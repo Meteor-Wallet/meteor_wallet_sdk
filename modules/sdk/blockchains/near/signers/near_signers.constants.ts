@@ -1,0 +1,1 @@
+export const NEAR_ED25519_KEY_DERIVATION_PATH = "m/44'/397'/0'";

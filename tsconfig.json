@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "moduleResolution": "node",
+    "strict": true,
+    "resolveJsonModule": true,
+    "allowSyntheticDefaultImports": true,
+    "declaration": true,
+    "composite": true,
+    "rootDir": ".",
+    "baseUrl": ".",
+    "jsx": "react-jsx",
+    "allowImportingTsExtensions": true,
+    "emitDeclarationOnly": true,
+    "skipLibCheck": true,
+    "target": "es2019",
+    "lib": ["ES2022"]
+  },
+  "include": ["modules", "src/**/*"],
+  "exclude": ["node_modules"]
+}
