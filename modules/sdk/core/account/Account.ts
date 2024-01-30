@@ -7,9 +7,7 @@ import { TransactionExecutionPlan } from "../transactions/TransactionExecutionPl
 import { BasicAccount } from "./BasicAccount";
 import { PubSub } from "../utility/pubsub/PubSub";
 import {
-  IAccountStorableData,
-  IWithBasicAccount,
-  IWithBasicAccountProps,
+  IAccountStorableData, IUniqueAccountProps,
 } from "./account.interfaces";
 import { ISubscribable } from "../utility/pubsub/pubsub.interfaces";
 import { TPubSubListener } from "../utility/pubsub/pubsub.types";
@@ -37,15 +35,12 @@ import { IFullAccountSocialFeature } from "./features/account_feature.social.int
 
 export abstract class Account
   implements
-    ISubscribable<IPubSub_Account>,
-    IListManageable<IWithBasicAccountProps>,
-    IWithBasicAccount,
+    IListManageable<IUniqueAccountProps>,
     IWithAccountFeatures<IFullAccountFeatureMap>,
     IStorable<IAccountStorableData>
 {
   _ord = new OrdIdentity();
   isBasic: false = false;
-  abstract basic: BasicAccount;
   protected abstract blockchain: Blockchain;
 
   abstract features: Partial<TAccountFeatureMapWithSupport<IFullAccountFeatureMap>>;

@@ -18,7 +18,6 @@ import {
   EPubSub_AccountManager,
 } from "./core/account/AccountManager.pubsub.ts";
 import { BlockchainNetwork } from "./core/blockchain/network/BlockchainNetwork.ts";
-import { Account } from "@near-js/accounts";
 import { SignerOrigin } from "./core/keys_and_signers/signer_origins/SignerOrigin.ts";
 
 export class MeteorSdk implements ISubscribable<IPubSub_MeteorSdk> {
