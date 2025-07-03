@@ -1,2 +1,0 @@
-export const METEOR_GLOBAL_HASH_START = "647d177cca8601046a3cb39e12f55bec";
-export const METEOR_GLOBAL_HASH_END = "5790bfcbc42199dd5fcf063200fac1d0";
