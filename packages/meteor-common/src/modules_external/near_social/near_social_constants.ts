@@ -1,0 +1,5 @@
+export const NEARSOCIAL_CONTRACT_ID = "social.near";
+export const NEARSOCIAL_TESTNET_CONTRACT_ID = "v1.social08.testnet";
+export const NEARSOCIAL_GAS = "100000000000000";
+export const NEARSOCIAL_DEPOSIT = "400000000000000000000000";
+export const NEARSOCIAL_UPDATE_PROFILE_DEPOSIT = "1";

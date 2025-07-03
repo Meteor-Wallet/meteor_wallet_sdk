@@ -1,0 +1,132 @@
+{
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+  "organizeImports": {
+    "enabled": true
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "lineWidth": 100,
+    "lineEnding": "lf",
+    "bracketSpacing": true
+  },
+  "css": {
+    "formatter": {
+      "enabled": false
+    },
+    "linter": {
+      "enabled": false
+    }
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "security": {
+        "noDangerouslySetInnerHtml": "off",
+        "noGlobalEval": "off"
+      },
+      "style": {
+        "useDefaultParameterLast": "off",
+        "noVar": "off",
+        "noCommaOperator": "off",
+        "useSingleVarDeclarator": "off",
+        "useExponentiationOperator": "off",
+        "noArguments": "off",
+        "useTemplate": "off",
+        "useSelfClosingElements": "off",
+        "noUnusedTemplateLiteral": "off",
+        "useNumberNamespace": "off",
+        "useConst": "off",
+        "noUselessElse": "off",
+        "noNonNullAssertion": "warn",
+        "noInferrableTypes": "off",
+        "useImportType": "off",
+        "useExportType": "off",
+        "useNodejsImportProtocol": "off",
+        "noParameterAssign": "off"
+      },
+      "recommended": true,
+      "suspicious": {
+        "noGlobalIsFinite": "off",
+        "noFunctionAssign": "off",
+        "noGlobalIsNan": "off",
+        "noMisrefactoredShorthandAssign": "off",
+        "noFallthroughSwitchClause": "off",
+        "noConfusingVoidType": "off",
+        "noShadowRestrictedNames": "off",
+        "noSelfCompare": "off",
+        "noDoubleEquals": "off",
+        "noEmptyInterface": "off",
+        "noImplicitAnyLet": "off",
+        "useIsArray": "off",
+        "noPrototypeBuiltins": "off",
+        "noArrayIndexKey": "warn",
+        "noExplicitAny": "off",
+        "noAssignInExpressions": "off"
+      },
+      "a11y": {
+        "useMediaCaption": "off",
+        "noPositiveTabindex": "off",
+        "noAutofocus": "off",
+        "useButtonType": "off",
+        "useValidAnchor": "off",
+        "useAltText": "off",
+        "useKeyWithClickEvents": "off",
+        "noSvgWithoutTitle": "off"
+      },
+      "complexity": {
+        "noUselessTernary": "off",
+        "noExtraBooleanCast": "off",
+        "noUselessConstructor": "off",
+        "noStaticOnlyClass": "off",
+        "noUselessCatch": "off",
+        "useOptionalChain": "off",
+        "noForEach": "off",
+        "useLiteralKeys": "off",
+        "noBannedTypes": "off",
+        "noUselessFragments": "off",
+        "useArrowFunction": "off"
+      },
+      "correctness": {
+        "noConstAssign": "off",
+        "noInvalidUseBeforeDeclaration": "off",
+        "noUnreachable": "off",
+        "noInnerDeclarations": "off",
+        "noChildrenProp": "off",
+        "noConstantCondition": "off",
+        "noEmptyPattern": "off",
+        "useJsxKeyInIterable": "off",
+        "noSwitchDeclarations": "off",
+        "useExhaustiveDependencies": "off",
+        "noUnusedImports": "error"
+      },
+      "performance": {
+        "noAccumulatingSpread": "off",
+        "noDelete": "off"
+      }
+    }
+  },
+  "javascript": {
+    "parser": {
+      "unsafeParameterDecoratorsEnabled": true
+    },
+    "formatter": {
+      "enabled": true,
+      "bracketSpacing": true
+    }
+  },
+  "json": {
+    "parser": {
+      "allowComments": true
+    },
+    "formatter": {
+      "enabled": true,
+      "lineWidth": 100
+    }
+  },
+  "files": {
+    "maxSize": 4000000,
+    "ignoreUnknown": true,
+    "ignore": ["node_modules", "dist", ".tamagui", "*.gen.ts"]
+  }
+}

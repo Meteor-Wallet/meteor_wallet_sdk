@@ -1,0 +1,12 @@
+{
+  "name": "Tradeport Graphql",
+  "schemaPath": "schema.graphql",
+  "extensions": {
+    "endpoints": {
+      "Default GraphQL Endpoint": {
+        "url": "https://api2.nearblocks.io/v1/graphql",
+        "introspect": true
+      }
+    }
+  }
+}

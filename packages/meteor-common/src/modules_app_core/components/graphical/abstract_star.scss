@@ -1,0 +1,65 @@
+.p_star_0 {
+  fill: url(#star-gradient-0);
+  animation: 3.5s ease-in-out 0.1s alternate infinite flicker;
+}
+
+.p_star_1 {
+  fill: url(#star-gradient-1);
+  animation: 4.5s ease-in-out 0s alternate infinite flicker;
+}
+
+.p_star_2 {
+  fill: url(#star-gradient-2);
+  animation: 5s ease-in-out 0.2s alternate infinite flicker;
+}
+
+@keyframes flicker {
+  0% {
+    opacity: 0.6;
+  }
+
+  20% {
+    opacity: 0.95;
+  }
+
+  30% {
+    opacity: 0.8;
+  }
+
+  50% {
+    opacity: 0.9;
+  }
+
+  60% {
+    opacity: 0.6;
+  }
+
+  80% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0.55;
+  }
+}
+
+#star-gradient-0 {
+  --star-color-start: #f21f65;
+  --star-color-two: #ea4b5a;
+  --star-color-three: #e09340;
+  --star-color-end: #f3ae26;
+}
+
+#star-gradient-1 {
+  --star-color-start: #88139a;
+  --star-color-two: #b428be;
+  --star-color-three: #db5eff;
+  --star-color-end: #db5eff;
+}
+
+#star-gradient-2 {
+  --star-color-start: #266ef3;
+  --star-color-two: #408be0;
+  --star-color-three: #4bbaea;
+  --star-color-end: #1febf2;
+}

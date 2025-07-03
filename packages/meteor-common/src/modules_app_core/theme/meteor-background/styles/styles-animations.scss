@@ -1,0 +1,171 @@
+// METEOR BLUE
+
+.meteorB-ani-1 {
+  animation: 20s linear kf-meteorB-1 infinite;
+}
+
+.meteorB-ani-2 {
+  animation: 20s linear kf-meteorB-2 infinite;
+  animation-delay: 5s;
+}
+
+.meteorP-ani-1 {
+  animation: 20s linear kf-meteorP-1 infinite;
+  animation-delay: 10s;
+}
+
+.meteorP-ani-2 {
+  animation: 20s linear kf-meteorP-2 infinite;
+  animation-delay: 15s;
+}
+
+@keyframes kf-meteorB-1 {
+  0% {
+    translate: -50% -50%;
+    opacity: 1;
+  }
+
+  5% {
+    opacity: 1;
+  }
+
+  10% {
+    translate: 50% 50%;
+    opacity: 0;
+  }
+
+  100% {
+    translate: 50% 50%;
+    opacity: 0;
+  }
+}
+
+@keyframes kf-meteorB-2 {
+  0% {
+    translate: 10% -50%;
+    opacity: 1;
+  }
+
+  5% {
+    opacity: 1;
+  }
+
+  10% {
+    translate: 110% 50%;
+    opacity: 0;
+  }
+
+  100% {
+    translate: 110% 50%;
+    opacity: 0;
+  }
+}
+
+// METEOR PURPLE
+
+@keyframes kf-meteorP-1 {
+  0% {
+    translate: -50% -10%;
+    opacity: 1;
+  }
+
+  5% {
+    opacity: 1;
+  }
+
+  10% {
+    translate: 50% 90%;
+    opacity: 0;
+  }
+
+  100% {
+    translate: 50% 90%;
+    opacity: 0;
+  }
+}
+
+@keyframes kf-meteorP-2 {
+  0% {
+    translate: -40% -50%;
+    opacity: 1;
+  }
+
+  5% {
+    opacity: 1;
+  }
+
+  10% {
+    translate: 70% 50%;
+    opacity: 0;
+  }
+
+  100% {
+    translate: 70% 50%;
+    opacity: 0;
+  }
+}
+
+// STARS
+
+.star-ani-1 {
+  animation: 10s linear kf-star-1 infinite;
+}
+
+.star-ani-2 {
+  animation: 10s linear kf-star-1 infinite;
+  animation-duration: 10s;
+  animation-delay: 1s;
+}
+
+.star-ani-3 {
+  animation: 10s linear kf-star-1 infinite;
+  animation-duration: 13s;
+  animation-delay: 2s;
+}
+
+.star-ani-4 {
+  animation: 10s linear kf-star-1 infinite;
+  animation-duration: 11s;
+  animation-delay: 3s;
+}
+
+.star-ani-5 {
+  animation: 10s linear kf-star-1 infinite;
+  animation-duration: 7s;
+  animation-delay: 4s;
+}
+
+.star-ani-6 {
+  animation: 10s linear kf-star-1 infinite;
+  animation-duration: 10s;
+  animation-delay: 5s;
+}
+
+.star-ani-7 {
+  animation: 10s linear kf-star-1 infinite;
+  animation-duration: 12s;
+  animation-delay: 6s;
+}
+
+@keyframes kf-star-1 {
+  0% {
+    scale: 0;
+    rotate: 0deg;
+    opacity: 1;
+  }
+
+  4% {
+    scale: 0.5;
+    rotate: 90deg;
+  }
+
+  8% {
+    scale: 0;
+    rotate: 180deg;
+  }
+
+  100% {
+    scale: 0;
+    rotate: 180deg;
+  }
+}

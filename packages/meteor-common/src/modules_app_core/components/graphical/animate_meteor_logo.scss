@@ -1,0 +1,170 @@
+#g_tail_outer_1 {
+  animation: 2s ease-in-out 0s infinite alternate opacity-animate-outer,
+    //1.5s ease-in-out 0s infinite alternate filters-outer,
+    0.5s ease-in-out 0.4s infinite alternate tail-transforms-short;
+  //filter: blur(3px);
+}
+
+#g_tail_outer_2 {
+  animation: 2s ease-in-out 1.5s infinite alternate opacity-animate-outer,
+    //1.5s ease-in-out 1s infinite alternate filters-outer,
+    0.5s ease-in-out 0.1s infinite alternate tail-transforms-short;
+  //filter: blur(6px);
+}
+
+#g_tail_outer_3 {
+  animation: 2s ease-in-out 1s infinite alternate opacity-animate-outer,
+    //1.5s ease-in-out 1.5s infinite alternate filters-outer,
+    0.5s ease-in-out 0.2s infinite alternate tail-transforms-short;
+  //filter: blur(3px);
+}
+
+#g_tail_outer_4 {
+  animation: 2s ease-in-out 0.5s infinite alternate opacity-animate-outer,
+    0.5s ease-in-out 0.5s infinite alternate tail-transforms-short;
+  //filter: blur(3px);
+}
+
+#g_tail_inner_1 {
+  transform-origin: 27% 50%;
+  animation: 2s ease-in-out 0s infinite alternate opacity-animate-inner,
+    0.5s ease-in-out 0.1s infinite alternate tail-transforms-long;
+}
+
+#g_tail_inner_2 {
+  transform-origin: center;
+  animation: 2s ease-in-out 1s infinite alternate opacity-animate-inner,
+    0.5s ease-in-out 0.3s infinite alternate tail-transforms-long;
+}
+
+#g_tail_inner_3 {
+  transform-origin: 60% 60%;
+  animation: 2s ease-in-out 1.5s infinite alternate opacity-animate-inner,
+    0.5s ease-in-out 0s infinite alternate tail-transforms-long;
+}
+
+#meteor_svg_logo {
+  animation: 1s ease-in-out infinite alternate logo-shake;
+}
+
+#outer_tails {
+  filter: blur(4px);
+}
+
+#inner_tails {
+  filter: blur(1px);
+}
+
+.meteor-logo {
+  //background: red;
+  .meteor-logo-circle {
+    animation: 2s ease-in-out 0.25s infinite alternate logo-shake-less;
+  }
+
+  #p_circle {
+    fill: url(#circle-gradient) rgba(50, 60, 150, 0.15);
+  }
+
+  #circle-gradient {
+    --color-stop: rgba(50, 60, 200, 0.3);
+    --color-bot: rgba(50, 60, 200, 0.15);
+  }
+}
+
+.mode-dark {
+  .meteor-logo {
+    #circle-gradient {
+      --color-stop: rgba(224, 234, 250, 0.3);
+      --color-bot: rgba(200, 205, 253, 0.15);
+    }
+  }
+
+  #meteor_svg_logo {
+    filter: drop-shadow(0 0.2em rgba(0, 30, 50, 0.5));
+    //filter: drop-shadow(0 -0.2em rgba(255, 255, 255, 0.5));
+  }
+}
+
+@keyframes logo-shake {
+  0% {
+    transform: translate(0.25em, -0.25em);
+  }
+
+  100% {
+    transform: translate(-0.25em, 0.25em);
+  }
+}
+
+@keyframes logo-shake-less {
+  0% {
+    transform: translate(0.12em, -0.12em);
+    //transform: translate(0.1em, -0.1em);
+  }
+
+  100% {
+    transform: translate(-0.12em, 0.12em);
+    //transform: translate(-0.1em, 0.1em);
+  }
+}
+
+@keyframes tail-transforms-long {
+  0% {
+    transform: translate(2em, -2em) scale(1);
+  }
+
+  /*33% {
+    transform: translate(-1em, 1em) scale(1.02);
+  }
+
+  66% {
+    transform: translate(2em, -2em) scale(0.98);
+  }*/
+
+  100% {
+    transform: translate(-1em, 1em) scale(1.15);
+  }
+}
+
+@keyframes tail-transforms-short {
+  0% {
+    transform: translate(0, 0);
+  }
+
+  100% {
+    transform: translate(-2.5em, 2.5em);
+  }
+}
+
+@keyframes opacity-animate-inner {
+  0% {
+    opacity: 0.9;
+  }
+
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes opacity-animate-outer {
+  0% {
+    opacity: 0.5;
+  }
+
+  100% {
+    opacity: 0.9;
+  }
+}
+
+/*@keyframes filters-outer {
+  0% {
+    filter: blur(3px);
+  }
+
+  100% {
+    filter: blur(0px);
+  }
+}*/
+
+//#outer_tails {
+//  transform: translate(-2em, 2em);
+//}
