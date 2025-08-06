@@ -54,9 +54,11 @@ class ComWindow {
       const queryParams: {
         source: EDappActionSource.website_post_message;
         connectionUid: string;
+        pageUri?: string;
       } = {
         source: EDappActionSource.website_post_message,
         connectionUid: connection.uid,
+        pageUri: encodeURIComponent(window.location.href),
       };
 
       const w = SIGN_POPUP_WIDTH;

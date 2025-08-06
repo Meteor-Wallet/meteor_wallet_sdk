@@ -1,6 +1,6 @@
 {
   "name": "@meteorwallet/sdk",
-  "version": "1.0.9",
+  "version": "1.0.10",
   "main": "./dist/meteor-sdk/src/index.js",
   "type": "module",
   "exports": {
@@ -24,13 +24,14 @@
   },
   "files": ["./dist", "./src", "./package.json"],
   "scripts": {
-    "build": "tsdown",
+    "build": "tsdown --dts",
     "docs:build": "rimraf ./docs && typedoc",
     "docs:build_serve": "npm run docs:build && cd ./docs && serve",
     "docs:deploy": "CLOUDFLARE_ACCOUNT_ID=06f0b83df3d52d4d6ddc6512618dca88 npx wrangler pages publish ./docs",
     "prettier": "prettier --write  src/**/*.{js,ts}",
     "type-check": "tsc --noEmit",
-    "type-check-watch": "tsc --noEmit --watch"
+    "type-check-watch": "tsc --noEmit --watch",
+    "format": "bunx biome format --write"
   },
   "dependencies": {
     "@near-js/transactions": "1.3.3",
