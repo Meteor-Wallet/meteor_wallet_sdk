@@ -1,24 +1,23 @@
-import {
-  SIGN_POPUP_HEIGHT,
-  SIGN_POPUP_WIDTH,
-} from "@meteorwallet/common/modules_app_core/theme/constants_theme";
-import { ENearNetwork } from "@meteorwallet/common/modules_external/near/types/near_basic_types";
-import { EDappActionErrorTag } from "@meteorwallet/common/modules_feature/dapp_connect/error_handling_dappConnect";
+import { nanoid } from "nanoid";
+import { stringify } from "query-string";
+import { envConfig } from "../envConfig";
+import { SIGN_POPUP_HEIGHT, SIGN_POPUP_WIDTH } from "../ported_common/constants_theme.ts";
+import { ENearNetwork } from "../ported_common/near/near_basic_types.ts";
+import { EDappActionErrorTag } from "../ported_common/dapp/dapp.errors.ts";
 import {
   EDappActionConnectionStatus,
   EDappActionSource,
   EExternalActionType,
-  IMeteorActionResponse_Output,
-  IMeteorComInjectedObject,
-  IPostMessageConnection,
+} from "../ported_common/dapp/dapp.enums.ts";
+import {
+  type IMeteorActionResponse_Output,
+  type IMeteorComInjectedObject,
+  type IPostMessageConnection,
   MeteorActionError,
-  TClientPostMessageResponse,
-  TMeteorComListener,
-  TPostMessageSend,
-} from "@meteorwallet/common/modules_feature/dapp_connect/types_dappConnect";
-import { nanoid } from "nanoid";
-import { stringify } from "query-string";
-import { envConfig } from "../envConfig";
+  type TClientPostMessageResponse,
+  type TMeteorComListener,
+  type TPostMessageSend,
+} from "../ported_common/dapp/dapp.types.ts";
 
 interface IOConnectAndWaitForResponse_Input {
   network: ENearNetwork;

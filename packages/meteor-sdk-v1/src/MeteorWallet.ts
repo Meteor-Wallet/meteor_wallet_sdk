@@ -1,38 +1,38 @@
-import { ENearNetwork } from "@meteorwallet/common/modules_external/near/types/near_basic_types";
-import {
-  EExternalActionType,
-  IDappAction_Logout_Data,
-  IMeteorActionResponse_Output,
-  IODappAction_PostMessage_SignIn_Output,
-  IODappAction_PostMessage_SignTransactions_Input,
-  IODappAction_PostMessage_SignTransactions_Output,
-  IODappAction_SignMessage_Input,
-  IODappAction_SignMessage_Output,
-  IODappAction_VerifyOwner_Input,
-  IODappAction_VerifyOwner_Output,
-  IOMeteorWalletSdkAccount_SignAndSendTransaction_Input,
-  IOMeteorWalletSdk_RequestSignIn_Inputs,
-  IOMeteorWalletSdk_SignIn_Output,
-  IORequestSignTransactions_Inputs,
-  IOWalletExternalLinkedContract,
-  MeteorActionError,
-} from "@meteorwallet/common/modules_feature/dapp_connect/types_dappConnect";
-import { notNullEmpty } from "@meteorwallet/common/modules_utility/data_type_utils/StringUtils";
-import { EnvironmentStateAdapter_Sync } from "@meteorwallet/common/modules_utility/state_utils/EnvironmentStorageUtils";
 import { Account, Connection } from "@near-js/accounts";
 import { KeyPair, PublicKey } from "@near-js/crypto";
 import { createTransaction } from "@near-js/transactions";
-import { AccessKeyInfoView } from "@near-js/types";
+import { type AccessKeyInfoView } from "@near-js/types";
 import type {
   Action,
   FinalExecutionOutcome,
   Optional,
   Transaction,
 } from "@near-wallet-selector/core";
-import { ConnectConfig, InMemorySigner, Near, connect, keyStores, utils } from "near-api-js";
+import { type ConnectConfig, InMemorySigner, Near, connect, keyStores, utils } from "near-api-js";
 import { getMeteorPostMessenger } from "./postMessage/MeteorPostMessenger";
 import { getNetworkPreset, resolveWalletUrl } from "./utils/MeteorSdkUtils";
 import { createAction } from "./utils/create-action";
+import { ENearNetwork } from "./ported_common/near/near_basic_types.ts";
+import { notNullEmpty } from "./ported_common/utils/nullEmptyString.ts";
+import { EnvironmentStateAdapter_Sync } from "./ported_common/utils/EnvironmentStorageUtils.ts";
+import {
+  type IDappAction_Logout_Data,
+  type IMeteorActionResponse_Output,
+  type IODappAction_PostMessage_SignIn_Output,
+  type IODappAction_PostMessage_SignTransactions_Input,
+  type IODappAction_PostMessage_SignTransactions_Output,
+  type IODappAction_SignMessage_Input,
+  type IODappAction_SignMessage_Output,
+  type IODappAction_VerifyOwner_Input,
+  type IODappAction_VerifyOwner_Output,
+  type IOMeteorWalletSdk_RequestSignIn_Inputs,
+  type IOMeteorWalletSdk_SignIn_Output,
+  type IOMeteorWalletSdkAccount_SignAndSendTransaction_Input,
+  type IORequestSignTransactions_Inputs,
+  type IOWalletExternalLinkedContract,
+  MeteorActionError,
+} from "./ported_common/dapp/dapp.types.ts";
+import { EExternalActionType } from "./ported_common/dapp/dapp.enums.ts";
 
 const LOGIN_WALLET_URL_SUFFIX = "/login/";
 const SIGN_WALLET_URL_SUFFIX = "/sign/";

@@ -12,6 +12,7 @@
     "esModuleInterop": true,
     "isolatedModules": false,
     "moduleResolution": "bundler",
+    "verbatimModuleSyntax": true,
     "module": "ES2022",
     "noImplicitAny": false,
     "jsx": "react-jsx"

@@ -1,9 +1,9 @@
+import { envConfig } from "../envConfig";
 import {
   NEAR_BASE_CONNECT_CONFIG_BETANET,
   NEAR_BASE_CONNECT_CONFIG_MAINNET,
   NEAR_BASE_CONNECT_CONFIG_TESTNET,
-} from "@meteorwallet/common/modules_external/near/near_static_data";
-import { envConfig } from "../envConfig";
+} from "../ported_common/near/near_static_data.ts";
 
 export const resolveWalletUrl = (network: string, walletUrl?: string) => {
   if (walletUrl) {
