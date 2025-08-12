@@ -12,9 +12,9 @@ import { type ConnectConfig, InMemorySigner, Near, connect, keyStores, utils } f
 import { getMeteorPostMessenger } from "./postMessage/MeteorPostMessenger";
 import { getNetworkPreset, resolveWalletUrl } from "./utils/MeteorSdkUtils";
 import { createAction } from "./utils/create-action";
-import { ENearNetwork } from "./ported_common/near/near_basic_types.ts";
-import { notNullEmpty } from "./ported_common/utils/nullEmptyString.ts";
-import { EnvironmentStateAdapter_Sync } from "./ported_common/utils/EnvironmentStorageUtils.ts";
+import { ENearNetwork } from "./ported_common/near/near_basic_types";
+import { notNullEmpty } from "./ported_common/utils/nullEmptyString";
+import { EnvironmentStateAdapter_Sync } from "./ported_common/utils/EnvironmentStorageUtils";
 import {
   type IDappAction_Logout_Data,
   type IMeteorActionResponse_Output,
@@ -31,8 +31,8 @@ import {
   type IORequestSignTransactions_Inputs,
   type IOWalletExternalLinkedContract,
   MeteorActionError,
-} from "./ported_common/dapp/dapp.types.ts";
-import { EExternalActionType } from "./ported_common/dapp/dapp.enums.ts";
+} from "./ported_common/dapp/dapp.types";
+import { EExternalActionType } from "./ported_common/dapp/dapp.enums";
 
 const LOGIN_WALLET_URL_SUFFIX = "/login/";
 const SIGN_WALLET_URL_SUFFIX = "/sign/";

@@ -1,8 +1,8 @@
-import { ENearNetwork } from "./near_basic_types.ts";
+import { ENearNetwork } from "./near_basic_types";
 import type {
   TNearBaseConnectConfig,
   TNearBaseConnectConfigNetwork,
-} from "./NearApiJsClient.types.ts";
+} from "./NearApiJsClient.types";
 
 export const near_network_array: ENearNetwork[] = [
   ENearNetwork.testnet,

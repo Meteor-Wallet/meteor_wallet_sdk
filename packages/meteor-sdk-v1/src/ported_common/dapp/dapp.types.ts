@@ -3,8 +3,8 @@ import { Transaction as NearFullTransaction } from "@near-js/transactions";
 import type { FinalExecutionOutcome } from "@near-js/types";
 import type { Action, Optional, Transaction } from "@near-wallet-selector/core";
 import { z } from "zod";
-import { ENearNetwork } from "../near/near_basic_types.ts";
-import type { PartialBy } from "../utils/special_typescript_types.ts";
+import { ENearNetwork } from "../near/near_basic_types";
+import type { PartialBy } from "../utils/special_typescript_types";
 import {
   EDappActionConnectionStatus,
   EDappActionSource,
@@ -12,12 +12,12 @@ import {
   EMeteorInjectedFeature,
   EMeteorWalletSignInType,
   EWalletExternalActionStatus,
-} from "./dapp.enums.ts";
+} from "./dapp.enums";
 import {
   ZO_DappSignInAction_AllMethods,
   ZO_DappSignInAction_SelectedMethods,
-} from "./dapp.validation.ts";
-import { EDappActionErrorTag, getExternalActionErrorMessageForEndTag } from "./dapp.errors.ts";
+} from "./dapp.validation";
+import { EDappActionErrorTag, getExternalActionErrorMessageForEndTag } from "./dapp.errors";
 
 export interface IRejectReason {
   message: string;

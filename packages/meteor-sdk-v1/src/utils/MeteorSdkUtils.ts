@@ -3,7 +3,7 @@ import {
   NEAR_BASE_CONNECT_CONFIG_BETANET,
   NEAR_BASE_CONNECT_CONFIG_MAINNET,
   NEAR_BASE_CONNECT_CONFIG_TESTNET,
-} from "../ported_common/near/near_static_data.ts";
+} from "../ported_common/near/near_static_data";
 
 export const resolveWalletUrl = (network: string, walletUrl?: string) => {
   if (walletUrl) {

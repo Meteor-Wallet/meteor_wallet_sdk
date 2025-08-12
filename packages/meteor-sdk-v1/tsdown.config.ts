@@ -3,9 +3,12 @@ import { defineConfig } from "tsdown";
 export default defineConfig({
   // Only build the SDK entry point
   entry: ["./src/index.ts"],
+  outputOptions: {
+    format: "cjs",
+  },
 
   // Generate d.ts alongside JS
-  dts: true,
+  dts: false,
 
   // Do not try to bundle/react to these externals
   // Keep UI libs external and ignore binary assets; monorepo packages should be bundled

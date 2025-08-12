@@ -1,5 +1,5 @@
 import type { ConnectConfig } from "near-api-js";
-import { ENearNetwork } from "./near_basic_types.ts";
+import { ENearNetwork } from "./near_basic_types";
 
 export type TNearConnectConfig = Omit<ConnectConfig, "headers"> & {
   name: string;
