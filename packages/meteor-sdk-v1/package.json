@@ -22,19 +22,21 @@
     "type-check-watch": "tsc --noEmit --watch"
   },
   "dependencies": {
-    "@near-js/accounts": "1.4.1",
-    "@near-js/crypto": "1.4.2",
-    "@near-js/transactions": "1.3.3",
-    "@near-js/types": "0.3.1",
+    "@near-js/accounts": "2.2.5",
+    "@near-js/crypto": "2.2.5",
+    "@near-js/transactions": "2.2.5",
+    "@near-js/keystores": "2.2.5",
+    "@near-js/keystores-browser": "2.2.5",
+    "@near-js/types": "2.2.5",
     "borsh": "1.0.0",
     "nanoid": "5.1.5",
     "query-string": "^7.1.3"
   },
   "peerDependencies": {
-    "near-api-js": "^5.0.0"
+    "near-api-js": "^6.0.0"
   },
   "devDependencies": {
-    "near-api-js": "5.1.1",
+    "near-api-js": "6.2.5",
     "typedoc": "0.28.10",
     "tsdown": "0.14.1"
   }

@@ -8,7 +8,7 @@ import type {
   Optional,
   Transaction,
 } from "@near-wallet-selector/core";
-import { type ConnectConfig, InMemorySigner, Near, connect, keyStores, utils } from "near-api-js";
+import { type ConnectConfig, Near, connect, utils } from "near-api-js";
 import { getMeteorPostMessenger } from "./postMessage/MeteorPostMessenger";
 import { getNetworkPreset, resolveWalletUrl } from "./utils/MeteorSdkUtils";
 import { createAction } from "./utils/create-action";
@@ -33,6 +33,8 @@ import {
   MeteorActionError,
 } from "./ported_common/dapp/dapp.types.ts";
 import { EExternalActionType } from "./ported_common/dapp/dapp.enums.ts";
+import { KeyStore } from "@near-js/keystores";
+import { BrowserLocalStorageKeyStore } from "@near-js/keystores-browser";
 
 const LOGIN_WALLET_URL_SUFFIX = "/login/";
 const SIGN_WALLET_URL_SUFFIX = "/sign/";
@@ -61,6 +63,7 @@ interface IMeteorAuthData {
 export interface IMeteorWallet_Constructor {
   near: Near;
   appKeyPrefix?: string;
+  keyStore: KeyStore;
 }
 
 export interface IMeteorWallet_create_Inputs extends Partial<ConnectConfig> {
@@ -103,7 +106,7 @@ export class MeteorWallet {
   _authDataKey: string;
 
   /** @hidden */
-  _keyStore: keyStores.KeyStore;
+  _keyStore: KeyStore;
 
   /** @hidden */
   _authData: IMeteorAuthData;
@@ -131,7 +134,7 @@ export class MeteorWallet {
    * ```
    */
   static async init({ walletUrl, ...config }: IMeteorWallet_create_Inputs): Promise<MeteorWallet> {
-    const keyStore = new keyStores.BrowserLocalStorageKeyStore();
+    const keyStore = new BrowserLocalStorageKeyStore();
 
     const near = await connect({
       keyStore,
@@ -141,7 +144,7 @@ export class MeteorWallet {
       ...config,
     });
 
-    const wallet = new MeteorWallet({ near, appKeyPrefix: "near_app" });
+    const wallet = new MeteorWallet({ near, appKeyPrefix: "near_app", keyStore });
 
     // Cleanup up any pending keys (cancelled logins).
     if (!wallet.isSignedIn()) {
@@ -167,6 +170,7 @@ export class MeteorWallet {
   constructor({
     near,
     appKeyPrefix = near.config.contractName ?? "default",
+    keyStore,
   }: IMeteorWallet_Constructor) {
     this._near = near;
 
@@ -176,20 +180,8 @@ export class MeteorWallet {
 
     this._networkId = near.config.networkId;
     this._walletBaseUrl = near.config.walletUrl;
-    this._keyStore = (near.connection.signer as InMemorySigner).keyStore;
-
-    /*
-    console.log("Initialized wallet- checking if signed in");
-
-    if (!this.isSignedIn()) {
-      console.log("Completing sign-in process, if its available");
-      this._initializationPromises.push(this._completeSignInWithAccessKey());
-    }*/
+    this._keyStore = keyStore;
   }
-
-  /* async initialize() {
-     await Promise.all(this._initializationPromises);
-   }*/
 
   isExtensionInstalled(): boolean {
     return (window as any).meteorWallet != null;
@@ -441,9 +433,11 @@ export class MeteorWallet {
 
   async transformTransactions(transactions: Array<Optional<Transaction, "signerId">>) {
     const account = this.account()!;
-    const { networkId, signer, provider } = account.connection;
+    // const { networkId, signer, provider } = account.getConnection();
+    const signer = account.getSigner()!;
+    const provider = account.provider;
 
-    const localKey = await signer.getPublicKey(account.accountId, networkId);
+    const localKey = await signer.getPublicKey();
 
     return Promise.all(
       transactions.map(async (transaction, index) => {
@@ -457,7 +451,7 @@ export class MeteorWallet {
 
         const transformedActions = transaction.actions.map((action) => createAction(action));
 
-        const block = await provider.block({ finality: "final" });
+        const block = await provider.viewBlock({ finality: "final" });
 
         return createTransaction(
           account.accountId,
@@ -506,7 +500,7 @@ export class ConnectedMeteorWalletAccount extends Account {
 
   /** @hidden */
   constructor(walletConnection: MeteorWallet, connection: Connection, accountId: string) {
-    super(connection, accountId);
+    super(accountId, connection.provider, connection.signer);
     this.meteorWallet = walletConnection;
   }
 
@@ -529,10 +523,7 @@ export class ConnectedMeteorWalletAccount extends Account {
     receiverId,
     actions,
   }: IOMeteorWalletSdkAccount_SignAndSendTransaction_Input): Promise<IOTryAndSendTransaction_Output> {
-    const localKey = await this.connection.signer.getPublicKey(
-      this.accountId,
-      this.connection.networkId,
-    );
+    const localKey = await this.getSigner()!.getPublicKey();
 
     const accessKey = await this.accessKeyForTransaction(localKey);
 
@@ -721,8 +712,8 @@ export class ConnectedMeteorWalletAccount extends Account {
    * @param localKey A local public key provided to check for access
    * @returns Promise<any>
    */
-  async accessKeyForTransaction(localKey?: utils.PublicKey): Promise<AccessKeyInfoView | null> {
-    const accessKeys = await this.getAccessKeys();
+  async accessKeyForTransaction(localKey?: PublicKey): Promise<AccessKeyInfoView | null> {
+    const accessKeys = (await this.getAccessKeyList()).keys;
     console.log("accessKeys", accessKeys);
 
     if (localKey) {
