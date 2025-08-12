@@ -14,5 +14,7 @@
     "tsdown": "0.14.1",
     "@biomejs/biome": "2.1.4"
   },
-  "workspaces": ["packages/*"]
+  "workspaces": [
+    "packages/*"
+  ]
 }

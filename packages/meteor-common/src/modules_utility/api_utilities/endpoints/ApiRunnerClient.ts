@@ -126,9 +126,7 @@ export class ApiRunnerClient {
     return this;
   }
 
-  registerActionGroup(group: {
-    [id: string]: ApiAction<any, any, any[]>;
-  }): ApiRunnerClient {
+  registerActionGroup(group: { [id: string]: ApiAction<any, any, any[]> }): ApiRunnerClient {
     for (const id in group) {
       this.registerAction(group[id]);
     }

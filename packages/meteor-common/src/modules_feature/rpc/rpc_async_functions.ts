@@ -1,12 +1,6 @@
 import { RPC_ABNORMAL_PING_THRESHOLD } from "./rpc_constants";
 
-async function getRpcPing({
-  nodeUrl,
-  timeoutInMs,
-}: {
-  nodeUrl: string;
-  timeoutInMs: number;
-}) {
+async function getRpcPing({ nodeUrl, timeoutInMs }: { nodeUrl: string; timeoutInMs: number }) {
   try {
     const startTime = performance.now();
     await fetch(nodeUrl, {

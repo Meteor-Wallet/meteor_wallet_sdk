@@ -3,13 +3,7 @@ import { ITranslations } from "../../modules_app_core/translation/translation_ty
 import { StringUtils } from "../../modules_utility/data_type_utils/StringUtils";
 import { getPresetRpcList } from "./rpc_utils";
 
-function changeRpc({
-  nodeUrl,
-  lang,
-}: {
-  nodeUrl: string;
-  lang: ITranslations;
-}) {
+function changeRpc({ nodeUrl, lang }: { nodeUrl: string; lang: ITranslations }) {
   const presetRpcList = getPresetRpcList();
   AppStore.update((s) => {
     const tmp = [...s.selectedRpc];

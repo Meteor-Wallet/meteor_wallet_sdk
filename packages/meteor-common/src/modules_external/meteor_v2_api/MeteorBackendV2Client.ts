@@ -408,25 +408,18 @@ export class MeteorBackendV2Client extends BaseHttpClient {
     );
   }
 
-  public getStakingPoolList(payload: {
-    networkId: ENearNetwork;
-  }): Promise<string[]> {
+  public getStakingPoolList(payload: { networkId: ENearNetwork }): Promise<string[]> {
     return this.sendAndHandleResponse("/api/indexer_cache/get_staking_pools", payload);
   }
 
-  public getValidators(payload: {
-    networkId: ENearNetwork;
-    validatorId?: string;
-  }): Promise<{
+  public getValidators(payload: { networkId: ENearNetwork; validatorId?: string }): Promise<{
     validators: TValidatorDetails[];
     updatedAt: number;
   }> {
     return this.sendAndHandleResponse("/api/stake/get_validators", payload);
   }
 
-  public getAccountTransactions(payload: {
-    accountId: string;
-  }): Promise<string[]> {
+  public getAccountTransactions(payload: { accountId: string }): Promise<string[]> {
     return this.sendAndHandleResponse("/api/indexer/get_transaction_hashes", payload);
   }
 
@@ -838,27 +831,24 @@ export class MeteorBackendV2Client extends BaseHttpClient {
   public async cancelNearIntentsBridge({
     walletId,
     id,
-  }: { walletId: string; id: string }): Promise<IDB_NearIntentBridge> {
+  }: {
+    walletId: string;
+    id: string;
+  }): Promise<IDB_NearIntentBridge> {
     return this.sendAndHandleResponse("/api/near_intents/cancel_bridge", {
       walletId,
       id,
     });
   }
 
-  getWithdrawalHistory(payload: {
-    walletId: string;
-    page: number;
-    perPage: number;
-  }): Promise<{
+  getWithdrawalHistory(payload: { walletId: string; page: number; perPage: number }): Promise<{
     count: number;
     history: IDB_NearIntentWithdrawal[];
   }> {
     return this.sendAndHandleResponse("/api/near_intents/get_withdrawal_history", payload);
   }
 
-  getWithdrawalInfoById(payload: {
-    id: string;
-  }): Promise<IDB_NearIntentWithdrawal> {
+  getWithdrawalInfoById(payload: { id: string }): Promise<IDB_NearIntentWithdrawal> {
     return this.sendAndHandleResponse("/api/near_intents/get_withdrawal", payload);
   }
 

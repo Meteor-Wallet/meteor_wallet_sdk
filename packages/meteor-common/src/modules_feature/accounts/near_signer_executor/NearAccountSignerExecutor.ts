@@ -617,11 +617,7 @@ export class NearAccountSignerExecutor {
     return this.internalState[mainOrd].currentTransactionNonce;
   }
 
-  public async continueTransactions(
-    inputs: {
-      incomingOrdinal?: number;
-    } = {},
-  ): Promise<void> {
+  public async continueTransactions(inputs: { incomingOrdinal?: number } = {}): Promise<void> {
     if (!this.isOrdinalCurrentAndInGoodState(inputs.incomingOrdinal)) {
       if (inputs.incomingOrdinal != null) {
         this.onComplete(inputs.incomingOrdinal);
@@ -678,11 +674,7 @@ export class NearAccountSignerExecutor {
     this.onComplete(currentTransactionsOrdinalId);
   }
 
-  private async _continueTransactions({
-    incomingOrdinal,
-  }: {
-    incomingOrdinal?: number;
-  } = {}) {
+  private async _continueTransactions({ incomingOrdinal }: { incomingOrdinal?: number } = {}) {
     if (!this.isOrdinalCurrentAndInGoodState(incomingOrdinal)) {
       return;
     }
