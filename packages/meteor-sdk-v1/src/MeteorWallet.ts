@@ -1,4 +1,4 @@
-import { Account, Connection } from "@near-js/accounts";
+import { Account } from "@near-js/accounts";
 import { KeyPair, PublicKey } from "@near-js/crypto";
 import { createTransaction } from "@near-js/transactions";
 import { type AccessKeyInfoView } from "@near-js/types";
@@ -422,11 +422,7 @@ export class MeteorWallet {
     const currentAccountId = this.getAccountId();
 
     if (notNullEmpty(currentAccountId) && this._connectedAccount?.accountId !== currentAccountId) {
-      this._connectedAccount = new ConnectedMeteorWalletAccount(
-        this,
-        this._near.connection,
-        currentAccountId,
-      );
+      this._connectedAccount = new ConnectedMeteorWalletAccount(this, currentAccountId);
     }
     return this._connectedAccount;
   }
@@ -499,8 +495,8 @@ export class ConnectedMeteorWalletAccount extends Account {
   meteorWallet: MeteorWallet;
 
   /** @hidden */
-  constructor(walletConnection: MeteorWallet, connection: Connection, accountId: string) {
-    super(accountId, connection.provider, connection.signer);
+  constructor(walletConnection: MeteorWallet, accountId: string) {
+    super(accountId, walletConnection._near.connection.provider);
     this.meteorWallet = walletConnection;
   }
 
@@ -566,21 +562,6 @@ export class ConnectedMeteorWalletAccount extends Account {
       }
     }
 
-    /*const block = await this.connection.provider.block({ finality: "final" });
-    const blockHash = baseDecode(block.header.hash);
-
-    const publicKey = utils.PublicKey.from(accessKey.public_key);
-    // TODO: Cache & listen for nonce updates for given access key
-    const nonce = accessKey.access_key.nonce + 1;
-    const transaction = transactions.createTransaction(
-      this.accountId,
-      publicKey,
-      receiverId,
-      nonce,
-      actions,
-      blockHash,
-    );*/
-
     return {
       sent: false,
       transaction: {
@@ -614,33 +595,6 @@ export class ConnectedMeteorWalletAccount extends Account {
       })
     )[0];
   }
-
-  /** @hidden */
-
-  /*async signAndSendTransaction_redirect({
-    receiverId,
-    actions,
-    walletMeta,
-    walletCallbackUrl = window.location.href,
-  }: SignAndSendTransactionOptions): Promise<FinalExecutionOutcome> {
-    const { transaction, sent, executionOutcome } = await this.trySendOrCreateTransaction({ receiverId, actions });
-
-    if (sent) {
-      return executionOutcome!;
-    }
-
-    await this.meteorWallet.requestSignTransactions_redirect({
-      transactions: [transaction!],
-      meta: walletMeta,
-      callback_url: walletCallbackUrl,
-    });
-
-    return new Promise((resolve, reject) => {
-      setTimeout(() => {
-        reject(new Error("Failed to redirect to sign transaction"));
-      }, 1000);
-    });
-  }*/
 
   /**
    * Check if given access key allows the function call or method attempted in transaction
