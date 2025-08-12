@@ -1,8 +1,6 @@
 {
   "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
-  "organizeImports": {
-    "enabled": true
-  },
+  "assist": { "actions": { "source": { "organizeImports": "on" } } },
   "formatter": {
     "enabled": true,
     "indentStyle": "space",
@@ -27,11 +25,8 @@
       },
       "style": {
         "useDefaultParameterLast": "off",
-        "noVar": "off",
-        "noCommaOperator": "off",
         "useSingleVarDeclarator": "off",
         "useExponentiationOperator": "off",
-        "noArguments": "off",
         "useTemplate": "off",
         "useSelfClosingElements": "off",
         "noUnusedTemplateLiteral": "off",
@@ -62,7 +57,8 @@
         "noPrototypeBuiltins": "off",
         "noArrayIndexKey": "warn",
         "noExplicitAny": "off",
-        "noAssignInExpressions": "off"
+        "noAssignInExpressions": "off",
+        "noVar": "off"
       },
       "a11y": {
         "useMediaCaption": "off",
@@ -85,7 +81,9 @@
         "useLiteralKeys": "off",
         "noBannedTypes": "off",
         "noUselessFragments": "off",
-        "useArrowFunction": "off"
+        "useArrowFunction": "off",
+        "noCommaOperator": "off",
+        "noArguments": "off"
       },
       "correctness": {
         "noConstAssign": "off",
@@ -127,6 +125,6 @@
   "files": {
     "maxSize": 4000000,
     "ignoreUnknown": true,
-    "ignore": ["node_modules", "dist", ".tamagui", "*.gen.ts"]
+    "includes": ["**", "!**/node_modules", "!**/dist", "!**/.tamagui", "!**/*.gen.ts"]
   }
 }
