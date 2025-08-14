@@ -11,7 +11,7 @@ import type {
   Optional,
   Transaction,
 } from "@near-wallet-selector/core";
-import { type ConnectConfig, utils } from "near-api-js";
+import { type ConnectConfig, KeyPairSigner, utils } from "near-api-js";
 import { EExternalActionType } from "./ported_common/dapp/dapp.enums.ts";
 import {
   type IDappAction_Logout_Data,
@@ -258,6 +258,9 @@ export class MeteorWallet {
     const { keyPair, ...restOptions } = options;
 
     const accessKey: KeyPair = keyPair ?? KeyPair.fromRandom("ed25519");
+
+    console.log(accessKey);
+
     const usingPublicKey = accessKey.getPublicKey().toString();
 
     const response =
@@ -413,17 +416,32 @@ export class MeteorWallet {
   /**
    * Returns the current connected wallet account
    */
-  account(): ConnectedMeteorWalletAccount | undefined {
+  async account(): Promise<ConnectedMeteorWalletAccount> {
     const currentAccountId = this.getAccountId();
 
     if (notNullEmpty(currentAccountId) && this._connectedAccount?.accountId !== currentAccountId) {
-      this._connectedAccount = new ConnectedMeteorWalletAccount(this, currentAccountId);
+      const keyPair = await this._keyStore.getKey(this._networkId, currentAccountId);
+      const keyPairSigner = KeyPairSigner.fromSecretKey(keyPair.toString());
+
+      this._connectedAccount = new ConnectedMeteorWalletAccount(
+        this,
+        currentAccountId,
+        keyPairSigner,
+      );
     }
+
+    if (this._connectedAccount == null) {
+      throw new MeteorActionError({
+        endTags: [],
+        message: "No current account connected to Meteor Wallet",
+      });
+    }
+
     return this._connectedAccount;
   }
 
   async transformTransactions(transactions: Array<Optional<Transaction, "signerId">>) {
-    const account = this.account()!;
+    const account = await this.account();
     // const { networkId, signer, provider } = account.getConnection();
     const signer = account.getSigner()!;
     const provider = account.provider;
@@ -488,10 +506,12 @@ interface IOTryAndSendTransaction_Output {
 export class ConnectedMeteorWalletAccount extends Account {
   /** @hidden */
   meteorWallet: MeteorWallet;
+  // publicKey: PublicKey;
 
   /** @hidden */
-  constructor(walletConnection: MeteorWallet, accountId: string) {
-    super(accountId, walletConnection._provider);
+  constructor(walletConnection: MeteorWallet, accountId: string, signer: KeyPairSigner) {
+    super(accountId, walletConnection._provider, signer);
+    this.setSigner(signer);
     this.meteorWallet = walletConnection;
   }
 

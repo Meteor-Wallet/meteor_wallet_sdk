@@ -1,6 +1,7 @@
 import { EMeteorWalletSignInType } from "@meteorwallet/sdk";
 import type { Account, InjectedWallet, WalletBehaviourFactory } from "@near-wallet-selector/core";
 import type { MeteorWalletParams_Injected } from "~/meteor-wallet/meteor-wallet-types";
+import { nullEmpty } from "~/meteor-wallet/setup/nullEmpty";
 import { setupMeteorWalletState } from "~/meteor-wallet/setup/setupMeteorWalletState";
 
 export const createMeteorWalletInjected: WalletBehaviourFactory<
@@ -11,9 +12,9 @@ export const createMeteorWalletInjected: WalletBehaviourFactory<
 
   const getAccounts = async (): Promise<Array<Account>> => {
     const accountId = _state.wallet.getAccountId();
-    const account = _state.wallet.account();
+    const account = await _state.wallet.account();
 
-    if (!accountId || !account) {
+    if (nullEmpty(accountId) || account == null) {
       return [];
     }
 
@@ -128,9 +129,9 @@ export const createMeteorWalletInjected: WalletBehaviourFactory<
         throw new Error("No receiver found to send the transaction to");
       }
 
-      const account = _state.wallet.account()!;
+      const account = await _state.wallet.account()!;
 
-      return account["signAndSendTransaction_direct"]({
+      return account.signAndSendTransaction_direct({
         receiverId: receiverId ?? contract!.contractId,
         actions,
       });
