@@ -34,9 +34,5 @@
     "vite": "^6.3.3",
     "vite-tsconfig-paths": "^5.1.4",
     "vite-plugin-devtools-json": "^1.0.0"
-  },
-  "overrides": {
-    "react": "19.1.0",
-    "react-dom": "19.1.0"
   }
 }

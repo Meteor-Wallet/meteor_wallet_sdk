@@ -1,6 +1,26 @@
-import { useWalletSelector } from "@near-wallet-selector/react-hook";
+import {
+  type SetupParams,
+  useWalletSelector,
+  WalletSelectorProvider,
+} from "@near-wallet-selector/react-hook";
+import { setupMeteorWallet } from "~/meteor-wallet/setup/setupMeteorWallet";
+import "@near-wallet-selector/modal-ui/styles.css";
+
+const walletSelectorConfig: SetupParams = {
+  network: "testnet",
+  debug: true,
+  modules: [setupMeteorWallet()],
+};
 
 export function MeteorSdkTest() {
+  return (
+    <WalletSelectorProvider config={walletSelectorConfig}>
+      <MeteorSdkTestInner />
+    </WalletSelectorProvider>
+  );
+}
+
+function MeteorSdkTestInner() {
   const {
     signedAccountId,
     signOut,
