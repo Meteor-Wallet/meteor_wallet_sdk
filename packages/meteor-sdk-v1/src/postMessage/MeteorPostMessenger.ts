@@ -2,13 +2,12 @@ import { nanoid } from "nanoid";
 import { stringify } from "query-string";
 import { envConfig } from "../envConfig";
 import { SIGN_POPUP_HEIGHT, SIGN_POPUP_WIDTH } from "../ported_common/constants_theme.ts";
-import { ENearNetwork } from "../ported_common/near/near_basic_types.ts";
-import { EDappActionErrorTag } from "../ported_common/dapp/dapp.errors.ts";
 import {
   EDappActionConnectionStatus,
   EDappActionSource,
   EExternalActionType,
 } from "../ported_common/dapp/dapp.enums.ts";
+import { EDappActionErrorTag } from "../ported_common/dapp/dapp.errors.ts";
 import {
   type IMeteorActionResponse_Output,
   type IMeteorComInjectedObject,
@@ -18,6 +17,7 @@ import {
   type TMeteorComListener,
   type TPostMessageSend,
 } from "../ported_common/dapp/dapp.types.ts";
+import { ENearNetwork } from "../ported_common/near/near_basic_types.ts";
 
 interface IOConnectAndWaitForResponse_Input {
   network: ENearNetwork;
@@ -146,7 +146,6 @@ class MeteorPostMessenger {
   comInterval: any;
 
   constructor() {
-    // const baseUrl = "https://dev.wallet.meteorwallet.app";
     const baseUrl = envConfig.wallet_base_url;
 
     const url = new URL(baseUrl);

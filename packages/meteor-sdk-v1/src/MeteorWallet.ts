@@ -1,5 +1,8 @@
 import { Account } from "@near-js/accounts";
 import { KeyPair, PublicKey } from "@near-js/crypto";
+import { KeyStore } from "@near-js/keystores";
+import { BrowserLocalStorageKeyStore } from "@near-js/keystores-browser";
+import { JsonRpcProvider } from "@near-js/providers";
 import { createTransaction } from "@near-js/transactions";
 import { type AccessKeyInfoView } from "@near-js/types";
 import type {
@@ -8,13 +11,8 @@ import type {
   Optional,
   Transaction,
 } from "@near-wallet-selector/core";
-import { type ConnectConfig, Near, connect, utils } from "near-api-js";
-import { getMeteorPostMessenger } from "./postMessage/MeteorPostMessenger";
-import { getNetworkPreset, resolveWalletUrl } from "./utils/MeteorSdkUtils";
-import { createAction } from "./utils/create-action";
-import { ENearNetwork } from "./ported_common/near/near_basic_types.ts";
-import { notNullEmpty } from "./ported_common/utils/nullEmptyString.ts";
-import { EnvironmentStateAdapter_Sync } from "./ported_common/utils/EnvironmentStorageUtils.ts";
+import { type ConnectConfig, utils } from "near-api-js";
+import { EExternalActionType } from "./ported_common/dapp/dapp.enums.ts";
 import {
   type IDappAction_Logout_Data,
   type IMeteorActionResponse_Output,
@@ -32,9 +30,13 @@ import {
   type IOWalletExternalLinkedContract,
   MeteorActionError,
 } from "./ported_common/dapp/dapp.types.ts";
-import { EExternalActionType } from "./ported_common/dapp/dapp.enums.ts";
-import { KeyStore } from "@near-js/keystores";
-import { BrowserLocalStorageKeyStore } from "@near-js/keystores-browser";
+import { ENearNetwork } from "./ported_common/near/near_basic_types.ts";
+import { NEAR_BASE_CONFIG_FOR_NETWORK } from "./ported_common/near/near_static_data.ts";
+import { EnvironmentStateAdapter_Sync } from "./ported_common/utils/EnvironmentStorageUtils.ts";
+import { notNullEmpty } from "./ported_common/utils/nullEmptyString.ts";
+import { getMeteorPostMessenger } from "./postMessage/MeteorPostMessenger";
+import { createAction } from "./utils/create-action";
+import { resolveWalletUrl } from "./utils/MeteorSdkUtils.ts";
 
 const LOGIN_WALLET_URL_SUFFIX = "/login/";
 const SIGN_WALLET_URL_SUFFIX = "/sign/";
@@ -60,15 +62,13 @@ interface IMeteorAuthData {
   signedInContract?: IOWalletExternalLinkedContract;
 }
 
-export interface IMeteorWallet_Constructor {
-  near: Near;
-  appKeyPrefix?: string;
-  keyStore: KeyStore;
-}
-
-export interface IMeteorWallet_create_Inputs extends Partial<ConnectConfig> {
+export interface IMeteorWallet_Init_Inputs extends Partial<ConnectConfig> {
   networkId: string;
   appKeyPrefix?: string;
+}
+
+export interface IMeteorWallet_Constructor extends IMeteorWallet_Init_Inputs {
+  keyStore: KeyStore;
 }
 
 declare global {
@@ -115,7 +115,8 @@ export class MeteorWallet {
   _networkId: string;
 
   /** @hidden */
-  _near: Near;
+  _provider: JsonRpcProvider;
+  // _near: Near;
 
   /** @hidden */
   _connectedAccount: ConnectedMeteorWalletAccount | undefined;
@@ -133,18 +134,9 @@ export class MeteorWallet {
    * const wallet = await MeteorWallet.init({ networkId: "testnet" });
    * ```
    */
-  static async init({ walletUrl, ...config }: IMeteorWallet_create_Inputs): Promise<MeteorWallet> {
-    const keyStore = new BrowserLocalStorageKeyStore();
-
-    const near = await connect({
-      keyStore,
-      headers: {},
-      walletUrl: resolveWalletUrl(config.networkId, walletUrl),
-      ...getNetworkPreset(config.networkId),
-      ...config,
-    });
-
-    const wallet = new MeteorWallet({ near, appKeyPrefix: "near_app", keyStore });
+  static async init(config: IMeteorWallet_Init_Inputs): Promise<MeteorWallet> {
+    const keyStore = new BrowserLocalStorageKeyStore(window.localStorage, "_meteor_wallet");
+    const wallet = new MeteorWallet({ appKeyPrefix: "near_app", keyStore, ...config });
 
     // Cleanup up any pending keys (cancelled logins).
     if (!wallet.isSignedIn()) {
@@ -168,19 +160,22 @@ export class MeteorWallet {
    * ```
    */
   constructor({
-    near,
-    appKeyPrefix = near.config.contractName ?? "default",
+    appKeyPrefix = "default",
     keyStore,
+    networkId,
+    walletUrl,
+    nodeUrl,
   }: IMeteorWallet_Constructor) {
-    this._near = near;
-
     const authDataKey = appKeyPrefix + LOCAL_STORAGE_KEY_SUFFIX;
     this._authDataKey = authDataKey;
     this._authData = localStorageAdapter.getJson<IMeteorAuthData>(authDataKey) ?? { allKeys: [] };
 
-    this._networkId = near.config.networkId;
-    this._walletBaseUrl = near.config.walletUrl;
+    this._walletBaseUrl = resolveWalletUrl(networkId, walletUrl);
+    this._networkId = networkId;
     this._keyStore = keyStore;
+    this._provider = new JsonRpcProvider({
+      url: nodeUrl ?? NEAR_BASE_CONFIG_FOR_NETWORK[networkId].nodeUrl,
+    });
   }
 
   isExtensionInstalled(): boolean {
@@ -496,7 +491,7 @@ export class ConnectedMeteorWalletAccount extends Account {
 
   /** @hidden */
   constructor(walletConnection: MeteorWallet, accountId: string) {
-    super(accountId, walletConnection._near.connection.provider);
+    super(accountId, walletConnection._provider);
     this.meteorWallet = walletConnection;
   }
 

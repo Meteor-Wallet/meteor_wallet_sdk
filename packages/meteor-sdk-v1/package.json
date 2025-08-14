@@ -1,6 +1,6 @@
 {
   "name": "@meteorwallet/sdk",
-  "version": "1.0.19",
+  "version": "1.0.20",
   "type": "module",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -11,7 +11,11 @@
     },
     "./package.json": "./package.json"
   },
-  "files": ["./dist", "./src", "./package.json"],
+  "files": [
+    "./dist",
+    "./src",
+    "./package.json"
+  ],
   "scripts": {
     "build": "tsdown",
     "docs:build": "rimraf ./docs && typedoc",
@@ -27,10 +31,12 @@
     "@near-js/transactions": "2.2.5",
     "@near-js/keystores": "2.2.5",
     "@near-js/keystores-browser": "2.2.5",
+    "@near-js/providers": "2.2.5",
     "@near-js/types": "2.2.5",
     "borsh": "1.0.0",
     "nanoid": "5.1.5",
-    "query-string": "^7.1.3"
+    "query-string": "^7.1.3",
+    "zod": "^4.0.17"
   },
   "peerDependencies": {
     "near-api-js": "^6.0.0"

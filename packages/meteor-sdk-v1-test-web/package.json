@@ -10,12 +10,15 @@
   },
   "dependencies": {
     "@meteorwallet/sdk": "workspace:*",
+    "@near-js/keystores-browser": "^2.2.5",
+    "@near-js/crypto": "^2.2.5",
+    "@near-wallet-selector/core": "^9.3.0",
+    "@near-wallet-selector/react-hook": "^9.3.0",
     "@react-router/node": "^7.7.1",
     "@react-router/serve": "^7.7.1",
-    "@near-wallet-selector/core": "^9.3.0",
-    "near-api-js": "^6.2.5",
-    "@near-js/keystores-browser": "^2.2.5",
+    "buffer": "^6.0.3",
     "isbot": "^5.1.27",
+    "near-api-js": "^6.2.5",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-router": "^7.7.1"
@@ -29,6 +32,11 @@
     "tailwindcss": "^4.1.4",
     "typescript": "^5.8.3",
     "vite": "^6.3.3",
-    "vite-tsconfig-paths": "^5.1.4"
+    "vite-tsconfig-paths": "^5.1.4",
+    "vite-plugin-devtools-json": "^1.0.0"
+  },
+  "overrides": {
+    "react": "19.1.0",
+    "react-dom": "19.1.0"
   }
 }
