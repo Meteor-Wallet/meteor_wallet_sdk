@@ -3,6 +3,7 @@ import { KeyPair, PublicKey } from "@near-js/crypto";
 import { KeyStore } from "@near-js/keystores";
 import { BrowserLocalStorageKeyStore } from "@near-js/keystores-browser";
 import { JsonRpcProvider } from "@near-js/providers";
+import { KeyPairSigner } from "@near-js/signers";
 import { createTransaction } from "@near-js/transactions";
 import { type AccessKeyInfoView } from "@near-js/types";
 import type {
@@ -11,7 +12,7 @@ import type {
   Optional,
   Transaction,
 } from "@near-wallet-selector/core";
-import { type ConnectConfig, KeyPairSigner, utils } from "near-api-js";
+import { type ConnectConfig, utils } from "near-api-js";
 import { EExternalActionType } from "./ported_common/dapp/dapp.enums.ts";
 import {
   type IDappAction_Logout_Data,

@@ -1,6 +1,6 @@
 {
   "name": "@meteorwallet/sdk",
-  "version": "1.0.21",
+  "version": "1.0.22",
   "type": "module",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -33,6 +33,7 @@
     "@near-js/keystores": "2.2.5",
     "@near-js/keystores-browser": "2.2.5",
     "@near-js/providers": "2.2.5",
+    "@near-js/signers": "^2.2.5",
     "@near-js/types": "2.2.5",
     "borsh": "1.0.0",
     "nanoid": "5.1.5",
