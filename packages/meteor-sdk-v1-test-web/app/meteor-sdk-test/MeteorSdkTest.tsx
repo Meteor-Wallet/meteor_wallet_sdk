@@ -1,4 +1,3 @@
-import { setupModal } from "@near-wallet-selector/modal-ui";
 import {
   type SetupParams,
   useWalletSelector,

@@ -8,6 +8,11 @@ import { watchNodeModules } from "vite-plugin-watch-node-modules";
 import tsconfigPaths from "vite-tsconfig-paths";
 
 export default defineConfig({
+  server: {
+    warmup: {
+      clientFiles: ["./app/**/*.{js,ts,jsx,tsx}"],
+    },
+  },
   plugins: [
     tailwindcss(),
     reactRouter(),
