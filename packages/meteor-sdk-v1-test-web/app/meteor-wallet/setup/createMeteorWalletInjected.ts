@@ -147,7 +147,7 @@ export const createMeteorWalletInjected: WalletBehaviourFactory<
         throw new Error("Wallet not signed in");
       }
 
-      return _state.wallet.requestSignTransactions({
+      return _state.wallet.requestSignAndSendTransactions({
         transactions,
       });
     },
@@ -173,9 +173,11 @@ export const createMeteorWalletInjected: WalletBehaviourFactory<
         throw new Error("Wallet not signed in");
       }
 
-      return _state.wallet.requestSignedTransactionsWithoutPublish({
+      const response = await _state.wallet.requestSignedTransactionsWithoutPublish({
         transactions: [transaction],
       });
+
+      // response.transactions.map(s => s.)
 
       throw new Error(`Method not supported by ${metadata.name}`);
     },

@@ -7,6 +7,7 @@ import { KeyPairSigner } from "@near-js/signers";
 import {
   createTransaction,
   encodeDelegateAction,
+  Transaction as NearNativeTransaction,
   SCHEMA,
   type SignedDelegate,
   type SignedTransaction,
@@ -40,6 +41,7 @@ import {
   type IOMeteorRequest_SignDelegate_Input,
   type IOMeteorRequest_SignDelegate_Output,
   type IOMeteorRequest_SignTransactions_Inputs,
+  type IOMeteorRequest_SignTransactionsNoPublish_Inputs,
   type IOMeteorWalletSdk_RequestSignIn_Inputs,
   type IOMeteorWalletSdk_SignIn_Output,
   type IOMeteorWalletSdkAccount_SignAndSendTransaction_Input,
@@ -463,20 +465,16 @@ export class MeteorWallet {
   }
 
   async requestSignedTransactionsWithoutPublish(
-    inputs: IOMeteorRequest_SignTransactions_Inputs,
+    inputs: IOMeteorRequest_SignTransactionsNoPublish_Inputs,
   ): Promise<IOMeteorRequest_CreateSignedTransactions_Output> {
     const { transactions } = inputs;
-
-    const transformedTransactions = await this.transformTransactions(transactions);
-
-    console.log("Transformed transactions to sign", transformedTransactions);
 
     const response =
       await getMeteorPostMessenger().connectAndWaitForResponse<IODappAction_PostMessage_CreateSignTransactions_Output>(
         {
           actionType: EExternalActionType.sign_transaction_no_publish,
           inputs: {
-            transactions: transformedTransactions
+            transactions: transactions
               .map((transaction) => transaction.encode())
               .map((serialized) => Buffer.from(serialized).toString("base64"))
               .join(","),
@@ -561,7 +559,9 @@ export class MeteorWallet {
     return this._connectedAccount;
   }
 
-  async transformTransactions(transactions: Array<Optional<Transaction, "signerId">>) {
+  async transformTransactions(
+    transactions: Optional<Transaction, "signerId">[],
+  ): Promise<NearNativeTransaction[]> {
     const account = await this.account();
     // const { networkId, signer, provider } = account.getConnection();
     const signer = account.getSigner()!;

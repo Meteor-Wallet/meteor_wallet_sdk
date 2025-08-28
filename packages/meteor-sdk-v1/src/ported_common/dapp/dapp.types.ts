@@ -49,32 +49,17 @@ export class MeteorActionError extends Error {
   }
 }
 
-/*export interface IWalletExternalAction_Login {
-  success_url?: string;
-  failure_url?: string;
-  contract_id: string;
-  public_key: string;
-}*/
-
-/*interface IWalletExternalAction_SignIn_Processed {
-  accessType: EWalletExternalAction_SignIn_AccessType;
-}*/
-
 export type TMeteorWalletExternalAction_SignIn_AllMethods = z.infer<
   typeof ZO_DappSignInAction_AllMethods
 >;
+
 export type TMeteorWalletExternalAction_SignIn_SelectedMethods = z.infer<
   typeof ZO_DappSignInAction_SelectedMethods
 >;
-// export type TWalletExternalAction_SignIn = z.infer<typeof ZO_MeteorSignInAction_Combined>;
+
 export type TDappAction_SignIn_Data =
   | TMeteorWalletExternalAction_SignIn_AllMethods
   | TMeteorWalletExternalAction_SignIn_SelectedMethods;
-
-// export type TNearTransactionBase = Omit<
-//   NearFullTransaction,
-//   "nonce" | "publicKey" | "blockHash" | "encode"
-// >;
 
 export interface IOMeteorWalletSdk_RequestSignIn_Inputs {
   keyPair?: KeyPair;
@@ -150,6 +135,15 @@ export interface IODappAction_PostMessage_SignTransactions_Output {
 export interface IOMeteorRequest_SignTransactions_Inputs {
   /** list of transactions to sign */
   transactions: Array<Optional<Transaction, "signerId">>;
+}
+
+/**
+ * Just sign transactions, don't publish them
+ */
+
+export interface IOMeteorRequest_SignTransactionsNoPublish_Inputs {
+  /** list of transactions to sign */
+  transactions: Optional<NearFullTransaction, "signerId">[];
 }
 
 /**
@@ -325,6 +319,43 @@ export interface IDappAction_VerifyOwner extends IExternalAction_Base {
   actionType: EExternalActionType.verify_owner;
   inputs: IODappAction_VerifyOwner_Input;
 }
+
+export interface IDappAction_CreateSignedTransaction extends IExternalAction_Base {
+  actionType: EExternalActionType.create_signed_transaction;
+  inputs: IODappAction_PostMessage_CreateSignTransactions_Input;
+}
+
+export interface IDappAction_SignDelegateAction extends IExternalAction_Base {
+  actionType: EExternalActionType.sign_delegate_action;
+  inputs: IODappAction_PostMessage_SignDelegate_Input;
+}
+
+export interface IDappAction_SignTransactionNoPublish extends IExternalAction_Base {
+  actionType: EExternalActionType.sign_transaction_no_publish;
+  inputs: IODappAction_PostMessage_SignTransactions_Input;
+}
+
+export type TKeypomAction_Claim_Data = {
+  contractId: string;
+  privKey: string;
+  redirectUrl?: string;
+};
+
+export interface IKeypomAction_Claim extends IExternalAction_Base {
+  actionType: EExternalActionType.keypom_claim;
+  inputs: TKeypomAction_Claim_Data;
+}
+
+export type TExternalAction =
+  | IDappAction_Login
+  | IDappAction_SignMessage
+  | IDappAction_SignTransaction
+  | IDappAction_Logout
+  | IDappAction_VerifyOwner
+  | IDappAction_CreateSignedTransaction
+  | IDappAction_SignDelegateAction
+  | IDappAction_SignTransactionNoPublish
+  | IKeypomAction_Claim;
 
 export type IMeteorActionResponse_Output<T> =
   | {

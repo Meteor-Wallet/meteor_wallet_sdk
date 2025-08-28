@@ -4,6 +4,7 @@ import { useImmer } from "use-immer";
 import {
   addMessage,
   getMessages,
+  type IAddMessage,
 } from "~/meteor-sdk-test/dapp_actions/chat_messages/chat_messages.func";
 
 export function ChatMessages() {
@@ -16,11 +17,13 @@ export function ChatMessages() {
     },
   });
 
-  const [messageToSend, updateMessage] = useImmer({
+  const [messageToSend, updateMessage] = useImmer<IAddMessage & { withDonation: boolean }>({
     message: "",
     donation: "0.001",
     withDonation: false,
     multiple: false,
+    blankTransaction: false,
+    signOnly: false,
   });
 
   const mutate_addMessage = useMutation({
@@ -32,6 +35,8 @@ export function ChatMessages() {
       });
     },
   });
+
+  console.log("messageToSend", messageToSend);
 
   return (
     <div className="w-full space-y-6">
@@ -88,6 +93,38 @@ export function ChatMessages() {
               onChange={(e) => {
                 updateMessage((draft) => {
                   draft.multiple = e.target.checked;
+                });
+              }}
+            />
+          </div>
+          <div className={"flex items-center gap-2"}>
+            <label htmlFor={"sign-only"} className={"text-sm"}>
+              Sign Only
+            </label>
+            <input
+              id={"sign-only"}
+              name="sign-only"
+              type="checkbox"
+              checked={messageToSend.signOnly}
+              onChange={(e) => {
+                updateMessage((draft) => {
+                  draft.signOnly = e.target.checked;
+                });
+              }}
+            />
+          </div>
+          <div className={"flex items-center gap-2"}>
+            <label htmlFor={"blank-transaction"} className={"text-sm"}>
+              Blank Transaction (Only Actions with Receiver)
+            </label>
+            <input
+              id={"blank-transaction"}
+              name="blank-transaction"
+              type="checkbox"
+              checked={messageToSend.blankTransaction}
+              onChange={(e) => {
+                updateMessage((draft) => {
+                  draft.blankTransaction = e.target.checked;
                 });
               }}
             />
