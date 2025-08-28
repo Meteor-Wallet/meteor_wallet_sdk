@@ -4,7 +4,13 @@ import { KeyStore } from "@near-js/keystores";
 import { BrowserLocalStorageKeyStore } from "@near-js/keystores-browser";
 import { JsonRpcProvider } from "@near-js/providers";
 import { KeyPairSigner } from "@near-js/signers";
-import { createTransaction } from "@near-js/transactions";
+import {
+  createTransaction,
+  encodeDelegateAction,
+  SCHEMA,
+  type SignedDelegate,
+  type SignedTransaction,
+} from "@near-js/transactions";
 import { type AccessKeyInfoView } from "@near-js/types";
 import type {
   Action,
@@ -12,11 +18,16 @@ import type {
   Optional,
   Transaction,
 } from "@near-wallet-selector/core";
+import { deserialize, serialize } from "borsh";
 import { type ConnectConfig, utils } from "near-api-js";
 import { EExternalActionType } from "./ported_common/dapp/dapp.enums.ts";
 import {
   type IDappAction_Logout_Data,
   type IMeteorActionResponse_Output,
+  type IODappAction_PostMessage_CreateSignTransactions_Input,
+  type IODappAction_PostMessage_CreateSignTransactions_Output,
+  type IODappAction_PostMessage_SignDelegate_Input,
+  type IODappAction_PostMessage_SignDelegate_Output,
   type IODappAction_PostMessage_SignIn_Output,
   type IODappAction_PostMessage_SignTransactions_Input,
   type IODappAction_PostMessage_SignTransactions_Output,
@@ -24,10 +35,14 @@ import {
   type IODappAction_SignMessage_Output,
   type IODappAction_VerifyOwner_Input,
   type IODappAction_VerifyOwner_Output,
+  type IOMeteorRequest_CreateSignedTransactions_Input,
+  type IOMeteorRequest_CreateSignedTransactions_Output,
+  type IOMeteorRequest_SignDelegate_Input,
+  type IOMeteorRequest_SignDelegate_Output,
+  type IOMeteorRequest_SignTransactions_Inputs,
   type IOMeteorWalletSdk_RequestSignIn_Inputs,
   type IOMeteorWalletSdk_SignIn_Output,
   type IOMeteorWalletSdkAccount_SignAndSendTransaction_Input,
-  type IORequestSignTransactions_Inputs,
   type IOWalletExternalLinkedContract,
   MeteorActionError,
 } from "./ported_common/dapp/dapp.types.ts";
@@ -84,7 +99,7 @@ declare global {
  *
  * @example
  * ```js
- * import { MeteorWallet } from "@meteorwallet/sdk";
+ * import { MeteorWallet } from "@meteorwallet/sdk-v1";
  *
  * // create new MeteorWallet instance (passing in your initialized Near connection)
  * const meteorWallet = new MeteorWallet({ near: connectedNear, appKeyPrefix: 'my-app' });
@@ -378,8 +393,8 @@ export class MeteorWallet {
    * Sign transactions using Meteor Wallet. Will return a promise with an array of `FinalExecutionOutcome`
    * of the given transactions.
    * */
-  async requestSignTransactions(
-    inputs: IORequestSignTransactions_Inputs,
+  async requestSignAndSendTransactions(
+    inputs: IOMeteorRequest_SignTransactions_Inputs,
   ): Promise<FinalExecutionOutcome[]> {
     const { transactions } = inputs;
 
@@ -406,6 +421,111 @@ export class MeteorWallet {
 
     if (response.success) {
       return response.payload.executionOutcomes;
+    }
+
+    throw new MeteorActionError({
+      endTags: response.endTags,
+      message: response.message,
+    });
+  }
+
+  async requestCreateSignedTransactions(
+    inputs: IOMeteorRequest_CreateSignedTransactions_Input,
+  ): Promise<IOMeteorRequest_CreateSignedTransactions_Output> {
+    const response =
+      await getMeteorPostMessenger().connectAndWaitForResponse<IODappAction_PostMessage_CreateSignTransactions_Output>(
+        {
+          actionType: EExternalActionType.create_signed_transaction,
+          inputs: {
+            transactionsToCreate: inputs.transactionsToCreate.map(({ receiverId, actions }) => ({
+              actions: actions.map((a) =>
+                Buffer.from(serialize(SCHEMA.Action, a)).toString("base64"),
+              ),
+              receiverId,
+            })),
+          } satisfies IODappAction_PostMessage_CreateSignTransactions_Input,
+          network: this._networkId as ENearNetwork,
+        },
+      );
+
+    if (response.success) {
+      return {
+        transactions: response.payload.transactions.map(
+          (t) => <SignedTransaction>deserialize(SCHEMA.SignedTransaction, Buffer.from(t, "base64")),
+        ),
+      };
+    }
+
+    throw new MeteorActionError({
+      endTags: response.endTags,
+      message: response.message,
+    });
+  }
+
+  async requestSignedTransactionsWithoutPublish(
+    inputs: IOMeteorRequest_SignTransactions_Inputs,
+  ): Promise<IOMeteorRequest_CreateSignedTransactions_Output> {
+    const { transactions } = inputs;
+
+    const transformedTransactions = await this.transformTransactions(transactions);
+
+    console.log("Transformed transactions to sign", transformedTransactions);
+
+    const response =
+      await getMeteorPostMessenger().connectAndWaitForResponse<IODappAction_PostMessage_CreateSignTransactions_Output>(
+        {
+          actionType: EExternalActionType.sign_transaction_no_publish,
+          inputs: {
+            transactions: transformedTransactions
+              .map((transaction) => transaction.encode())
+              .map((serialized) => Buffer.from(serialized).toString("base64"))
+              .join(","),
+          } as IODappAction_PostMessage_SignTransactions_Input,
+          // inputs: { public_key: usingPublicKey, ...options },
+          network: this._networkId as ENearNetwork,
+        },
+      );
+
+    if (response.success) {
+      return {
+        transactions: response.payload.transactions.map(
+          (t) => <SignedTransaction>deserialize(SCHEMA.SignedTransaction, Buffer.from(t, "base64")),
+        ),
+      };
+    }
+
+    throw new MeteorActionError({
+      endTags: response.endTags,
+      message: response.message,
+    });
+  }
+
+  async requestSignDelegateActions({
+    delegateActions,
+  }: IOMeteorRequest_SignDelegate_Input): Promise<IOMeteorRequest_SignDelegate_Output> {
+    const response =
+      await getMeteorPostMessenger().connectAndWaitForResponse<IODappAction_PostMessage_SignDelegate_Output>(
+        {
+          actionType: EExternalActionType.sign_delegate_action,
+          inputs: {
+            delegateActions: delegateActions
+              .map((action) => encodeDelegateAction(action))
+              .map((serialized) => Buffer.from(serialized).toString("base64"))
+              .join(","),
+          } satisfies IODappAction_PostMessage_SignDelegate_Input,
+          network: this._networkId as ENearNetwork,
+        },
+      );
+
+    if (response.success) {
+      return {
+        signedDelegateActions: response.payload.signedDelegateActions.map((i) => ({
+          signedDelegate: <SignedDelegate>(
+            deserialize(SCHEMA.SignedDelegate, Buffer.from(i.signedDelegate, "base64"))
+          ),
+          hash: Buffer.from(i.hash, "base64"),
+        })),
+      };
     }
 
     throw new MeteorActionError({
@@ -590,7 +710,7 @@ export class ConnectedMeteorWalletAccount extends Account {
 
   /**
    * Sign a transaction using Meteor Wallet
-   * @see {@link MeteorWallet.requestSignTransactions}
+   * @see {@link MeteorWallet.requestSignAndSendTransactions}
    */
   async signAndSendTransaction_direct({
     receiverId,
@@ -606,7 +726,7 @@ export class ConnectedMeteorWalletAccount extends Account {
     }
 
     return (
-      await this.meteorWallet.requestSignTransactions({
+      await this.meteorWallet.requestSignAndSendTransactions({
         transactions: [transaction!],
       })
     )[0];

@@ -1,5 +1,10 @@
 import { KeyPair, KeyType } from "@near-js/crypto";
-import { Transaction as NearFullTransaction } from "@near-js/transactions";
+import {
+  DelegateAction,
+  Transaction as NearFullTransaction,
+  SignedDelegate,
+  SignedTransaction,
+} from "@near-js/transactions";
 import type { FinalExecutionOutcome } from "@near-js/types";
 import type { Action, Optional, Transaction } from "@near-wallet-selector/core";
 import { z } from "zod";
@@ -13,11 +18,11 @@ import {
   EMeteorWalletSignInType,
   EWalletExternalActionStatus,
 } from "./dapp.enums.ts";
+import { EDappActionErrorTag, getExternalActionErrorMessageForEndTag } from "./dapp.errors.ts";
 import {
   ZO_DappSignInAction_AllMethods,
   ZO_DappSignInAction_SelectedMethods,
 } from "./dapp.validation.ts";
-import { EDappActionErrorTag, getExternalActionErrorMessageForEndTag } from "./dapp.errors.ts";
 
 export interface IRejectReason {
   message: string;
@@ -131,18 +136,85 @@ export interface IODappAction_VerifyOwner_Output {
   keyType: KeyType;
 }
 
+/**
+ * Sign and publish transactions
+ */
 export interface IODappAction_PostMessage_SignTransactions_Input {
   transactions: string;
 }
 
-export interface ITransactionHashOutput {
-  hash: string;
-  nonceString: string;
+export interface IODappAction_PostMessage_SignTransactions_Output {
+  executionOutcomes: FinalExecutionOutcome[];
 }
 
-export interface IODappAction_PostMessage_SignTransactions_Output {
-  // transactionHashes: ITransactionHashOutput[];
-  executionOutcomes: FinalExecutionOutcome[];
+export interface IOMeteorRequest_SignTransactions_Inputs {
+  /** list of transactions to sign */
+  transactions: Array<Optional<Transaction, "signerId">>;
+}
+
+/**
+ * Create signed transactions (no publish)
+ */
+export interface IDappAction_CreateSignedTransactionItem {
+  receiverId: string;
+  // base64 encoded
+  actions: string[];
+}
+
+export interface IODappAction_PostMessage_CreateSignTransactions_Input {
+  transactionsToCreate: IDappAction_CreateSignedTransactionItem[];
+}
+
+export interface IODappAction_PostMessage_CreateSignTransactions_Output {
+  transactions: string[];
+}
+
+export interface ICreateSignedTransactionItem {
+  receiverId: string;
+  // base64 encoded
+  actions: Action[];
+}
+
+export interface IOMeteorRequest_CreateSignedTransactions_Input {
+  transactionsToCreate: ICreateSignedTransactionItem[];
+}
+
+export interface IOMeteorRequest_CreateSignedTransactions_Output {
+  transactions: SignedTransaction[];
+}
+
+/**
+ * Sign Delegate Action
+ */
+export interface IODappAction_PostMessage_SignDelegate_Input {
+  // base64 encoded delegate actions
+  delegateActions: string;
+}
+
+export interface IDappAction_SignedDelegate {
+  // base64 encoded
+  hash: string;
+  // borsh encoded and base64
+  signedDelegate: string;
+}
+
+export interface IODappAction_PostMessage_SignDelegate_Output {
+  signedDelegateActions: IDappAction_SignedDelegate[];
+}
+
+export interface IOMeteorRequest_SignDelegate_Input {
+  delegateActions: DelegateAction[];
+}
+
+interface IMeteorRequest_SignDelegate_Output {
+  // base64 encoded
+  hash: Uint8Array;
+  // borsh encoded
+  signedDelegate: SignedDelegate;
+}
+
+export interface IOMeteorRequest_SignDelegate_Output {
+  signedDelegateActions: IMeteorRequest_SignDelegate_Output[];
 }
 
 /**
@@ -155,11 +227,6 @@ export interface IORequestSignTransactionsRedirect_Inputs {
   callback_url?: string;
   /** meta information NEAR Wallet will send back to the application. `meta` will be attached to the `callbackUrl` as a url search param */
   meta?: string;
-}
-
-export interface IORequestSignTransactions_Inputs {
-  /** list of transactions to sign */
-  transactions: Array<Optional<Transaction, "signerId">>;
 }
 
 export interface IDappAction_SignTransactions_Data {

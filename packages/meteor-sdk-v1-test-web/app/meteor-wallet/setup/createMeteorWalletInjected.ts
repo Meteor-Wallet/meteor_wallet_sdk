@@ -1,4 +1,5 @@
-import { EMeteorWalletSignInType } from "@meteorwallet/sdk";
+import { EMeteorWalletSignInType } from "@meteorwallet/sdk-v1";
+import { PublicKey } from "@near-js/crypto";
 import type { Account, InjectedWallet, WalletBehaviourFactory } from "@near-wallet-selector/core";
 import type { MeteorWalletParams_Injected } from "~/meteor-wallet/meteor-wallet-types";
 import { nullEmpty } from "~/meteor-wallet/setup/nullEmpty";
@@ -152,7 +153,15 @@ export const createMeteorWalletInjected: WalletBehaviourFactory<
     },
 
     async createSignedTransaction(receiverId, actions) {
-      logger.log("createSignedTransaction", { receiverId, actions });
+      logger.log("MeteorWallet:createSignedTransaction", { receiverId, actions });
+
+      // if (!_state.wallet.isSignedIn()) {
+      //   throw new Error("Wallet not signed in");
+      // }
+      //
+      // return _state.wallet.requestCreateSignedTransactions({
+      //   transactions,
+      // });
 
       throw new Error(`Method not supported by ${metadata.name}`);
     },
@@ -160,17 +169,35 @@ export const createMeteorWalletInjected: WalletBehaviourFactory<
     async signTransaction(transaction) {
       logger.log("signTransaction", { transaction });
 
+      if (!_state.wallet.isSignedIn()) {
+        throw new Error("Wallet not signed in");
+      }
+
+      return _state.wallet.requestSignedTransactionsWithoutPublish({
+        transactions: [transaction],
+      });
+
       throw new Error(`Method not supported by ${metadata.name}`);
     },
 
     async getPublicKey() {
-      logger.log("getPublicKey", {});
+      logger.log("MeteorWallet:getPublicKey", {});
 
-      throw new Error(`Method not supported by ${metadata.name}`);
+      const accounts = await getAccounts();
+
+      if (accounts.length === 0) {
+        throw new Error("Wallet is not signed in yet");
+      }
+
+      if (!accounts[0].publicKey) {
+        throw new Error("Public key is not available for the selected account");
+      }
+
+      return PublicKey.fromString(accounts[0].publicKey);
     },
 
     async signNep413Message(message, accountId, recipient, nonce, callbackUrl) {
-      logger.log("signNep413Message", {
+      logger.log("MeteorWallet:signNep413Message", {
         message,
         accountId,
         recipient,
@@ -178,7 +205,23 @@ export const createMeteorWalletInjected: WalletBehaviourFactory<
         callbackUrl,
       });
 
-      throw new Error(`Method not supported by ${metadata.name}`);
+      const response = await _state.wallet.signMessage({
+        message,
+        nonce,
+        recipient,
+        accountId,
+      });
+
+      if (response.success) {
+        const { publicKey, accountId, signature } = response.payload;
+        return {
+          publicKey: PublicKey.from(publicKey),
+          accountId: accountId,
+          signature: new Uint8Array(Buffer.from(signature, "base64")),
+        };
+      } else {
+        throw new Error(`Couldn't sign message: ${response.message}`);
+      }
     },
 
     async signDelegateAction(delegateAction) {

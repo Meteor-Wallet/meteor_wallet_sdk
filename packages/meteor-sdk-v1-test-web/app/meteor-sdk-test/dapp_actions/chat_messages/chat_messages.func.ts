@@ -24,6 +24,13 @@ export async function getMessages(
   return response.reverse();
 }
 
+export interface IAddMessage {
+  message: string;
+  donation: string;
+  multiple: boolean;
+  signOnly: boolean;
+}
+
 export async function addMessage(
   walletSelectorValue: WalletSelectorProviderValue,
   {

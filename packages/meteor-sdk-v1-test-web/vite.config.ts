@@ -18,7 +18,7 @@ export default defineConfig({
     reactRouter(),
     tsconfigPaths(),
     devtoolsJson(),
-    watchNodeModules(["@meteorwallet/sdk"], {
+    watchNodeModules(["@meteorwallet/sdk-v1"], {
       cwd: path.join(process.cwd(), "../../"),
     }) as any,
     nodePolyfills({

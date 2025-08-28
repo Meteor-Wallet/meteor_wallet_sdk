@@ -9,10 +9,11 @@
     "typecheck": "react-router typegen && tsc"
   },
   "dependencies": {
-    "@meteorwallet/sdk": "workspace:*",
+    "@meteorwallet/sdk-v1": "workspace:*",
     "@near-js/keystores-browser": "^2.2.5",
     "@near-js/crypto": "^2.2.5",
     "@near-js/utils": "^2.2.5",
+    "@near-js/keystores": "2.2.5",
     "@near-wallet-selector/core": "^9.3.0",
     "@near-wallet-selector/react-hook": "^9.3.0",
     "@react-router/node": "^7.8.0",

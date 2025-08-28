@@ -1,10 +1,14 @@
 export enum EExternalActionType {
   login = "login",
+  // Sign and Send!
   sign = "sign",
   logout = "logout",
   verify_owner = "verify_owner",
   keypom_claim = "keypom_claim",
   sign_message = "sign_message",
+  sign_delegate_action = "sign_delegate_action",
+  create_signed_transaction = "create_signed_transaction",
+  sign_transaction_no_publish = "sign_transaction_no_publish",
 }
 
 export enum EMeteorWalletSignInType {
