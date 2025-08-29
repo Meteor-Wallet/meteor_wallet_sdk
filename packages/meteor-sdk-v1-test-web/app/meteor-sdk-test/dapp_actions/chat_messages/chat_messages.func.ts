@@ -1,4 +1,10 @@
-import { Action, actionCreators, createTransaction, type Transaction } from "@near-js/transactions";
+import {
+  Action,
+  actionCreators,
+  buildDelegateAction,
+  createTransaction,
+  type Transaction,
+} from "@near-js/transactions";
 import { baseDecode, parseNearAmount } from "@near-js/utils";
 import type { Action as WsAction, Transaction as WsTransaction } from "@near-wallet-selector/core";
 import type { WalletSelectorProviderValue } from "@near-wallet-selector/react-hook/src/lib/WalletSelectorProvider";
@@ -32,17 +38,24 @@ export interface IAddMessage {
   multiple: boolean;
   blankTransaction: boolean;
   signOnly: boolean;
+  asDelegate: boolean;
 }
 
 export async function addMessage(
   walletSelectorValue: WalletSelectorProviderValue,
-  { message, donation, multiple, signOnly, blankTransaction }: IAddMessage,
+  { message, donation, multiple, signOnly, blankTransaction, asDelegate }: IAddMessage,
 ) {
   const wsTransactions: Array<WsTransaction> = [];
   const wsActions: WsAction[] = [];
 
   const transactions: Transaction[] = [];
   const actions: Action[] = [];
+
+  const wallet = walletSelectorValue.wallet;
+
+  if (wallet == null) {
+    throw new Error("Wallet is not connected");
+  }
 
   for (let i = 0; i < (multiple ? 2 : 1); i += 1) {
     const wsAction: WsAction = {
@@ -99,6 +112,22 @@ export async function addMessage(
     const resp = await walletSelectorValue.signTransaction(transactions[0]);
     console.log("sign transaction only (no publish)", resp);
     alert("Successfully signed transaction. Result is:\n" + resp);
+    return resp;
+  }
+
+  if (asDelegate) {
+    const resp = await wallet.signDelegateAction(
+      buildDelegateAction({
+        actions,
+        nonce: BigInt(100),
+        receiverId: CONTRACT_ID,
+        publicKey: await walletSelectorValue.getPublicKey(),
+        senderId: walletSelectorValue.signedAccountId!,
+        maxBlockHeight: BigInt(1000000000),
+      }),
+    );
+    console.log("Signed Delegate Action", resp);
+    alert("Successfully signed delegate action. Result is:\n" + resp);
     return resp;
   }
 

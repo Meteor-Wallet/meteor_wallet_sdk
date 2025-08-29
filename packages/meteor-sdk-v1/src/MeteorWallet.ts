@@ -7,6 +7,7 @@ import { KeyPairSigner } from "@near-js/signers";
 import {
   createTransaction,
   encodeDelegateAction,
+  Action as NearNativeAction,
   Transaction as NearNativeTransaction,
   SCHEMA,
   type SignedDelegate,
@@ -440,7 +441,7 @@ export class MeteorWallet {
           actionType: EExternalActionType.create_signed_transaction,
           inputs: {
             transactionsToCreate: inputs.transactionsToCreate.map(({ receiverId, actions }) => ({
-              actions: actions.map((a) =>
+              actions: this.transformActions(actions).map((a) =>
                 Buffer.from(serialize(SCHEMA.Action, a)).toString("base64"),
               ),
               receiverId,
@@ -559,6 +560,10 @@ export class MeteorWallet {
     return this._connectedAccount;
   }
 
+  transformActions(actions: Action[]): NearNativeAction[] {
+    return actions.map((action) => createAction(action));
+  }
+
   async transformTransactions(
     transactions: Optional<Transaction, "signerId">[],
   ): Promise<NearNativeTransaction[]> {
@@ -579,7 +584,7 @@ export class MeteorWallet {
           );
         }
 
-        const transformedActions = transaction.actions.map((action) => createAction(action));
+        const transformedActions = this.transformActions(transaction.actions);
 
         const block = await provider.viewBlock({ finality: "final" });
 

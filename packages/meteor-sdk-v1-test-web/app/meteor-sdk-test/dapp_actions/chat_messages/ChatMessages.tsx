@@ -24,6 +24,7 @@ export function ChatMessages() {
     multiple: false,
     blankTransaction: false,
     signOnly: false,
+    asDelegate: false,
   });
 
   const mutate_addMessage = useMutation({
@@ -125,6 +126,22 @@ export function ChatMessages() {
               onChange={(e) => {
                 updateMessage((draft) => {
                   draft.blankTransaction = e.target.checked;
+                });
+              }}
+            />
+          </div>
+          <div className={"flex items-center gap-2"}>
+            <label htmlFor={"as-delegate"} className={"text-sm"}>
+              As Delegate Action
+            </label>
+            <input
+              id={"as-delegate"}
+              name="as-delegate"
+              type="checkbox"
+              checked={messageToSend.asDelegate}
+              onChange={(e) => {
+                updateMessage((draft) => {
+                  draft.asDelegate = e.target.checked;
                 });
               }}
             />

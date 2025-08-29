@@ -1,5 +1,6 @@
 import { EMeteorWalletSignInType } from "@meteorwallet/sdk-v1";
 import { PublicKey } from "@near-js/crypto";
+import { SignedDelegate, SignedTransaction } from "@near-js/transactions";
 import type { Account, InjectedWallet, WalletBehaviourFactory } from "@near-wallet-selector/core";
 import type { MeteorWalletParams_Injected } from "~/meteor-wallet/meteor-wallet-types";
 import { nullEmpty } from "~/meteor-wallet/setup/nullEmpty";
@@ -152,18 +153,23 @@ export const createMeteorWalletInjected: WalletBehaviourFactory<
       });
     },
 
-    async createSignedTransaction(receiverId, actions) {
+    async createSignedTransaction(receiverId, actions): Promise<void | SignedTransaction> {
       logger.log("MeteorWallet:createSignedTransaction", { receiverId, actions });
 
-      // if (!_state.wallet.isSignedIn()) {
-      //   throw new Error("Wallet not signed in");
-      // }
-      //
-      // return _state.wallet.requestCreateSignedTransactions({
-      //   transactions,
-      // });
+      if (!_state.wallet.isSignedIn()) {
+        throw new Error("Wallet not signed in");
+      }
 
-      throw new Error(`Method not supported by ${metadata.name}`);
+      const response = await _state.wallet.requestCreateSignedTransactions({
+        transactionsToCreate: [
+          {
+            receiverId,
+            actions,
+          },
+        ],
+      });
+
+      return response.transactions[0];
     },
 
     async signTransaction(transaction) {
@@ -226,10 +232,17 @@ export const createMeteorWalletInjected: WalletBehaviourFactory<
       }
     },
 
-    async signDelegateAction(delegateAction) {
-      logger.log("signDelegateAction", { delegateAction });
+    async signDelegateAction(
+      delegateAction,
+    ): Promise<[Uint8Array<ArrayBufferLike>, SignedDelegate]> {
+      const response = await _state.wallet.requestSignDelegateActions({
+        delegateActions: [delegateAction],
+      });
 
-      throw new Error(`Method not supported by ${metadata.name}`);
+      return [
+        response.signedDelegateActions[0].hash,
+        response.signedDelegateActions[0].signedDelegate,
+      ];
     },
 
     buildImportAccountsUrl() {

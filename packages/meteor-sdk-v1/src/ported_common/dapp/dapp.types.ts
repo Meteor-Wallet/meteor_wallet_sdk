@@ -228,6 +228,10 @@ export interface IDappAction_SignTransactions_Data {
   transactions: NearFullTransaction[];
 }
 
+export interface IDappAction_SignDelegateActions_HydratedData {
+  delegateActions: DelegateAction[];
+}
+
 export interface IOWalletExternalLinkedContract {
   contract_id: string;
   public_key: string;
@@ -327,7 +331,7 @@ export interface IDappAction_CreateSignedTransaction extends IExternalAction_Bas
 
 export interface IDappAction_SignDelegateAction extends IExternalAction_Base {
   actionType: EExternalActionType.sign_delegate_action;
-  inputs: IODappAction_PostMessage_SignDelegate_Input;
+  inputs: IDappAction_SignDelegateActions_HydratedData;
 }
 
 export interface IDappAction_SignTransactionNoPublish extends IExternalAction_Base {

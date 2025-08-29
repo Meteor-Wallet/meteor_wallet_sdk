@@ -1,5 +1,5 @@
 import { PublicKey } from "@near-js/crypto";
-import { actionCreators } from "@near-js/transactions";
+import { actionCreators, Action as NearAction } from "@near-js/transactions";
 import type { Action, AddKeyPermission } from "@near-wallet-selector/core";
 
 const getAccessKey = (permission: AddKeyPermission) => {
@@ -18,7 +18,7 @@ export const parseArgs = (data: Object | string) => {
   return data;
 };
 
-export const createAction = (action: Action) => {
+export const createAction = (action: Action): NearAction => {
   switch (action.type) {
     case "CreateAccount":
       return actionCreators.createAccount();
