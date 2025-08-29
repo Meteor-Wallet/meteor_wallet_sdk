@@ -6,7 +6,6 @@ import { JsonRpcProvider } from "@near-js/providers";
 import { KeyPairSigner } from "@near-js/signers";
 import {
   createTransaction,
-  encodeDelegateAction,
   Action as NearNativeAction,
   Transaction as NearNativeTransaction,
   SCHEMA,
@@ -508,7 +507,7 @@ export class MeteorWallet {
           actionType: EExternalActionType.sign_delegate_action,
           inputs: {
             delegateActions: delegateActions
-              .map((action) => encodeDelegateAction(action))
+              .map((action) => serialize(SCHEMA.DelegateAction, action))
               .map((serialized) => Buffer.from(serialized).toString("base64"))
               .join(","),
           } satisfies IODappAction_PostMessage_SignDelegate_Input,
