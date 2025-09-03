@@ -18,8 +18,14 @@ export default defineConfig({
     /\.(png|svg|jpg|jpeg|gif)$/,
   ],
 
-  // Keep ESM neutral output for broad compatibility
+  // Build both ESM and CommonJS for maximum compatibility
   platform: "neutral",
   target: "chrome100",
   nodeProtocol: false,
+
+  // Generate both ESM and CommonJS outputs
+  format: ["esm", "cjs"],
+
+  // Output directory structure
+  outDir: "./dist",
 });
