@@ -7,7 +7,7 @@ import { setupMeteorWallet } from "~/meteor-wallet/setup/setupMeteorWallet";
 import "@near-wallet-selector/modal-ui/styles.css";
 import { QueryClient, QueryClientProvider, useMutation, useQuery } from "@tanstack/react-query";
 import { useImmer } from "use-immer";
-import { addMessage, CONTRACT_ID, getMessages } from "~/meteor-sdk-test/guestbook";
+import { addMessage, CONTRACT_ID, getMessages, signTestMessage } from "~/meteor-sdk-test/guestbook";
 
 const walletSelectorConfig: SetupParams = {
   network: "testnet",
@@ -58,6 +58,13 @@ function MeteorSdkTestInner() {
     },
   });
 
+  const mutate_signMessage = useMutation({
+    mutationKey: ["sign_test_message"],
+    mutationFn: async () => {
+      return signTestMessage(walletSelector);
+    },
+  });
+
   const { signedAccountId, signOut, signIn } = walletSelector;
 
   return (
@@ -95,6 +102,17 @@ function MeteorSdkTestInner() {
               <p className="text-gray-700 dark:text-gray-300">{signedAccountId}</p>
             </div>
           )}
+          <div className="rounded-3xl border border-gray-200 p-6 dark:border-gray-700 space-y-4">
+            <button
+              disabled={mutate_signMessage.isPending}
+              onClick={async () => {
+                await mutate_signMessage.mutateAsync();
+              }}
+              className={"rounded-3xl bg-blue-600 text-white py-2 px-4"}
+            >
+              {mutate_addMessage.isPending ? "Requesting..." : "Sign Test Message"}
+            </button>
+          </div>
           <div className="rounded-3xl border border-gray-200 p-6 dark:border-gray-700 space-y-4">
             <h2 className="text-xl font-semibold">Add Message</h2>
             <div className="flex flex-col gap-2 items-start">

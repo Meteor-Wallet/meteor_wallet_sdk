@@ -24,6 +24,17 @@ export async function getMessages(
   return response.reverse();
 }
 
+export async function signTestMessage(walletSelectorValue: WalletSelectorProviderValue) {
+  const signedMessage = await walletSelectorValue.signMessage({
+    message: "hello!",
+    nonce: Buffer.from([0]),
+    recipient: "guest-book.testnet",
+  });
+
+  console.log("signedMessage", signedMessage);
+  return signedMessage;
+}
+
 export async function addMessage(
   walletSelectorValue: WalletSelectorProviderValue,
   {

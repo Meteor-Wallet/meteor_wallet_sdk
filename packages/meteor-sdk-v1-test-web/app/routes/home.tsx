@@ -1,6 +1,4 @@
-import { type SetupParams, WalletSelectorProvider } from "@near-wallet-selector/react-hook";
 import { MeteorSdkTest } from "~/meteor-sdk-test/MeteorSdkTest";
-import { setupMeteorWallet } from "~/meteor-wallet/setup/setupMeteorWallet";
 import type { Route } from "./+types/home";
 
 export function meta({}: Route.MetaArgs) {
