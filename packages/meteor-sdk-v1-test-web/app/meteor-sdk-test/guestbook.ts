@@ -2,7 +2,7 @@ import { parseNearAmount } from "@near-js/utils";
 import type { Transaction } from "@near-wallet-selector/core";
 import type { WalletSelectorProviderValue } from "@near-wallet-selector/react-hook/src/lib/WalletSelectorProvider";
 
-export const CONTRACT_ID = "guest-book.testnet";
+export const GUESTBOOK_CONTRACT_ID = "guest-book.testnet";
 const BOATLOAD_OF_GAS = "30000000000000";
 
 export interface Message {
@@ -11,11 +11,15 @@ export interface Message {
   text: string;
 }
 
+export function createSimpleNonce() {
+  return Buffer.from(new Array(32).map(() => 0));
+}
+
 export async function getMessages(
   walletSelectorValue: WalletSelectorProviderValue,
 ): Promise<Message[]> {
   const response = (await walletSelectorValue.viewFunction({
-    contractId: CONTRACT_ID,
+    contractId: GUESTBOOK_CONTRACT_ID,
     method: "getMessages",
   })) as Message[];
 
@@ -27,8 +31,8 @@ export async function getMessages(
 export async function signTestMessage(walletSelectorValue: WalletSelectorProviderValue) {
   const signedMessage = await walletSelectorValue.signMessage({
     message: "hello!",
-    nonce: Buffer.from([0]),
-    recipient: "guest-book.testnet",
+    nonce: createSimpleNonce(),
+    recipient: GUESTBOOK_CONTRACT_ID,
   });
 
   console.log("signedMessage", signedMessage);
@@ -50,7 +54,7 @@ export async function addMessage(
   if (!multiple) {
     return walletSelectorValue
       .callFunction({
-        contractId: CONTRACT_ID,
+        contractId: GUESTBOOK_CONTRACT_ID,
         method: "addMessage",
         args: { text: message },
         deposit: parseNearAmount(donation)!,
@@ -68,7 +72,7 @@ export async function addMessage(
   for (let i = 0; i < 2; i += 1) {
     transactions.push({
       signerId: walletSelectorValue.signedAccountId!,
-      receiverId: CONTRACT_ID,
+      receiverId: GUESTBOOK_CONTRACT_ID,
       actions: [
         {
           type: "FunctionCall",

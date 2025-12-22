@@ -5,16 +5,25 @@ import {
 } from "@near-wallet-selector/react-hook";
 import { setupMeteorWallet } from "~/meteor-wallet/setup/setupMeteorWallet";
 import "@near-wallet-selector/modal-ui/styles.css";
+import { EMeteorWalletSignInType } from "@meteorwallet/sdk";
 import { QueryClient, QueryClientProvider, useMutation, useQuery } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
 import { useImmer } from "use-immer";
-import { addMessage, CONTRACT_ID, getMessages, signTestMessage } from "~/meteor-sdk-test/guestbook";
+import {
+  addMessage,
+  createSimpleNonce,
+  GUESTBOOK_CONTRACT_ID,
+  getMessages,
+  signTestMessage,
+} from "~/meteor-sdk-test/guestbook";
+import { createNativeMeteorWallet } from "~/meteor-wallet/setup/createNativeMeteorWallet";
 
 const walletSelectorConfig: SetupParams = {
   network: "testnet",
   debug: true,
   modules: [setupMeteorWallet()],
   createAccessKeyFor: {
-    contractId: CONTRACT_ID,
+    contractId: GUESTBOOK_CONTRACT_ID,
     methodNames: [],
   },
 };
@@ -34,6 +43,12 @@ export function MeteorSdkTest() {
 function MeteorSdkTestInner() {
   const walletSelector = useWalletSelector();
 
+  const {
+    signedAccountId: signedAccountIdWalletSelector,
+    signOut: signOutWalletSelector,
+    signIn: signInWalletSelector,
+  } = walletSelector;
+
   const query_messages = useQuery({
     queryKey: ["get_messages"],
     queryFn: async () => {
@@ -41,37 +56,129 @@ function MeteorSdkTestInner() {
     },
   });
 
-  const [messageToSend, updateMessage] = useImmer({
+  const query_nativeMeteorSdk = useQuery({
+    queryKey: ["get_native_meteor_sdk"],
+    queryFn: async () => {
+      return await createNativeMeteorWallet();
+    },
+  });
+
+  const nativeMeteorWallet = query_nativeMeteorSdk.data?.wallet!;
+
+  const [useMeteorSdkDirectly, setUseNativeSdkDirectly] = useState(false);
+  const [signedAccountId, setSignedInAccountId] = useState<string | undefined | null>(undefined);
+
+  useEffect(() => {
+    if (nativeMeteorWallet != null && useMeteorSdkDirectly) {
+      setSignedInAccountId(nativeMeteorWallet.getAccountId());
+    } else {
+      setSignedInAccountId(signedAccountIdWalletSelector);
+    }
+  }, [nativeMeteorWallet, useMeteorSdkDirectly, signedAccountIdWalletSelector]);
+
+  const [testState, updateTestState] = useImmer({
     message: "",
     donation: "0.001",
     withDonation: false,
     multiple: false,
   });
 
-  const mutate_addMessage = useMutation({
-    mutationKey: [messageToSend],
+  const mutate_addMessageWalletSelector = useMutation({
+    mutationKey: ["add_message_wallet_selector", testState],
     mutationFn: async () => {
       return addMessage(walletSelector, {
-        ...messageToSend,
-        donation: messageToSend.withDonation ? messageToSend.donation : "0",
+        ...testState,
+        donation: testState.withDonation ? testState.donation : "0",
       });
     },
   });
 
-  const mutate_signMessage = useMutation({
-    mutationKey: ["sign_test_message"],
+  const mutate_signMessageWalletSelector = useMutation({
+    mutationKey: ["sign_test_message_wallet_selector", testState],
     mutationFn: async () => {
       return signTestMessage(walletSelector);
     },
   });
 
-  const { signedAccountId, signOut, signIn } = walletSelector;
+  const mutate_signMessage = useMutation({
+    mutationKey: ["sign_test_message", useMeteorSdkDirectly],
+    mutationFn: async () => {
+      if (useMeteorSdkDirectly) {
+        const response = await nativeMeteorWallet.signMessage({
+          message: "hello!",
+          accountId: nativeMeteorWallet.getAccountId(),
+          nonce: createSimpleNonce(),
+          recipient: GUESTBOOK_CONTRACT_ID,
+        });
+
+        console.log("Meteor Native SDK signMessage response", response);
+
+        if (response.success) {
+          return response.payload;
+        } else {
+          throw new Error(`Couldn't sign message owner: ${response.message}`);
+        }
+      } else {
+        return await mutate_signMessageWalletSelector.mutateAsync();
+      }
+    },
+  });
+
+  const mutate_addMessage = useMutation({
+    mutationKey: ["add_message", useMeteorSdkDirectly, testState],
+    mutationFn: async () => {
+      return await mutate_addMessageWalletSelector.mutateAsync();
+    },
+  });
+
+  const signIn = () => {
+    if (useMeteorSdkDirectly) {
+      nativeMeteorWallet
+        .requestSignIn({
+          type: EMeteorWalletSignInType.ALL_METHODS,
+          contract_id: GUESTBOOK_CONTRACT_ID,
+        })
+        .then((r) => {
+          if (r.success) {
+            setSignedInAccountId(r.payload.accountId);
+          } else {
+            setSignedInAccountId(undefined);
+          }
+        });
+    } else {
+      signInWalletSelector();
+    }
+  };
+
+  const signOut = async () => {
+    if (useMeteorSdkDirectly) {
+      nativeMeteorWallet.signOut().then(() => {
+        setSignedInAccountId(undefined);
+      });
+    } else {
+      await signOutWalletSelector();
+    }
+  };
 
   return (
     <main className="flex items-center justify-center pt-16 pb-4">
       <div className="flex-1 flex flex-col items-center gap-16 min-h-0">
         <div className="w-full space-y-6 px-4">
-          <nav className="rounded-3xl border border-gray-200 p-6 dark:border-gray-700 space-y-4 flex">
+          <nav className="rounded-3xl border border-gray-200 p-6 dark:border-gray-700 space-y-4 flex flex-col items-start">
+            <div className={"flex items-center gap-2"}>
+              <label htmlFor={"useMeteorSdkDirectly"} className={"text-sm"}>
+                Use Meteor Native SDK Directly
+              </label>
+              <input
+                id={"useMeteorSdkDirectly"}
+                name="useMeteorSdkDirectly"
+                type="checkbox"
+                checked={useMeteorSdkDirectly}
+                onChange={(e) => {
+                  setUseNativeSdkDirectly(e.target.checked);
+                }}
+              />
+            </div>
             <ul>
               {signedAccountId == null ? (
                 <button
@@ -120,9 +227,9 @@ function MeteorSdkTestInner() {
                 type="text"
                 placeholder="Message"
                 className="rounded-3xl border border-gray-200 p-2 dark:border-gray-700"
-                value={messageToSend.message}
+                value={testState.message}
                 onChange={(e) => {
-                  updateMessage((draft) => {
+                  updateTestState((draft) => {
                     draft.message = e.target.value;
                   });
                 }}
@@ -135,9 +242,9 @@ function MeteorSdkTestInner() {
                   id={"withDonation"}
                   name="withDonation"
                   type="checkbox"
-                  checked={messageToSend.withDonation}
+                  checked={testState.withDonation}
                   onChange={(e) => {
-                    updateMessage((draft) => {
+                    updateTestState((draft) => {
                       draft.withDonation = e.target.checked;
                     });
                   }}
@@ -147,9 +254,9 @@ function MeteorSdkTestInner() {
                 type="text"
                 placeholder="Donation"
                 className="rounded-3xl border border-gray-200 p-2 dark:border-gray-700"
-                value={messageToSend.donation}
+                value={testState.donation}
                 onChange={(e) => {
-                  updateMessage((draft) => {
+                  updateTestState((draft) => {
                     draft.donation = e.target.value;
                   });
                 }}
@@ -162,9 +269,9 @@ function MeteorSdkTestInner() {
                   id={"multiple"}
                   name="multiple"
                   type="checkbox"
-                  checked={messageToSend.multiple}
+                  checked={testState.multiple}
                   onChange={(e) => {
-                    updateMessage((draft) => {
+                    updateTestState((draft) => {
                       draft.multiple = e.target.checked;
                     });
                   }}
@@ -174,7 +281,7 @@ function MeteorSdkTestInner() {
                 disabled={mutate_addMessage.isPending}
                 onClick={async () => {
                   await mutate_addMessage.mutateAsync();
-                  updateMessage((draft) => {
+                  updateTestState((draft) => {
                     draft.message = "";
                   });
                   await query_messages.refetch({

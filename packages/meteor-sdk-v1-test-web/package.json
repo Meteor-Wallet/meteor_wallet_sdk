@@ -6,7 +6,7 @@
     "build": "react-router build",
     "dev": "react-router dev --force",
     "start": "react-router-serve ./build/server/index.js",
-    "typecheck": "react-router typegen && tsc"
+    "type-check": "react-router typegen && tsc"
   },
   "dependencies": {
     "@meteorwallet/sdk": "workspace:*",
