@@ -5,6 +5,7 @@
   "scripts": {
     "build": "vite build",
     "build-watch": "vite build --watch",
+    "dev": "vite dev --config vite.dev.config.ts",
     "type-check": "tsc --noEmit",
     "type-check-watch": "tsc --noEmit --watch"
   },

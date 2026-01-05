@@ -1,4 +1,4 @@
-export const styles = /* css */ `
+export const meteorPopupStyles = /* css */ `
 body,
 html {
   margin: 0;

@@ -1,4 +1,4 @@
-import { styles } from "./styles";
+import { meteorPopupStyles } from "./meteorPopupStyles.ts";
 
 export const head = /* html */ `
     <meta charset="UTF-8" />
@@ -10,7 +10,7 @@ export const head = /* html */ `
       rel="stylesheet"
       href="https://fonts.cdnfonts.com/css/cabinet-grotesk"
     />
-    <style>${styles}</style>
+    <style>${meteorPopupStyles}</style>
     <title>Meteor Connector</title>
 `;
 
