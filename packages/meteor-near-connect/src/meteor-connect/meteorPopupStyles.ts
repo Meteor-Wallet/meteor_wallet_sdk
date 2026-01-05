@@ -49,6 +49,7 @@ input::-webkit-inner-spin-button {
 }
 
 .popup {
+  position: relative;
   width: 100%;
   height: 100%;
   border-radius: 16px;
@@ -78,23 +79,6 @@ input::-webkit-inner-spin-button {
   font-style: normal;
   font-weight: 800;
   line-height: normal;
-}
-
-.qr-code {
-  background: url("https://hot-labs.org/hot-widget/qr.svg");
-  background-size: cover;
-  background-position: 0 -14px;
-  width: 280px;
-  height: 280px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  position: relative;
-}
-.qr-code canvas {
-  position: absolute;
-  top: 70px;
-  left: 70px;
 }
 
 .divider {

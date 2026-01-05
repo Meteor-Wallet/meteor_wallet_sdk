@@ -6,38 +6,59 @@ import { setupNearConnectStyles } from "./near-connect-layout/setupNearConnect.t
 setupNearConnectStyles();
 
 function App() {
-  const [count, setCount] = useState(0);
+  const [emulateNearConnectPopup, setEmulateNearConnectPopup] = useState(false);
 
   return (
     <>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>count is {count}</button>
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
-        </p>
+      <div
+        style={{
+          position: "relative",
+          zIndex: 9999,
+        }}
+      >
+        <button onClick={() => setEmulateNearConnectPopup(!emulateNearConnectPopup)}>
+          {emulateNearConnectPopup ? "Pure Meteor Popup Styles" : "Emulate Near Popup"}
+        </button>
       </div>
-      <p className="read-the-docs">Click on the Vite and React logos to learn more</p>
-      <div className="test hot-connector popup">
-        <div className="modal-container">
-          <div className="modal-content">
-            <div className="modal-body" style={{ padding: 0, overflow: "auto" }}>
-              <div
-                style={{
-                  width: "100%",
-                  height: "720px",
-                  border: "none",
-                }}
-                dangerouslySetInnerHTML={{ __html: bodyDesktop }}
-              />
-            </div>
-            <div className="footer">
-              <img src="https://tgapp.herewallet.app/images/hot/hot-icon.png" alt="HOT Connector" />
-              <p>HOT Connector</p>
-              <p className="get-wallet-link">Don't have a wallet?</p>
+      <div className={"popup-test-area"}>
+        {emulateNearConnectPopup ? (
+          <div className="test hot-connector popup">
+            <div className="modal-container">
+              <div className="modal-content">
+                <div className="modal-body" style={{ padding: 0, overflow: "auto" }}>
+                  <div
+                    style={{
+                      width: "100%",
+                      height: "720px",
+                      border: "none",
+                    }}
+                    dangerouslySetInnerHTML={{ __html: bodyDesktop }}
+                  />
+                </div>
+                <div className="footer">
+                  <img
+                    src="https://tgapp.herewallet.app/images/hot/hot-icon.png"
+                    alt="HOT Connector"
+                  />
+                  <p>HOT Connector</p>
+                  <p className="get-wallet-link">Don't have a wallet?</p>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
+        ) : (
+          <div className={"popup-test-container"}>
+            <div
+              style={{
+                position: "relative",
+                width: "100%",
+                height: "100%",
+                border: "none",
+              }}
+              dangerouslySetInnerHTML={{ __html: bodyDesktop }}
+            />
+          </div>
+        )}
       </div>
     </>
   );

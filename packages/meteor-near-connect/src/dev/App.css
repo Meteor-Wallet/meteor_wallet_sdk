@@ -3,6 +3,12 @@
     margin: 0 auto;
     padding: 2rem;
     text-align: center;
+    height: 100%;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+    align-items: stretch;
 }
 
 .logo {
@@ -39,4 +45,22 @@
 
 .read-the-docs {
     color: #888;
+}
+
+.popup-test-area {
+    background: #000000;
+    display: flex;
+    flex-grow: 1;
+    align-items: center;
+    justify-content: center;
+}
+
+.popup-test-container {
+    display: block;
+    position: relative;
+    width: 418px;
+    height: 557px;
+    overflow: hidden;
+    max-width: 418px;
+    max-height: 557px;
 }
