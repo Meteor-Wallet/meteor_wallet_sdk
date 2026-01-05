@@ -6,12 +6,13 @@ import {
   Outlet,
   Scripts,
   ScrollRestoration,
+  useLocation,
+  useNavigate,
 } from "react-router";
 
 import type { Route } from "./+types/root";
 import "./app.css";
-import { type SetupParams, WalletSelectorProvider } from "@near-wallet-selector/react-hook";
-import { setupMeteorWallet } from "~/meteor-wallet/setup/setupMeteorWallet";
+import { Button } from "~/ui/Button";
 
 export const links: Route.LinksFunction = () => [
   { rel: "preconnect", href: "https://fonts.googleapis.com" },
@@ -45,7 +46,32 @@ export function Layout({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
-  return <Outlet />;
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  return (
+    <div>
+      <div className={"flex justify-start justify-items-start items-start gap-5 p-5"}>
+        <Button
+          active={location.pathname === "/"}
+          onClick={() => {
+            navigate("/");
+          }}
+        >
+          Meteor Native SDK / Wallet Selector
+        </Button>
+        <Button
+          active={location.pathname === "/near-connect"}
+          onClick={() => {
+            navigate("/near-connect");
+          }}
+        >
+          NEAR Connect
+        </Button>
+      </div>
+      <Outlet />
+    </div>
+  );
 }
 
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
