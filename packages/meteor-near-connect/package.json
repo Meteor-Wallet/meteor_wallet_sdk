@@ -4,6 +4,7 @@
   "description": "Meteor NEAR Connect SDK",
   "scripts": {
     "build": "vite build",
+    "build-watch": "vite build --watch",
     "type-check": "tsc --noEmit",
     "type-check-watch": "tsc --noEmit --watch"
   },

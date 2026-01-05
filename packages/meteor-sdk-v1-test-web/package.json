@@ -5,14 +5,16 @@
   "scripts": {
     "build": "react-router build",
     "dev": "react-router dev --force",
+    "watch-meteor-script": "chokidar \"../../near-connect/meteor-near-connect.js\" -c \"cpy ../../near-connect/meteor-near-connect.js public\"",
     "start": "react-router-serve ./build/server/index.js",
     "type-check": "react-router typegen && tsc"
   },
   "dependencies": {
     "@meteorwallet/sdk": "workspace:*",
-    "@near-js/keystores-browser": "^2.2.5",
-    "@near-js/crypto": "^2.2.5",
-    "@near-js/utils": "^2.2.5",
+    "@near-js/keystores-browser": "2.2.5",
+    "@near-js/crypto": "2.2.5",
+    "@near-js/utils": "2.2.5",
+    "@near-js/types": "2.2.5",
     "@near-wallet-selector/core": "^9.3.0",
     "@near-wallet-selector/react-hook": "^9.3.0",
     "@react-router/node": "^7.8.0",
@@ -25,7 +27,8 @@
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-router": "^7.8.0",
-    "@hot-labs/near-connect": "0.8.1"
+    "@hot-labs/near-connect": "0.8.1",
+    "usehooks-ts": "3.1.1"
   },
   "devDependencies": {
     "@react-router/dev": "^7.8.0",
@@ -39,6 +42,8 @@
     "vite-tsconfig-paths": "^5.1.4",
     "vite-plugin-devtools-json": "^1.0.0",
     "vite-plugin-watch-node-modules": "0.5.0",
-    "vite-plugin-node-polyfills": "^0.24.0"
+    "vite-plugin-node-polyfills": "^0.24.0",
+    "chokidar-cli": "^3.0.0",
+    "cpy-cli": "^6.0.0"
   }
 }
