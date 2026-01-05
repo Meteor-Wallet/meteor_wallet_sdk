@@ -1,0 +1,22 @@
+{
+  "name": "meteor-near-connect",
+  "version": "0.0.1",
+  "description": "Meteor NEAR Connect SDK",
+  "scripts": {
+    "build": "vite build",
+    "type-check": "tsc --noEmit",
+    "type-check-watch": "tsc --noEmit --watch"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Meteor-Wallet/meteor_wallet_sdk.git"
+  },
+  "dependencies": {
+    "@near-js/utils": "2.2.5"
+  },
+  "devDependencies": {
+    "vite": "7.3.0",
+    "vite-plugin-node-polyfills": "^0.24.0"
+  },
+  "private": true
+}
