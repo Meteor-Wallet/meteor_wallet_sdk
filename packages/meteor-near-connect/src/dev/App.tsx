@@ -14,6 +14,7 @@ function App() {
         style={{
           position: "relative",
           zIndex: 9999,
+          marginBottom: "1em",
         }}
       >
         <button onClick={() => setEmulateNearConnectPopup(!emulateNearConnectPopup)}>
@@ -49,6 +50,7 @@ function App() {
         ) : (
           <div className={"popup-test-container"}>
             <div
+              className={"popup-test-wallet-area"}
               style={{
                 position: "relative",
                 width: "100%",
@@ -57,6 +59,9 @@ function App() {
               }}
               dangerouslySetInnerHTML={{ __html: bodyDesktop }}
             />
+            <div className="footer">
+              <p>HOT Connector</p>
+            </div>
           </div>
         )}
       </div>

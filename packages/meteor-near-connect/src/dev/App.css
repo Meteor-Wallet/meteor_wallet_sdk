@@ -48,19 +48,40 @@
 }
 
 .popup-test-area {
-    background: #000000;
+    background: #0f0f12;
     display: flex;
     flex-grow: 1;
     align-items: center;
     justify-content: center;
+    padding-bottom: 3em;
 }
 
 .popup-test-container {
-    display: block;
+    display: flex;
+    flex-direction: column;
     position: relative;
     width: 418px;
-    height: 557px;
+    height: 614px;
     overflow: hidden;
     max-width: 418px;
+    max-height: 614px;
+    border: 1px solid #243139;
+    border-radius: 1.5em;
+}
+
+.popup-test-container .popup-test-wallet-area {
+    width: 100%;
+    display: flex;
+    flex-grow: 1;
+    height: 557px;
     max-height: 557px;
+}
+
+.popup-test-container .footer {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 1;
+    width: 100%;
+    background: #0a0a17;
 }
