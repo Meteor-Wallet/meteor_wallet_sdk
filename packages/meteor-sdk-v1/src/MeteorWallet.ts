@@ -33,8 +33,8 @@ import {
 } from "./ported_common/dapp/dapp.types.ts";
 import { ENearNetwork } from "./ported_common/near/near_basic_types.ts";
 import { NEAR_BASE_CONFIG_FOR_NETWORK } from "./ported_common/near/near_static_data.ts";
-import { EnvironmentStateAdapter_Sync } from "./ported_common/utils/EnvironmentStorageUtils.ts";
 import { notNullEmpty } from "./ported_common/utils/nullEmptyString.ts";
+import { CEnvironmentStorageAdapter_Sync } from "./ported_common/utils/storage/EnvironmentStorageAdapter_Sync.ts";
 import { getMeteorPostMessenger } from "./postMessage/MeteorPostMessenger";
 import { createAction } from "./utils/create-action";
 import { resolveWalletUrl } from "./utils/MeteorSdkUtils.ts";
@@ -45,13 +45,13 @@ const MULTISIG_HAS_METHOD = "add_request_and_confirm";
 const LOCAL_STORAGE_KEY_SUFFIX = "_meteor_wallet_auth_key";
 const PENDING_ACCESS_KEY_PREFIX = "pending_key"; // browser storage key for a pending access key (i.e. key has been generated but we are not sure it was added yet)
 
-const localStorageAdapter = new EnvironmentStateAdapter_Sync({
+const localStorageAdapter = new CEnvironmentStorageAdapter_Sync({
   getString: (key: string) => window.localStorage.getItem(key),
   setString: (key: string, value: string) => window.localStorage.setItem(key, value),
   clear: (key: string) => window.localStorage.removeItem(key),
 });
 
-const sessionAdapter = new EnvironmentStateAdapter_Sync({
+const sessionAdapter = new CEnvironmentStorageAdapter_Sync({
   getString: (key: string) => window.sessionStorage.getItem(key),
   setString: (key: string, value: string) => window.sessionStorage.setItem(key, value),
   clear: (key: string) => window.sessionStorage.removeItem(key),
