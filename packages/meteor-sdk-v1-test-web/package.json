@@ -27,7 +27,7 @@
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-router": "^7.8.0",
-    "@hot-labs/near-connect": "0.8.1",
+    "@hot-labs/near-connect": "0.8.2",
     "usehooks-ts": "3.1.1"
   },
   "devDependencies": {

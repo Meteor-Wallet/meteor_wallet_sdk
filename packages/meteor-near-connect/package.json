@@ -14,9 +14,11 @@
     "url": "https://github.com/Meteor-Wallet/meteor_wallet_sdk.git"
   },
   "dependencies": {
-    "@near-js/utils": "2.2.5"
+    "@near-js/utils": "2.2.5",
+    "@hot-labs/near-connect": "0.8.2"
   },
   "devDependencies": {
+    "@near-js/types": "2.2.5",
     "vite": "7.3.0",
     "vite-plugin-node-polyfills": "^0.24.0"
   },

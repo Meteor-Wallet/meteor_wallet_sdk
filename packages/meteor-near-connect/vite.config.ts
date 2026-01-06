@@ -9,7 +9,7 @@ export default defineConfig({
     outDir: "../../near-connect",
     rollupOptions: {
       input: {
-        main: `./src/meteor-connect/index.ts`,
+        main: `./src/meteor-connect/nearConnectExecutor.ts`,
       },
       output: {
         entryFileNames: `meteor-near-connect.js`,

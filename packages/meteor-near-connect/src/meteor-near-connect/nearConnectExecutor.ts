@@ -1,7 +1,18 @@
+import type {
+  NearWalletBase,
+  SignAndSendTransactionParams,
+  SignAndSendTransactionsParams,
+  SignMessageParams,
+} from "@hot-labs/near-connect";
+import type { FinalExecutionOutcome } from "@near-js/types";
 import { baseEncode } from "@near-js/utils";
 import crypto from "crypto";
-import { type ConnectorAction } from "../utils/action";
 import { isMobile } from "../utils/isMobile.ts";
+import type {
+  NearConnectAccount,
+  NearConnectNetwork,
+  NearConnectSignedMessage,
+} from "./near-connect.types.ts";
 import { bodyDesktop, bodyMobile, head } from "./view";
 
 const logoImage = new Image();
@@ -34,8 +45,8 @@ export class RequestFailed extends Error {
   }
 }
 
-class MeteorConnect {
-  static shared = new MeteorConnect();
+class MeteorNearConnect {
+  static shared = new MeteorNearConnect();
 
   async getTimestamp() {
     const { ts } = await fetch("https://api0.herewallet.app/api/v1/web/time").then((res) =>
@@ -89,8 +100,6 @@ class MeteorConnect {
 
   async request(method: string, request: any): Promise<any> {
     renderUI();
-    const qr = document.querySelector(".qr-code");
-    if (qr) qr.innerHTML = "";
 
     window.selector.ui.showIframe();
     const requestId = await this.createRequest({ method, request });
@@ -139,52 +148,55 @@ class MeteorConnect {
   }
 }
 
-class NearWallet {
-  getAccounts = async (data: any) => {
-    // if (data.network === "testnet") throw "HOT Wallet not supported on testnet";
+class NearWallet implements Omit<NearWalletBase, "manifest"> {
+  getAccounts = async (data?: {
+    network?: NearConnectNetwork;
+  }): Promise<Array<NearConnectAccount>> => {
     const currentAccount = await window.selector.storage.get("meteor-account");
     if (currentAccount) return [JSON.parse(currentAccount)];
     return [];
   };
 
-  signIn = async (data: any) => {
-    // if (data.network === "testnet") throw "HOT Wallet not supported on testnet";
-    const result = await MeteorConnect.shared.request("near:signIn", {});
+  signIn = async (data?: {
+    network?: NearConnectNetwork;
+    contractId?: string;
+    methodNames?: Array<string>;
+  }): Promise<Array<NearConnectAccount>> => {
+    const result = await MeteorNearConnect.shared.request("near:signIn", {});
     window.selector.storage.set("meteor-account", JSON.stringify(result));
     return [result];
   };
 
-  signOut = async (data: any) => {
-    // if (data.network === "testnet") throw "HOT Wallet not supported on testnet";
+  signOut = async (data?: { network?: NearConnectNetwork }): Promise<void> => {
     await window.selector.storage.remove("meteor-account");
   };
 
-  signMessage = async (payload: any) => {
-    // if (payload.network === "testnet") throw "HOT Wallet not supported on testnet";
-    const res = await MeteorConnect.shared.request("near:signMessage", payload);
+  signMessage = async (payload: SignMessageParams): Promise<NearConnectSignedMessage> => {
+    const res = await MeteorNearConnect.shared.request("near:signMessage", payload);
     return res;
   };
 
-  signAndSendTransaction = async (payload: {
-    network: string;
-    receiverId: string;
-    actions: ConnectorAction[];
-  }) => {
-    // if (payload.network === "testnet") throw "HOT Wallet not supported on testnet";
-    const { transactions } = await MeteorConnect.shared.request("near:signAndSendTransactions", {
-      transactions: [payload],
-    });
+  signAndSendTransaction = async (
+    payload: SignAndSendTransactionParams,
+  ): Promise<FinalExecutionOutcome> => {
+    const { transactions } = await MeteorNearConnect.shared.request(
+      "near:signAndSendTransactions",
+      {
+        transactions: [payload],
+      },
+    );
     return transactions[0];
   };
 
-  signAndSendTransactions = async (payload: {
-    network: string;
-    transactions: { receiverId: string; actions: ConnectorAction[] }[];
-  }) => {
-    // if (payload.network === "testnet") throw "HOT Wallet not supported on testnet";
-    const { transactions } = await MeteorConnect.shared.request("near:signAndSendTransactions", {
-      transactions: payload.transactions,
-    });
+  signAndSendTransactions = async (
+    payload: SignAndSendTransactionsParams,
+  ): Promise<Array<FinalExecutionOutcome>> => {
+    const { transactions } = await MeteorNearConnect.shared.request(
+      "near:signAndSendTransactions",
+      {
+        transactions: payload.transactions,
+      },
+    );
     return transactions;
   };
 }
