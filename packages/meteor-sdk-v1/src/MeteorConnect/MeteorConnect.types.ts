@@ -29,10 +29,10 @@ export interface IMeteorConnectPublicKey_Ed25519 {
 
 export type TMeteorConnectPublicKey = IMeteorConnectPublicKey_Ed25519;
 
-export type TMeteorConnectTargetedPlatform = "v1_web" | "v1_ext" | "v2_android" | "v2_ios" | "test";
-
+/*
 export type TMeteorConnectProtocol =
   | "tab_post_message"
+  | "url_callback"
   | "window_injected"
   | "deep_link_req_id"
   | "qr_req_id";
@@ -43,22 +43,29 @@ export interface IMeteorConnectTargetedClient<
 > {
   platform: T;
   protocol: P;
+}*/
+
+export type TMeteorConnectionPlatformTarget = "v1_web" | "v1_ext" | "v2_mobile" | "test";
+
+export interface IMeteorConnection_Base<T extends TMeteorConnectionPlatformTarget> {
+  platformTarget: T;
 }
+
+export interface IMeteorConnection_V1_Web extends IMeteorConnection_Base<"v1_web"> {}
+export interface IMeteorConnection_V1_Ext extends IMeteorConnection_Base<"v1_ext"> {}
+
+export type TMeteorConnection = IMeteorConnection_V1_Web | IMeteorConnection_V1_Ext;
 
 export interface IMeteorConnectAccount {
   identifier: TMeteorConnectAccountIdentifier;
   publicKeys: TMeteorConnectPublicKey[];
-  targetedClient: IMeteorConnectTargetedClient;
+  connection: TMeteorConnection;
 }
 
 // export interface IMeteorConnectClientConnection_V1_Web
 //   extends IMeteorConnectTargetedClient<"v1_web", "tab_post_message"> {}
 
 // export type TMeteorConnectClientConnection =
-
-export interface IMeteorConnectClientConnection extends IMeteorConnectTargetedClient {
-  timeConnected?: number;
-}
 
 export type TNetworkTargetKey = `${TMeteorConnectAccountType}::${TMeteorConnectAccountNetwork}`;
 
@@ -70,7 +77,6 @@ export type TMeteorConnectSelectedAccountForNetworkTarget = Record<
 export interface IMeteorConnectTypedStorage {
   accounts: IMeteorConnectAccount[];
   selectedNetworkAccounts: TMeteorConnectSelectedAccountForNetworkTarget;
-  clientConnections: IMeteorConnectClientConnection[];
 }
 
 export interface IMeteorConnect_Initialize_Input {
