@@ -1,4 +1,4 @@
-import { smallGreyText } from "../ui/tailwind-vars";
+import { smallGreyText } from "../../ui/tailwind-vars.ts";
 
 interface IPropsNetworkSelector {
   network: "testnet" | "mainnet";

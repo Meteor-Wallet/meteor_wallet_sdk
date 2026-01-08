@@ -1,7 +1,7 @@
-import { smallGreyText } from "../ui/tailwind-vars";
-import { SendTx } from "./wallet-action/SendTx";
-import { SignMessage } from "./wallet-action/SignMessage";
-import { type IPropsWalletAction } from "./wallet-action/wallet-action.types";
+import { smallGreyText } from "../../ui/tailwind-vars.ts";
+import { SendTx } from "./wallet-action/SendTx.tsx";
+import { SignMessage } from "./wallet-action/SignMessage.tsx";
+import { type IPropsWalletAction } from "./wallet-action/wallet-action.types.ts";
 
 export const WalletActions = (actionProps: IPropsWalletAction) => {
   return (

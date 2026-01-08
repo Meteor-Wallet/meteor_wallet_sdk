@@ -1,7 +1,7 @@
 import type { InjectedWallet, WalletModuleFactory } from "@near-wallet-selector/core";
-import icon from "~/meteor-wallet/icon";
-import type { MeteorWalletParams_Injected } from "~/meteor-wallet/meteor-wallet-types";
-import { createMeteorWalletInjected } from "~/meteor-wallet/setup/createMeteorWalletInjected";
+import icon from "~/core/meteor-wallet/icon.ts";
+import type { MeteorWalletParams_Injected } from "~/core/meteor-wallet/meteor-wallet-types.ts";
+import { createMeteorWalletInjected } from "~/core/meteor-wallet/setup/createMeteorWalletInjected.ts";
 
 export function setupMeteorWallet({
   iconUrl = icon,

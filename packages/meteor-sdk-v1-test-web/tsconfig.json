@@ -10,7 +10,9 @@
     "rootDirs": [".", "./.react-router/types"],
     "baseUrl": ".",
     "paths": {
-      "~/*": ["./app/*"]
+      "~/*": ["./app/*"],
+      "@meteorwallet/sdk": ["../meteor-sdk-v1/src"],
+      "@meteorwallet/sdk/*": ["../meteor-sdk-v1/src/*"],
     },
     "esModuleInterop": true,
     "verbatimModuleSyntax": true,

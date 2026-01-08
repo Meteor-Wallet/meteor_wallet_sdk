@@ -4,6 +4,7 @@ import {
   createTypedStorageHelper,
   type ITypedStorageHelper,
 } from "../ported_common/utils/storage/TypedStorageHelper.ts";
+import type { TMCRequest } from "./MeteorConnect.request.types.ts";
 import type {
   IMeteorConnect_Initialize_Input,
   IMeteorConnectAccount,
@@ -51,7 +52,7 @@ export class MeteorConnect {
     if (networkTarget != null) {
       accounts = accounts.filter((account) => {
         return (
-          account.identifier.accountType === networkTarget.accountType &&
+          account.identifier.blockchain === networkTarget.blockchain &&
           account.identifier.network === networkTarget.network
         );
       });
@@ -65,7 +66,7 @@ export class MeteorConnect {
     networkAccountFallback: boolean = false,
   ): Promise<IMeteorConnectAccount | undefined> {
     const allNetworkAccounts = await this.getAllAccounts({
-      accountType: accountIdentifier.accountType,
+      blockchain: accountIdentifier.blockchain,
       network: accountIdentifier.network,
     });
 
@@ -85,7 +86,7 @@ export class MeteorConnect {
       const selectedNetworkAccounts = await this.storage.getJson("selectedNetworkAccounts");
 
       if (selectedNetworkAccounts != null) {
-        const networkKey: TNetworkTargetKey = `${accountIdentifier.accountType}::${accountIdentifier.network}`;
+        const networkKey: TNetworkTargetKey = `${accountIdentifier.blockchain}::${accountIdentifier.network}`;
 
         const selectedAccountIdentifier = selectedNetworkAccounts[networkKey];
 
@@ -100,5 +101,9 @@ export class MeteorConnect {
     }
 
     return account;
+  }
+
+  async makeRequest(request: TMCRequest): Promise<any> {
+    console.log("request", request);
   }
 }

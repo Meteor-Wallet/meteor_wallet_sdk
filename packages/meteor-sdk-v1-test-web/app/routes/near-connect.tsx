@@ -1,4 +1,4 @@
-import { NearConnectTest } from "~/near-connect/NearConnectTest";
+import { NearConnectTest } from "~/pages/near-connect/NearConnectTest";
 import type { Route } from "../../.react-router/types/app/routes/+types/home";
 
 export function meta({}: Route.MetaArgs) {

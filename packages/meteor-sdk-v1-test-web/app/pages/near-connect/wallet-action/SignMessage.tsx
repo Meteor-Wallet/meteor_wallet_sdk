@@ -1,4 +1,4 @@
-import { type IPropsWalletAction } from "./wallet-action.types";
+import { type IPropsWalletAction } from "./wallet-action.types.ts";
 
 export const SignMessage = ({ wallet }: IPropsWalletAction) => {
   const signMessage = async () => {

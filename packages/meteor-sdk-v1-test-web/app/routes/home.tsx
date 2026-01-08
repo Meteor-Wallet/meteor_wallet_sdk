@@ -1,4 +1,4 @@
-import { MeteorSdkTest } from "~/meteor-sdk-test/MeteorSdkTest";
+import { MeteorSdkTest } from "~/pages/meteor-sdk-test/MeteorSdkTest.tsx";
 import type { Route } from "./+types/home";
 
 export function meta({}: Route.MetaArgs) {

@@ -3,20 +3,20 @@ import {
   useWalletSelector,
   WalletSelectorProvider,
 } from "@near-wallet-selector/react-hook";
-import { setupMeteorWallet } from "~/meteor-wallet/setup/setupMeteorWallet";
+import { setupMeteorWallet } from "~/core/meteor-wallet/setup/setupMeteorWallet";
 import "@near-wallet-selector/modal-ui/styles.css";
 import { EMeteorWalletSignInType } from "@meteorwallet/sdk";
 import { QueryClient, QueryClientProvider, useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useImmer } from "use-immer";
+import { createNativeMeteorWallet } from "~/core/meteor-wallet/setup/createNativeMeteorWallet";
 import {
   addMessage,
   createSimpleNonce,
   GUESTBOOK_CONTRACT_ID,
   getMessages,
   signTestMessage,
-} from "~/meteor-sdk-test/guestbook";
-import { createNativeMeteorWallet } from "~/meteor-wallet/setup/createNativeMeteorWallet";
+} from "~/pages/meteor-sdk-test/guestbook.ts";
 
 const walletSelectorConfig: SetupParams = {
   network: "testnet",

@@ -1,4 +1,4 @@
-import "~/meteor-wallet/polyfill_web_node_modules";
+import "~/core/meteor-wallet/polyfill_web_node_modules";
 import {
   isRouteErrorResponse,
   Links,
@@ -67,6 +67,14 @@ export default function App() {
           }}
         >
           NEAR Connect
+        </Button>
+        <Button
+          active={location.pathname === "/meteor-connect"}
+          onClick={() => {
+            navigate("/meteor-connect");
+          }}
+        >
+          Meteor Connect
         </Button>
       </div>
       <Outlet />

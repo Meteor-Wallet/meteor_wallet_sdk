@@ -6,7 +6,7 @@ export type TMeteorConnectAccountNetwork = "mainnet" | "testnet";
 export interface IMeteorConnectNetworkTarget<
   T extends TMeteorConnectAccountType = TMeteorConnectAccountType,
 > {
-  accountType: T;
+  blockchain: T;
   network: TMeteorConnectAccountNetwork;
 }
 

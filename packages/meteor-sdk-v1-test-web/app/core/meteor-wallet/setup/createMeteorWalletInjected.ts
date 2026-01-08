@@ -1,8 +1,8 @@
 import { EMeteorWalletSignInType } from "@meteorwallet/sdk";
 import type { Account, InjectedWallet, WalletBehaviourFactory } from "@near-wallet-selector/core";
-import type { MeteorWalletParams_Injected } from "~/meteor-wallet/meteor-wallet-types";
-import { nullEmpty } from "~/meteor-wallet/setup/nullEmpty";
-import { setupMeteorWalletState } from "~/meteor-wallet/setup/setupMeteorWalletState";
+import type { MeteorWalletParams_Injected } from "~/core/meteor-wallet/meteor-wallet-types.ts";
+import { nullEmpty } from "~/core/meteor-wallet/setup/nullEmpty.ts";
+import { setupMeteorWalletState } from "~/core/meteor-wallet/setup/setupMeteorWalletState.ts";
 
 export const createMeteorWalletInjected: WalletBehaviourFactory<
   InjectedWallet,
