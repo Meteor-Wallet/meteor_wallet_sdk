@@ -1,5 +1,8 @@
 import { EMCActionId, type TMCActionResponse } from "../../MeteorConnect.action.types.ts";
-import type { IMeteorConnect_TargetClient } from "../../MeteorConnect.types.ts";
+import type {
+  IMeteorConnect_TargetClient,
+  IMeteorConnectAccountIdentifier,
+} from "../../MeteorConnect.types.ts";
 import { createFakeAccount } from "./utils/testClientFakeData.ts";
 
 export class MeteorConnectTestClient implements IMeteorConnect_TargetClient {
@@ -7,7 +10,10 @@ export class MeteorConnectTestClient implements IMeteorConnect_TargetClient {
     request: R["request"],
   ): Promise<R> {
     if (request.actionId === EMCActionId.account_sign_out) {
-      const accountIdentifier = request.accountIdentifier!;
+      const accountIdentifier: IMeteorConnectAccountIdentifier = {
+        accountId: request.accountId!,
+        ...request.networkTarget,
+      };
 
       return {
         request,

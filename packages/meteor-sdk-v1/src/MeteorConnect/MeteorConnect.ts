@@ -6,6 +6,7 @@ import {
 } from "../ported_common/utils/storage/TypedStorageHelper.ts";
 import {
   EMCActionId,
+  type IMCRequest_Account_SignOut,
   type IMCResponse_Account_SignIn,
   type TMCActionResponse,
 } from "./MeteorConnect.action.types.ts";
@@ -20,6 +21,7 @@ import type {
   TNetworkTargetKey,
 } from "./MeteorConnect.types.ts";
 import { MeteorConnectTestClient } from "./target_clients/test_client/MeteorConnectTestClient.ts";
+import { accountTargetToText } from "./utils/accountTargetToText.ts";
 import { initProp } from "./utils/initProp.ts";
 import { isEqual } from "./utils/isEqual.ts";
 
@@ -39,12 +41,16 @@ export class MeteorConnect {
     }
 
     if (this.loggingLevel === "basic") {
-      console.log(`MeteorConnect: ${actionDescription}`);
+      console.log(this.formatMsg(actionDescription));
     }
 
     if (this.loggingLevel === "debug") {
-      console.log(`MeteorConnect: ${actionDescription}`, meta);
+      console.log(this.formatMsg(actionDescription), meta);
     }
+  }
+
+  private formatMsg(message: string): string {
+    return `MeteorConnect: ${message}`;
   }
 
   async initialize({ storage }: IMeteorConnect_Initialize_Input) {
@@ -164,7 +170,28 @@ export class MeteorConnect {
     }
 
     if (request.actionId === EMCActionId.account_sign_out) {
-      return this.makeTargetedRequest(request);
+      const target =
+        request.accountId != null
+          ? {
+              accountId: request.accountId,
+              ...request.networkTarget,
+            }
+          : request.networkTarget;
+
+      const account = await this.getAccount(target);
+
+      if (account == null) {
+        throw new Error(
+          this.formatMsg(
+            `Sign Out: Account [${accountTargetToText(target)}] does not exist to sign out of`,
+          ),
+        );
+      }
+
+      return this.makeTargetedRequest({
+        ...request,
+        accountId: account.identifier.accountId,
+      } as IMCRequest_Account_SignOut);
     }
 
     return this.makeTargetedRequest(request);

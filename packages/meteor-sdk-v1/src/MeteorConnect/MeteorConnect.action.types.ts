@@ -25,7 +25,7 @@ export interface IMCRequest_Account_SignIn
 
 export interface IMCRequest_Account_SignOut
   extends IMCRequest_Account_Base<EMCActionId.account_sign_out> {
-  accountIdentifier?: IMeteorConnectAccountIdentifier;
+  accountId?: string;
 }
 
 export type TMCActionRequest = IMCRequest_Account_SignIn | IMCRequest_Account_SignOut;
