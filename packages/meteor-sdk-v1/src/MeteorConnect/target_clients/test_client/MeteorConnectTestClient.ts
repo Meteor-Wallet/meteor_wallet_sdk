@@ -28,6 +28,6 @@ export class MeteorConnectTestClient implements IMeteorConnect_TargetClient {
       } as R;
     }
 
-    throw new Error(`MeteorConnectTestClient: Action ID ${request["actionId"]} not implemented`);
+    throw new Error(`MeteorConnectTestClient: Action ID [${request["actionId"]}] not implemented`);
   }
 }

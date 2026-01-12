@@ -21,6 +21,7 @@ import type {
   TNetworkTargetKey,
 } from "./MeteorConnect.types.ts";
 import { MeteorConnectTestClient } from "./target_clients/test_client/MeteorConnectTestClient.ts";
+import { MeteorConnectV1Client } from "./target_clients/v1_client/MeteorConnectV1Client.ts";
 import { accountTargetToText } from "./utils/accountTargetToText.ts";
 import { initProp } from "./utils/initProp.ts";
 import { isEqual } from "./utils/isEqual.ts";
@@ -149,12 +150,19 @@ export class MeteorConnect {
   private async makeTargetedRequest<R extends TMCActionResponse = TMCActionResponse>(
     request: R["request"],
   ): Promise<R> {
+    if (
+      request.connection.platformTarget === "v1_web" ||
+      request.connection.platformTarget === "v1_ext"
+    ) {
+      return new MeteorConnectV1Client().makeRequest(request);
+    }
+
     if (request.connection.platformTarget === "test") {
       return new MeteorConnectTestClient().makeRequest(request);
     }
 
     throw new Error(
-      `MeteorConnect Request: Platform [${request.connection.platformTarget}] not implemented`,
+      `MeteorConnect Request: Platform [${request.connection["platformTarget"]}] not implemented`,
     );
   }
 
