@@ -17,20 +17,24 @@ export function createTypedStorageHelper<T extends Record<string, any>>({
   storageAdapter,
   keyPrefix = "",
 }: ICreateTypedStorageHelper_Input): ITypedStorageHelper<T> {
+  function makeKey(key: string): string {
+    return `${keyPrefix}${key}`;
+  }
+
   const getJson = async <K extends StringKeys<T>>(key: K): Promise<T[K] | undefined> => {
-    return storageAdapter.getJson<T[K]>(key);
+    return storageAdapter.getJson<T[K]>(makeKey(key));
   };
 
   const getJsonOrDef = async <K extends StringKeys<T>>(key: K, defVal: T[K]): Promise<T[K]> => {
-    return (await storageAdapter.getJson<T[K]>(key)) ?? defVal;
+    return (await storageAdapter.getJson<T[K]>(makeKey(key))) ?? defVal;
   };
 
   const setJson = async <K extends StringKeys<T>>(key: K, val: T[K]): Promise<void> => {
-    return storageAdapter.setJson(key, val);
+    return storageAdapter.setJson(makeKey(key), val);
   };
 
   const removeItem = async <K extends StringKeys<T>>(key: K): Promise<void> => {
-    return storageAdapter.removeItem(key);
+    return storageAdapter.removeItem(makeKey(key));
   };
 
   return {

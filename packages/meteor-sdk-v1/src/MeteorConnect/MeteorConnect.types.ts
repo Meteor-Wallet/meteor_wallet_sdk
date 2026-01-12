@@ -1,4 +1,7 @@
 import type { ILocalStorageInterface } from "../ported_common/utils/storage/storage.types.ts";
+import type { TMCActionResponse } from "./MeteorConnect.action.types.ts";
+
+export type TMCLoggingLevel = "none" | "basic" | "debug";
 
 export type TMeteorConnectAccountType = "near";
 export type TMeteorConnectAccountNetwork = "mainnet" | "testnet";
@@ -25,6 +28,7 @@ export interface IMeteorConnectPublicKey_Ed25519 {
   type: "ed25519";
   // In the format "ed25519:base58_encoding"
   publicKey: string;
+  meta?: any;
 }
 
 export type TMeteorConnectPublicKey = IMeteorConnectPublicKey_Ed25519;
@@ -53,8 +57,12 @@ export interface IMeteorConnection_Base<T extends TMeteorConnectionPlatformTarge
 
 export interface IMeteorConnection_V1_Web extends IMeteorConnection_Base<"v1_web"> {}
 export interface IMeteorConnection_V1_Ext extends IMeteorConnection_Base<"v1_ext"> {}
+export interface IMeteorConnection_Test extends IMeteorConnection_Base<"test"> {}
 
-export type TMeteorConnection = IMeteorConnection_V1_Web | IMeteorConnection_V1_Ext;
+export type TMeteorConnection =
+  | IMeteorConnection_V1_Web
+  | IMeteorConnection_V1_Ext
+  | IMeteorConnection_Test;
 
 export interface IMeteorConnectAccount {
   identifier: TMeteorConnectAccountIdentifier;
@@ -77,8 +85,15 @@ export type TMeteorConnectSelectedAccountForNetworkTarget = Record<
 export interface IMeteorConnectTypedStorage {
   accounts: IMeteorConnectAccount[];
   selectedNetworkAccounts: TMeteorConnectSelectedAccountForNetworkTarget;
+  lastInitialized: number;
 }
 
 export interface IMeteorConnect_Initialize_Input {
   storage: ILocalStorageInterface;
+}
+
+export interface IMeteorConnect_TargetClient {
+  makeRequest: <R extends TMCActionResponse = TMCActionResponse>(
+    request: R["request"],
+  ) => Promise<R>;
 }

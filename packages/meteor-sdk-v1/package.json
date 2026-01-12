@@ -36,6 +36,8 @@
     "type-check-watch": "tsc --noEmit --watch"
   },
   "dependencies": {
+    "@meteorwallet/errors": "1.28.0-0",
+    "@meteorwallet/utils": "1.28.0-0",
     "@near-js/accounts": "2.2.5",
     "@near-js/crypto": "2.2.5",
     "@near-js/transactions": "2.2.5",
