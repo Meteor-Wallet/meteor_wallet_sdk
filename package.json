@@ -3,6 +3,8 @@
   "version": "0.0.1",
   "scripts": {
     "format": "bunx biome format --write",
+    "type-check-all": "bun run --filter '*' type-check",
+    "type-check-watch-all": "bun run --filter '*' type-check-watch",
     "clean-files": "bunx glcl",
     "clean-cache-files": "bunx glcl -f glob-list.caches.clean"
   },

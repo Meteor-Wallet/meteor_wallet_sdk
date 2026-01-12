@@ -12,8 +12,9 @@
     "paths": {
       "~/*": ["./app/*"],
       "@meteorwallet/sdk": ["../meteor-sdk-v1/src"],
-      "@meteorwallet/sdk/*": ["../meteor-sdk-v1/src/*"],
+      "@meteorwallet/sdk/*": ["../meteor-sdk-v1/src/*"]
     },
+    "noImplicitAny": false,
     "esModuleInterop": true,
     "verbatimModuleSyntax": true,
     "allowImportingTsExtensions": true,

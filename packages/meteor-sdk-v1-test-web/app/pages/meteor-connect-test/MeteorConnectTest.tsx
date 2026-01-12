@@ -1,5 +1,5 @@
 import { MeteorConnect } from "@meteorwallet/sdk";
-import { EMCRequestId } from "@meteorwallet/sdk/MeteorConnect/MeteorConnect.request.types.ts";
+import { EMCActionId } from "@meteorwallet/sdk/MeteorConnect/MeteorConnect.action.types.ts";
 import { webpage_local_storage } from "@meteorwallet/sdk/ported_common/utils/storage/webpage/webpage_local_storage.ts";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
@@ -56,7 +56,7 @@ const MeteorConnectTestInitialized = ({ meteorConnect }: { meteorConnect: Meteor
         <Button
           onClick={async () => {
             await meteorConnect.makeRequest({
-              id: EMCRequestId.add_account,
+              actionId: EMCActionId.account_sign_in,
               connection: {
                 platformTarget: "v1_web",
               },
@@ -73,7 +73,7 @@ const MeteorConnectTestInitialized = ({ meteorConnect }: { meteorConnect: Meteor
         <Button
           onClick={async () => {
             await meteorConnect.makeRequest({
-              id: EMCRequestId.add_account,
+              actionId: EMCActionId.account_sign_out,
               connection: {
                 platformTarget: "v1_web",
               },
