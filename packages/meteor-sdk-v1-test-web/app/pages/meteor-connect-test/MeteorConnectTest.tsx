@@ -1,7 +1,8 @@
 import { MeteorConnect } from "@meteorwallet/sdk";
-import { EMCActionId } from "@meteorwallet/sdk/MeteorConnect/MeteorConnect.action.types.ts";
+import { EMCActionId } from "@meteorwallet/sdk/MeteorConnect/action/mc_action.types.ts";
+import type { IMeteorConnectAccount } from "@meteorwallet/sdk/MeteorConnect/MeteorConnect.types.ts";
 import { webpage_local_storage } from "@meteorwallet/sdk/ported_common/utils/storage/webpage/webpage_local_storage.ts";
-import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, useMutation, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { NetworkSelector } from "~/pages/near-connect/NetworkSelector.tsx";
 import { Button } from "~/ui/Button.tsx";
@@ -41,8 +42,9 @@ const MeteorConnectTestInner = () => {
 
 const MeteorConnectTestInitialized = ({ meteorConnect }: { meteorConnect: MeteorConnect }) => {
   const [network, setNetwork] = useState<"testnet" | "mainnet">("testnet");
+  // const [account, setAccount] = useState<IMeteorConnectAccount | undefined>();
 
-  const account = useQuery({
+  const accountQuery = useQuery({
     queryKey: ["getAccount", network],
     queryFn: async () => {
       return {
@@ -54,6 +56,8 @@ const MeteorConnectTestInitialized = ({ meteorConnect }: { meteorConnect: Meteor
     },
   });
 
+  const account = accountQuery.data?.account;
+
   return (
     <div className={"p-5"}>
       <h1>NEAR Connect Test</h1>
@@ -63,10 +67,10 @@ const MeteorConnectTestInitialized = ({ meteorConnect }: { meteorConnect: Meteor
           setNetwork(network);
         }}
       />
-      {account.data?.account == null ? (
+      {account == null ? (
         <Button
           onClick={async () => {
-            await meteorConnect.makeRequest({
+            await meteorConnect.actionRequest({
               actionId: EMCActionId.account_sign_in,
               connection: {
                 platformTarget: "v1_web",
@@ -76,36 +80,42 @@ const MeteorConnectTestInitialized = ({ meteorConnect }: { meteorConnect: Meteor
                 network,
               },
             });
+
+            await accountQuery.refetch({ cancelRefetch: true });
           }}
         >
           Sign In
         </Button>
       ) : (
-        <Button
-          onClick={async () => {
-            await meteorConnect.makeRequest({
-              actionId: EMCActionId.account_sign_out,
-              connection: {
-                platformTarget: "v1_web",
-              },
-              networkTarget: {
-                blockchain: "near",
-                network,
-              },
-            });
-          }}
-        >
-          Sign Out
-        </Button>
+        <>
+          <Button
+            onClick={async () => {
+              await meteorConnect.actionRequest({
+                actionId: EMCActionId.account_sign_out,
+                accountIdentifier: account.identifier,
+              });
+
+              await accountQuery.refetch({ cancelRefetch: true });
+            }}
+          >
+            Sign Out
+          </Button>
+          <MeteorConnectWithAccount account={account} />
+        </>
       )}
     </div>
   );
 };
 
-const MeteorConnectWithAccount = ({}: {}) => {
+const MeteorConnectWithAccount = ({ account }: { account: IMeteorConnectAccount }) => {
+  const mutate_signMessage = useMutation({
+    mutationKey: ["mutate_signMessage", account.identifier, account.publicKeys],
+    mutationFn: async () => {},
+  });
+
   return (
     <div className={"p-5"}>
-      <h1>Signed In</h1>
+      <h1>{account.identifier.accountId} Signed In</h1>
     </div>
   );
 };

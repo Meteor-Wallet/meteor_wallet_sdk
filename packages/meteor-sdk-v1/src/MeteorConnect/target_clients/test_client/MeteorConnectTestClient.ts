@@ -1,31 +1,19 @@
-import { EMCActionId, type TMCActionResponse } from "../../MeteorConnect.action.types.ts";
-import type {
-  IMeteorConnect_TargetClient,
-  IMeteorConnectAccountIdentifier,
-} from "../../MeteorConnect.types.ts";
+import type { TMCActionDefinition } from "../../action/mc_action.combined.types.ts";
+import { MeteorConnectClientBase } from "../base/MeteorConnectClientBase.ts";
 import { createFakeAccount } from "./utils/testClientFakeData.ts";
 
-export class MeteorConnectTestClient implements IMeteorConnect_TargetClient {
-  async makeRequest<R extends TMCActionResponse = TMCActionResponse>(
-    request: R["request"],
-  ): Promise<R> {
-    if (request.actionId === EMCActionId.account_sign_out) {
-      const accountIdentifier: IMeteorConnectAccountIdentifier = {
-        accountId: request.accountId!,
-        ...request.networkTarget,
-      };
+export class MeteorConnectTestClient extends MeteorConnectClientBase {
+  clientName = "MeteorConnect TEST Client";
 
-      return {
-        request,
-        responsePayload: accountIdentifier,
-      } as R;
+  async resolveRequest<R extends TMCActionDefinition = TMCActionDefinition>(
+    request: R["request"],
+  ): Promise<R["responsePayload"]> {
+    if (request.actionId === "near::sign_in") {
+      return createFakeAccount(request.networkTarget, request.connection);
     }
 
-    if (request.actionId === EMCActionId.account_sign_in) {
-      return {
-        request,
-        responsePayload: createFakeAccount(request.networkTarget, request.connection),
-      } as R;
+    if (request.actionId === "near::sign_out") {
+      return request.accountIdentifier;
     }
 
     throw new Error(`MeteorConnectTestClient: Action ID [${request["actionId"]}] not implemented`);

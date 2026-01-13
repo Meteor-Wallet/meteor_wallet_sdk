@@ -1,5 +1,6 @@
 import type { ILocalStorageInterface } from "../ported_common/utils/storage/storage.types.ts";
-import type { TMCActionResponse } from "./MeteorConnect.action.types.ts";
+
+import type { TMCActionDefinition } from "./action/mc_action.combined.types.ts";
 
 export type TMCLoggingLevel = "none" | "basic" | "debug";
 
@@ -70,21 +71,10 @@ export interface IMeteorConnectAccount {
   connection: TMeteorConnection;
 }
 
-// export interface IMeteorConnectClientConnection_V1_Web
-//   extends IMeteorConnectTargetedClient<"v1_web", "tab_post_message"> {}
-
-// export type TMeteorConnectClientConnection =
-
 export type TNetworkTargetKey = `${TMeteorConnectAccountType}::${TMeteorConnectAccountNetwork}`;
-
-export type TMeteorConnectSelectedAccountForNetworkTarget = Record<
-  TNetworkTargetKey,
-  TMeteorConnectAccountIdentifier | undefined
->;
 
 export interface IMeteorConnectTypedStorage {
   accounts: IMeteorConnectAccount[];
-  selectedNetworkAccounts: TMeteorConnectSelectedAccountForNetworkTarget;
   lastInitialized: number;
 }
 
@@ -93,7 +83,7 @@ export interface IMeteorConnect_Initialize_Input {
 }
 
 export interface IMeteorConnect_TargetClient {
-  makeRequest: <R extends TMCActionResponse = TMCActionResponse>(
+  makeRequest: <R extends TMCActionDefinition = TMCActionDefinition>(
     request: R["request"],
   ) => Promise<R>;
 }

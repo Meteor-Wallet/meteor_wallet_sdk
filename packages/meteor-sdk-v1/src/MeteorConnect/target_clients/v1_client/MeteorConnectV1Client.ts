@@ -2,12 +2,9 @@ import type { BrowserLocalStorageKeyStore } from "@near-js/keystores-browser";
 import * as nearAPI from "near-api-js";
 import { MeteorWallet } from "../../../MeteorWallet.ts";
 import { EMeteorWalletSignInType } from "../../../ported_common/dapp/dapp.enums.ts";
-import { EMCActionId, type TMCActionResponse } from "../../MeteorConnect.action.types.ts";
-import type {
-  IMeteorConnect_TargetClient,
-  IMeteorConnectAccount,
-  TMeteorConnectAccountNetwork,
-} from "../../MeteorConnect.types.ts";
+import type { TMCActionDefinition } from "../../action/mc_action.combined.types.ts";
+import type { TMeteorConnectAccountNetwork } from "../../MeteorConnect.types.ts";
+import { MeteorConnectClientBase } from "../base/MeteorConnectClientBase.ts";
 
 interface IMeteorWalletV1AndKeyStore {
   wallet: MeteorWallet;
@@ -20,7 +17,9 @@ const sdkForNetwork: Record<TMeteorConnectAccountNetwork, IMeteorWalletV1AndKeyS
     testnet: undefined,
   };
 
-export class MeteorConnectV1Client implements IMeteorConnect_TargetClient {
+export class MeteorConnectV1Client extends MeteorConnectClientBase {
+  clientName = "MeteorConnect V1 Client";
+
   private getSdkForNetwork(network: TMeteorConnectAccountNetwork): IMeteorWalletV1AndKeyStore {
     if (sdkForNetwork[network] != null) {
       return sdkForNetwork[network];
@@ -44,25 +43,21 @@ export class MeteorConnectV1Client implements IMeteorConnect_TargetClient {
     return sdkForNetwork[network];
   }
 
-  async makeRequest<R extends TMCActionResponse = TMCActionResponse>(
+  async resolveRequest<R extends TMCActionDefinition = TMCActionDefinition>(
     request: R["request"],
-  ): Promise<R> {
-    const { wallet } = this.getSdkForNetwork(request.networkTarget.network);
-
-    if (request.actionId === EMCActionId.account_sign_in) {
-      console.log("MeteorConnectV1Client: Requesting sign in");
+  ): Promise<R["responsePayload"]> {
+    if (request.actionId === "near::sign_in") {
+      const { wallet } = this.getSdkForNetwork(request.networkTarget.network);
 
       const response = await wallet.requestSignIn({
         type: EMeteorWalletSignInType.ALL_METHODS,
         contract_id: "",
       });
 
-      console.log("MeteorConnectV1Client: Sign in complete", response);
-
       if (response.success) {
         const signedInAccount = response.payload;
 
-        const payload: IMeteorConnectAccount = {
+        return {
           connection: request.connection,
           identifier: {
             accountId: signedInAccount.accountId,
@@ -72,14 +67,16 @@ export class MeteorConnectV1Client implements IMeteorConnect_TargetClient {
             { type: "ed25519", publicKey: signedInAccount.accessKey.getPublicKey().toString() },
           ],
         };
-
-        return {
-          request,
-          responsePayload: payload,
-        } as R;
       } else {
         throw new Error(`MeteorConnectV1Client: Sign in failed ${response.message}`);
       }
+    }
+
+    if (request.actionId === "near::sign_out") {
+      const { wallet } = this.getSdkForNetwork(request.accountIdentifier.network);
+
+      await wallet.signOut();
+      return request.accountIdentifier;
     }
 
     throw new Error(`MeteorConnectV1Client: Action ID [${request["actionId"]}] not implemented`);

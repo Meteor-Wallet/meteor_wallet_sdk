@@ -4,12 +4,12 @@ import {
   createTypedStorageHelper,
   type ITypedStorageHelper,
 } from "../ported_common/utils/storage/TypedStorageHelper.ts";
-import {
-  EMCActionId,
-  type IMCRequest_Account_SignOut,
-  type IMCResponse_Account_SignIn,
-  type TMCActionResponse,
-} from "./MeteorConnect.action.types.ts";
+import type { TMCActionDefinition } from "./action/mc_action.combined.types.ts";
+import type {
+  IMCAction_Near_SignOut,
+  IMCActionDef_Account_SignIn,
+  IMCActionDef_Account_SignOut,
+} from "./action/mc_action.near.types.ts";
 import { METEOR_CONNECT_STORAGE_KEY_PREFIX } from "./MeteorConnect.static.ts";
 import type {
   IMeteorConnect_Initialize_Input,
@@ -18,7 +18,7 @@ import type {
   IMeteorConnectNetworkTarget,
   IMeteorConnectTypedStorage,
   TMCLoggingLevel,
-  TNetworkTargetKey,
+  TMeteorConnection,
 } from "./MeteorConnect.types.ts";
 import { MeteorConnectTestClient } from "./target_clients/test_client/MeteorConnectTestClient.ts";
 import { MeteorConnectV1Client } from "./target_clients/v1_client/MeteorConnectV1Client.ts";
@@ -34,6 +34,10 @@ export class MeteorConnect {
 
   setLoggingLevel(level: TMCLoggingLevel): void {
     this.loggingLevel = level;
+  }
+
+  getLoggingLevel(): TMCLoggingLevel {
+    return this.loggingLevel;
   }
 
   private log(actionDescription: string, meta?: any) {
@@ -120,18 +124,6 @@ export class MeteorConnect {
       });
     } else {
       networkAccountFallback = true;
-
-      const selectedNetworkAccounts = await this.storage.getJson("selectedNetworkAccounts");
-
-      if (selectedNetworkAccounts != null) {
-        const networkKey: TNetworkTargetKey = `${accountIdentifier.blockchain}::${accountIdentifier.network}`;
-
-        const selectedAccountIdentifier = selectedNetworkAccounts[networkKey];
-
-        account = allNetworkAccounts.find((account) => {
-          return isEqual(account.identifier, selectedAccountIdentifier);
-        });
-      }
     }
 
     if (account == null && networkAccountFallback) {
@@ -141,67 +133,77 @@ export class MeteorConnect {
     return account;
   }
 
-  private async addAccount(account: IMeteorConnectAccount): Promise<void> {
+  private async addSignedInAccount(account: IMeteorConnectAccount): Promise<void> {
     const currentAccounts = await this.storage.getJsonOrDef("accounts", []);
     const newAccounts: IMeteorConnectAccount[] = [...currentAccounts, account];
     await this.storage.setJson("accounts", newAccounts);
   }
 
-  private async makeTargetedRequest<R extends TMCActionResponse = TMCActionResponse>(
+  private async removeSignedInAccount(identifier: IMeteorConnectAccountIdentifier): Promise<void> {
+    const currentAccounts = await this.storage.getJsonOrDef("accounts", []);
+    const newAccounts: IMeteorConnectAccount[] = currentAccounts.filter(
+      (a) => !isEqual(a.identifier, identifier),
+    );
+    await this.storage.setJson("accounts", newAccounts);
+  }
+
+  private async makeTargetedActionRequest<R extends TMCActionDefinition = TMCActionDefinition>(
     request: R["request"],
+    connection: TMeteorConnection,
   ): Promise<R> {
-    if (
-      request.connection.platformTarget === "v1_web" ||
-      request.connection.platformTarget === "v1_ext"
-    ) {
-      return new MeteorConnectV1Client().makeRequest(request);
+    if (connection.platformTarget === "v1_web" || connection.platformTarget === "v1_ext") {
+      return new MeteorConnectV1Client(this).makeRequest(request);
     }
 
-    if (request.connection.platformTarget === "test") {
-      return new MeteorConnectTestClient().makeRequest(request);
+    if (connection.platformTarget === "test") {
+      return new MeteorConnectTestClient(this).makeRequest(request);
     }
 
     throw new Error(
-      `MeteorConnect Request: Platform [${request.connection["platformTarget"]}] not implemented`,
+      `MeteorConnect Request: Platform [${connection["platformTarget"]}] not implemented`,
     );
   }
 
-  async makeRequest<R extends TMCActionResponse = TMCActionResponse>(
+  async actionRequest<R extends TMCActionDefinition = TMCActionDefinition>(
     request: R["request"],
   ): Promise<R> {
     this.log(`Action Request [${request.actionId}]`, request);
 
-    if (request.actionId === EMCActionId.account_sign_in) {
-      const response = await this.makeTargetedRequest<IMCResponse_Account_SignIn>(request);
-      await this.addAccount(response.responsePayload);
+    if (request.actionId === "near::sign_in") {
+      const response = await this.makeTargetedActionRequest<IMCActionDef_Account_SignIn>(
+        request,
+        request.connection,
+      );
+      await this.addSignedInAccount(response.responsePayload);
       return response as R;
     }
 
-    if (request.actionId === EMCActionId.account_sign_out) {
-      const target =
-        request.accountId != null
-          ? {
-              accountId: request.accountId,
-              ...request.networkTarget,
-            }
-          : request.networkTarget;
-
-      const account = await this.getAccount(target);
+    if (request.actionId === "near::sign_out") {
+      const account = await this.getAccount(request.accountIdentifier);
 
       if (account == null) {
         throw new Error(
           this.formatMsg(
-            `Sign Out: Account [${accountTargetToText(target)}] does not exist to sign out of`,
+            `Sign Out: Account [${accountTargetToText(request.accountIdentifier)}] does not exist to sign out of`,
           ),
         );
       }
 
-      return this.makeTargetedRequest({
-        ...request,
-        accountId: account.identifier.accountId,
-      } as IMCRequest_Account_SignOut);
+      const response = await this.makeTargetedActionRequest<IMCActionDef_Account_SignOut>(
+        {
+          ...request,
+          accountId: account.identifier.accountId,
+        } as IMCAction_Near_SignOut,
+        account.connection,
+      );
+
+      await this.removeSignedInAccount(response.responsePayload);
+
+      return response as R;
     }
 
-    return this.makeTargetedRequest(request);
+    throw new Error(
+      this.formatMsg(`Request with ID [${request["actionId"]}] couldn't be resolved`),
+    );
   }
 }

@@ -9,10 +9,12 @@ import {
   createTypedStorageHelper,
   type ITypedStorageHelper,
 } from "../ported_common/utils/storage/TypedStorageHelper.ts";
-import { EMCActionId, type IMCResponse_Account_SignIn } from "./MeteorConnect.action.types.ts";
+import type { IMCActionDef_Account_SignIn } from "./action/mc_action.near.types.ts";
 import { METEOR_CONNECT_STORAGE_KEY_PREFIX } from "./MeteorConnect.static.ts";
 import { MeteorConnect } from "./MeteorConnect.ts";
 import type {
+  IMeteorConnectAccount,
+  IMeteorConnectNetworkTarget,
   IMeteorConnectTypedStorage,
   TMeteorConnectAccountNetwork,
 } from "./MeteorConnect.types.ts";
@@ -24,9 +26,15 @@ interface IMeteorConnectTestInitialized {
   meteorConnect: MeteorConnect;
 }
 
-async function initializeMeteorConnectTest(
-  initialLocalStorageData?: Record<string, string | undefined>,
-): Promise<IMeteorConnectTestInitialized> {
+interface IInitializeMeteorConnectTest_Input {
+  initialLocalStorageData?: Record<string, string | undefined>;
+  addNetworkAccounts?: IMeteorConnectNetworkTarget[];
+}
+
+async function initializeMeteorConnectTest({
+  initialLocalStorageData,
+  addNetworkAccounts = [],
+}: IInitializeMeteorConnectTest_Input = {}): Promise<IMeteorConnectTestInitialized> {
   const storage = create_bun_test_local_storage_with_adapter(initialLocalStorageData);
   const meteorConnect = new MeteorConnect();
 
@@ -40,6 +48,18 @@ async function initializeMeteorConnectTest(
   await meteorConnect.initialize({
     storage: storage.storageInterface,
   });
+
+  if (addNetworkAccounts.length > 0) {
+    for (const networkTarget of addNetworkAccounts) {
+      await meteorConnect.actionRequest<IMCActionDef_Account_SignIn>({
+        actionId: "near::sign_in",
+        connection: {
+          platformTarget: "test",
+        },
+        networkTarget,
+      });
+    }
+  }
 
   return {
     meteorConnect,
@@ -72,9 +92,11 @@ describe("MeteorConnect", () => {
 
       const networks: TMeteorConnectAccountNetwork[] = ["testnet", "mainnet"];
 
+      const createdAccounts: IMeteorConnectAccount[] = [];
+
       for (const network of networks) {
-        const response = await meteorConnect.makeRequest<IMCResponse_Account_SignIn>({
-          actionId: EMCActionId.account_sign_in,
+        const response = await meteorConnect.actionRequest<IMCActionDef_Account_SignIn>({
+          actionId: "near::sign_in",
           connection: {
             platformTarget: "test",
           },
@@ -84,12 +106,14 @@ describe("MeteorConnect", () => {
           },
         });
 
-        expect(response.request.actionId).toEqual(EMCActionId.account_sign_in);
+        expect(response.request.actionId).toEqual("near::sign_in");
 
         expect(response.responsePayload).toBeDefined();
         expect(response.responsePayload.publicKeys.length).toEqual(1);
         expect(response.responsePayload.identifier.blockchain).toEqual("near");
         expect(response.responsePayload.identifier.accountId).toBeString();
+
+        createdAccounts.push(response.responsePayload);
 
         const splitId = response.responsePayload.identifier.accountId.split(".");
 
@@ -97,10 +121,72 @@ describe("MeteorConnect", () => {
         expect(splitId[1]).toEqual(network === "mainnet" ? "near" : "testnet");
       }
 
-      const accountsFromStorage = await typedStorage.getJson("accounts");
+      const accountsFromSdk = await meteorConnect.getAllAccounts();
+
+      expect(accountsFromSdk.length).toEqual(2);
+
+      for (const [index, account] of accountsFromSdk.entries()) {
+        expect(createdAccounts[index]).toEqual(account);
+      }
+
+      const accountsFromStorage = (await typedStorage.getJson("accounts"))!;
 
       expect(accountsFromStorage).toBeDefined();
-      expect(accountsFromStorage!.length).toEqual(2);
+      expect(accountsFromStorage.length).toEqual(2);
+
+      expect(createdAccounts.length).toEqual(2);
+
+      const testnetAccount = (await meteorConnect.getAccount({
+        blockchain: "near",
+        network: "testnet",
+      }))!;
+
+      expect(testnetAccount).toBeDefined();
+      expect(testnetAccount).toEqual(createdAccounts[0]);
+
+      const mainnetAccount = (await meteorConnect.getAccount({
+        blockchain: "near",
+        network: "mainnet",
+      }))!;
+
+      expect(mainnetAccount).toBeDefined();
+      expect(mainnetAccount).toEqual(createdAccounts[1]);
+    });
+
+    it("should be able to sign out", async () => {
+      const { typedStorage, meteorConnect } = await initializeMeteorConnectTest({
+        addNetworkAccounts: [
+          {
+            network: "testnet",
+            blockchain: "near",
+          },
+        ],
+      });
+
+      let accountsFromStorage = (await typedStorage.getJson("accounts"))!;
+
+      expect(accountsFromStorage).toBeDefined();
+      expect(accountsFromStorage.length).toEqual(1);
+
+      await meteorConnect.actionRequest({
+        actionId: "near::sign_out",
+        accountIdentifier: accountsFromStorage[0].identifier,
+      });
+
+      const accounts = await meteorConnect.getAllAccounts();
+
+      expect(accounts.length).toEqual(0);
+
+      accountsFromStorage = (await typedStorage.getJson("accounts"))!;
+
+      expect(accountsFromStorage).toBeDefined();
+      expect(accountsFromStorage.length).toEqual(0);
+    });
+
+    it("should be able to create Near actions", async () => {
+      const { meteorConnect } = await initializeMeteorConnectTest();
+
+      // meteorConnect.actionRequest();
     });
   });
 });
