@@ -1,89 +1,17 @@
 import { describe, expect, it } from "bun:test";
-import {
-  create_bun_test_local_storage,
-  create_bun_test_local_storage_with_adapter,
-} from "../../ported_common/utils/storage/bun_test/create_bun_test_local_storage.ts";
-import type { CEnvironmentStorageAdapter } from "../../ported_common/utils/storage/EnvironmentStorageAdapter.ts";
-import type { ILocalStorageInterface } from "../../ported_common/utils/storage/storage.types.ts";
-import {
-  createTypedStorageHelper,
-  type ITypedStorageHelper,
-} from "../../ported_common/utils/storage/TypedStorageHelper.ts";
-import type { IMCActionDef_Near_SignIn } from "../action/mc_action.near.types.ts";
-import { METEOR_CONNECT_STORAGE_KEY_PREFIX } from "../MeteorConnect.static.ts";
+import { create_bun_test_local_storage } from "../../ported_common/utils/storage/bun_test/create_bun_test_local_storage.ts";
+import type {
+  IMCActionDef_Near_SignIn,
+  IMCActionDef_Near_SignMessage,
+} from "../action/mc_action.near.types.ts";
 import { MeteorConnect } from "../MeteorConnect.ts";
 import type {
   IMeteorConnectAccount,
-  IMeteorConnectNetworkTarget,
-  IMeteorConnectTypedStorage,
   TMeteorConnectAccountNetwork,
 } from "../MeteorConnect.types.ts";
 import { GUESTBOOK_CONTRACT_ID } from "./MeteorConnect.test.static.ts";
 import { test_createSimpleNonce } from "./test_utils/createSimpleNonce.ts";
-
-interface IMeteorConnectTestInitialized {
-  storageInterface: ILocalStorageInterface;
-  storage: CEnvironmentStorageAdapter;
-  typedStorage: ITypedStorageHelper<IMeteorConnectTypedStorage>;
-  meteorConnect: MeteorConnect;
-  addedAccounts: IMeteorConnectAccount[];
-}
-
-interface IInitializeMeteorConnectTest_Input {
-  initialLocalStorageData?: Record<string, string | undefined>;
-  addNetworkAccounts?: IMeteorConnectNetworkTarget[];
-  addTestnetAccount?: boolean;
-}
-
-async function initializeMeteorConnectTest({
-  initialLocalStorageData,
-  addNetworkAccounts = [],
-  addTestnetAccount = false,
-}: IInitializeMeteorConnectTest_Input = {}): Promise<IMeteorConnectTestInitialized> {
-  const storage = create_bun_test_local_storage_with_adapter(initialLocalStorageData);
-  const meteorConnect = new MeteorConnect();
-
-  const typedStorage = createTypedStorageHelper<IMeteorConnectTypedStorage>({
-    storageAdapter: storage.storage,
-    keyPrefix: METEOR_CONNECT_STORAGE_KEY_PREFIX,
-  });
-
-  meteorConnect.setLoggingLevel("none");
-
-  await meteorConnect.initialize({
-    storage: storage.storageInterface,
-  });
-
-  const addedAccounts: IMeteorConnectAccount[] = [];
-
-  if (addNetworkAccounts.length === 0 && addTestnetAccount) {
-    addNetworkAccounts.push({
-      network: "testnet",
-      blockchain: "near",
-    });
-  }
-
-  if (addNetworkAccounts.length > 0) {
-    for (const networkTarget of addNetworkAccounts) {
-      const response = await meteorConnect.actionRequest<IMCActionDef_Near_SignIn>({
-        actionId: "near::sign_in",
-        connection: {
-          platformTarget: "test",
-        },
-        target: networkTarget,
-      });
-
-      addedAccounts.push(response.response);
-    }
-  }
-
-  return {
-    meteorConnect,
-    typedStorage,
-    addedAccounts,
-    ...storage,
-  };
-}
+import { initializeMeteorConnectTest } from "./test_utils/InitializeMeteorConnectTest.ts";
 
 describe("MeteorConnect", () => {
   it("should be able to initialize", async () => {
@@ -125,14 +53,14 @@ describe("MeteorConnect", () => {
 
         expect(response.request.actionId).toEqual("near::sign_in");
 
-        expect(response.response).toBeDefined();
-        expect(response.response.publicKeys.length).toEqual(1);
-        expect(response.response.identifier.blockchain).toEqual("near");
-        expect(response.response.identifier.accountId).toBeString();
+        expect(response.outcome).toBeDefined();
+        expect(response.outcome.publicKeys.length).toEqual(1);
+        expect(response.outcome.identifier.blockchain).toEqual("near");
+        expect(response.outcome.identifier.accountId).toBeString();
 
-        createdAccounts.push(response.response);
+        createdAccounts.push(response.outcome);
 
-        const splitId = response.response.identifier.accountId.split(".");
+        const splitId = response.outcome.identifier.accountId.split(".");
 
         expect(splitId.length).toEqual(2);
         expect(splitId[1]).toEqual(network === "mainnet" ? "near" : "testnet");
@@ -200,14 +128,14 @@ describe("MeteorConnect", () => {
       expect(accountsFromStorage.length).toEqual(0);
     });
 
-    it("should be able to create Near actions", async () => {
+    it("should be able to sign a NEAR message", async () => {
       const { meteorConnect, addedAccounts } = await initializeMeteorConnectTest({
         addTestnetAccount: true,
       });
 
       const [account] = addedAccounts;
 
-      meteorConnect.actionRequest({
+      const response = await meteorConnect.actionRequest<IMCActionDef_Near_SignMessage>({
         actionId: "near::sign_message",
         messageParams: {
           message: "hello",
@@ -216,6 +144,9 @@ describe("MeteorConnect", () => {
         },
         target: account.identifier,
       });
+
+      expect(response.outcome).toBeDefined();
+      expect(response.outcome.accountId).toEqual(account.identifier.accountId);
     });
   });
 });

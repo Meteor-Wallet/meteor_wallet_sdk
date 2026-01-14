@@ -7,6 +7,7 @@ import {
 import type { TMCActionDefinition } from "./action/mc_action.combined.types.ts";
 import type {
   IMCActionDef_Near_SignIn,
+  IMCActionDef_Near_SignMessage,
   IMCActionDef_Near_SignOut,
 } from "./action/mc_action.near.types.ts";
 import { METEOR_CONNECT_STORAGE_KEY_PREFIX } from "./MeteorConnect.static.ts";
@@ -163,6 +164,20 @@ export class MeteorConnect {
     );
   }
 
+  private async getAccountOrThrow(
+    accountIdentifier: PartialBy<IMeteorConnectAccountIdentifier, "accountId">,
+  ): Promise<IMeteorConnectAccount> {
+    const account = await this.getAccount(accountIdentifier);
+
+    if (account == null) {
+      throw new Error(
+        this.formatMsg(`Account at [${accountTargetToText(accountIdentifier)}] does not exist`),
+      );
+    }
+
+    return account;
+  }
+
   async actionRequest<R extends TMCActionDefinition = TMCActionDefinition>(
     request: R["request"],
   ): Promise<R> {
@@ -173,20 +188,12 @@ export class MeteorConnect {
         request,
         request.connection,
       );
-      await this.addSignedInAccount(response.response);
+      await this.addSignedInAccount(response.outcome);
       return response as R;
     }
 
     if (request.actionId === "near::sign_out") {
-      const account = await this.getAccount(request.target);
-
-      if (account == null) {
-        throw new Error(
-          this.formatMsg(
-            `Sign Out: Account [${accountTargetToText(request.target)}] does not exist to sign out of`,
-          ),
-        );
-      }
+      const account = await this.getAccountOrThrow(request.target);
 
       const response = await this.makeTargetedActionRequest<IMCActionDef_Near_SignOut>(
         {
@@ -196,7 +203,21 @@ export class MeteorConnect {
         account.connection,
       );
 
-      await this.removeSignedInAccount(response.response);
+      await this.removeSignedInAccount(response.outcome);
+
+      return response as R;
+    }
+
+    if (request.actionId === "near::sign_message") {
+      const account = await this.getAccountOrThrow(request.target);
+
+      const response = await this.makeTargetedActionRequest<IMCActionDef_Near_SignMessage>(
+        {
+          ...request,
+          target: account.identifier,
+        },
+        account.connection,
+      );
 
       return response as R;
     }

@@ -15,7 +15,7 @@ export interface IMCAction_Base<ID extends TMCActionId = TMCActionId> {
 
 export interface IMCActionDef<R extends IMCAction_Base, P> {
   request: R;
-  response: P;
+  outcome: P;
 }
 
 export interface IMCAction_WithConnection {

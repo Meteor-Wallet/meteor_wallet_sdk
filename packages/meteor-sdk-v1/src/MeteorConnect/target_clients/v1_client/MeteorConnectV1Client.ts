@@ -1,3 +1,4 @@
+import { PublicKey } from "@near-js/crypto";
 import type { BrowserLocalStorageKeyStore } from "@near-js/keystores-browser";
 import * as nearAPI from "near-api-js";
 import { MeteorWallet } from "../../../MeteorWallet.ts";
@@ -45,7 +46,7 @@ export class MeteorConnectV1Client extends MeteorConnectClientBase {
 
   async resolveRequest<R extends TMCActionDefinition = TMCActionDefinition>(
     request: R["request"],
-  ): Promise<R["response"]> {
+  ): Promise<R["outcome"]> {
     if (request.actionId === "near::sign_in") {
       const { wallet } = this.getSdkForNetwork(request.target.network);
 
@@ -76,7 +77,26 @@ export class MeteorConnectV1Client extends MeteorConnectClientBase {
       const { wallet } = this.getSdkForNetwork(request.target.network);
 
       await wallet.signOut();
-      return request.target as R["response"];
+      return request.target as R["outcome"];
+    }
+
+    if (request.actionId === "near::sign_message") {
+      const { wallet } = this.getSdkForNetwork(request.target.network);
+      const response = await wallet.signMessage({
+        ...request.messageParams,
+        accountId: request.target.accountId,
+      });
+
+      if (response.success) {
+        return {
+          accountId: response.payload.accountId,
+          publicKey: PublicKey.fromString(response.payload.publicKey),
+          signature: Buffer.from(response.payload.signature, "base64"),
+          state: response.payload.state,
+        };
+      } else {
+        throw new Error(this.formatMsg(`Sign message failed ${response.message}`));
+      }
     }
 
     throw new Error(`MeteorConnectV1Client: Action ID [${request["actionId"]}] not implemented`);

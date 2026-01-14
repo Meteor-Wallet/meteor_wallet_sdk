@@ -4,9 +4,9 @@ import { MeteorConnect } from "../../MeteorConnect.ts";
 export abstract class MeteorConnectClientBase {
   abstract readonly clientName: string;
 
-  constructor(private readonly meteorConnect: MeteorConnect) {}
+  constructor(protected readonly meteorConnect: MeteorConnect) {}
 
-  private log(actionDescription: string, meta?: any) {
+  protected log(actionDescription: string, meta?: any) {
     const level = this.meteorConnect.getLoggingLevel();
 
     if (level === "none") {
@@ -22,7 +22,7 @@ export abstract class MeteorConnectClientBase {
     }
   }
 
-  private formatMsg(message: string): string {
+  protected formatMsg(message: string): string {
     return `${this.clientName}: ${message}`;
   }
 
@@ -31,11 +31,11 @@ export abstract class MeteorConnectClientBase {
   ): Promise<R> {
     return {
       request,
-      response: await this.resolveRequest(request),
+      outcome: await this.resolveRequest(request),
     } as R;
   }
 
   abstract resolveRequest<R extends TMCActionDefinition = TMCActionDefinition>(
     request: R["request"],
-  ): Promise<R["response"]>;
+  ): Promise<R["outcome"]>;
 }
