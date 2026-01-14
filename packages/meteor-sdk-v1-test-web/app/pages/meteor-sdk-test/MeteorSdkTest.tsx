@@ -8,7 +8,10 @@ import "@near-wallet-selector/modal-ui/styles.css";
 import { EMeteorWalletSignInType } from "@meteorwallet/sdk";
 import { QueryClient, QueryClientProvider, useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { useImmer } from "use-immer";
+import {
+  AddMessageComponent,
+  type IAddMessageParams,
+} from "~/components/wallet_actions/AddMessageComponent.tsx";
 import { createNativeMeteorWallet } from "~/core/meteor-wallet/setup/createNativeMeteorWallet";
 import {
   addMessage,
@@ -76,25 +79,18 @@ function MeteorSdkTestInner() {
     }
   }, [nativeMeteorWallet, useMeteorSdkDirectly, signedAccountIdWalletSelector]);
 
-  const [testState, updateTestState] = useImmer({
-    message: "",
-    donation: "0.001",
-    withDonation: false,
-    multiple: false,
-  });
-
   const mutate_addMessageWalletSelector = useMutation({
-    mutationKey: ["add_message_wallet_selector", testState],
-    mutationFn: async () => {
+    mutationKey: ["add_message_wallet_selector"],
+    mutationFn: async (params: IAddMessageParams) => {
       return addMessage(walletSelector, {
-        ...testState,
-        donation: testState.withDonation ? testState.donation : "0",
+        ...params,
+        donation: params.withDonation ? params.donation : "0",
       });
     },
   });
 
   const mutate_signMessageWalletSelector = useMutation({
-    mutationKey: ["sign_test_message_wallet_selector", testState],
+    mutationKey: ["sign_test_message_wallet_selector"],
     mutationFn: async () => {
       return signTestMessage(walletSelector);
     },
@@ -125,9 +121,9 @@ function MeteorSdkTestInner() {
   });
 
   const mutate_addMessage = useMutation({
-    mutationKey: ["add_message", useMeteorSdkDirectly, testState],
-    mutationFn: async () => {
-      return await mutate_addMessageWalletSelector.mutateAsync();
+    mutationKey: ["add_message", useMeteorSdkDirectly],
+    mutationFn: async (params: IAddMessageParams) => {
+      return await mutate_addMessageWalletSelector.mutateAsync(params);
     },
   });
 
@@ -220,80 +216,15 @@ function MeteorSdkTestInner() {
               {mutate_addMessage.isPending ? "Requesting..." : "Sign Test Message"}
             </button>
           </div>
-          <div className="rounded-3xl border border-gray-200 p-6 dark:border-gray-700 space-y-4">
-            <h2 className="text-xl font-semibold">Add Message</h2>
-            <div className="flex flex-col gap-2 items-start">
-              <input
-                type="text"
-                placeholder="Message"
-                className="rounded-3xl border border-gray-200 p-2 dark:border-gray-700"
-                value={testState.message}
-                onChange={(e) => {
-                  updateTestState((draft) => {
-                    draft.message = e.target.value;
-                  });
-                }}
-              />
-              <div className={"flex items-center gap-2"}>
-                <label htmlFor={"withDonation"} className={"text-sm"}>
-                  Donation
-                </label>
-                <input
-                  id={"withDonation"}
-                  name="withDonation"
-                  type="checkbox"
-                  checked={testState.withDonation}
-                  onChange={(e) => {
-                    updateTestState((draft) => {
-                      draft.withDonation = e.target.checked;
-                    });
-                  }}
-                />
-              </div>
-              <input
-                type="text"
-                placeholder="Donation"
-                className="rounded-3xl border border-gray-200 p-2 dark:border-gray-700"
-                value={testState.donation}
-                onChange={(e) => {
-                  updateTestState((draft) => {
-                    draft.donation = e.target.value;
-                  });
-                }}
-              />
-              <div className={"flex items-center gap-2"}>
-                <label htmlFor={"multiple"} className={"text-sm"}>
-                  Multiple
-                </label>
-                <input
-                  id={"multiple"}
-                  name="multiple"
-                  type="checkbox"
-                  checked={testState.multiple}
-                  onChange={(e) => {
-                    updateTestState((draft) => {
-                      draft.multiple = e.target.checked;
-                    });
-                  }}
-                />
-              </div>
-              <button
-                disabled={mutate_addMessage.isPending}
-                onClick={async () => {
-                  await mutate_addMessage.mutateAsync();
-                  updateTestState((draft) => {
-                    draft.message = "";
-                  });
-                  await query_messages.refetch({
-                    cancelRefetch: true,
-                  });
-                }}
-                className={"rounded-3xl bg-blue-600 text-white py-2 px-4"}
-              >
-                {mutate_addMessage.isPending ? "Sending..." : "Send"}
-              </button>
-            </div>
-          </div>
+          <AddMessageComponent
+            disabled={mutate_addMessage.isPending}
+            onPressAddMessage={async (params) => {
+              await mutate_addMessage.mutateAsync(params);
+              await query_messages.refetch({
+                cancelRefetch: true,
+              });
+            }}
+          />
           {query_messages.isPending && <p>Loading messages...</p>}
           {query_messages.isError && <p>Error loading messages: {query_messages.error.message}</p>}
           {query_messages.isSuccess && (

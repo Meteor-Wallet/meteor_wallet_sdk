@@ -1,6 +1,6 @@
 import type { SignedMessage } from "@near-js/signers";
+import type { Action } from "@near-js/transactions";
 import type { FinalExecutionOutcome } from "@near-js/types";
-import type { IORequestSignTransactions_Inputs } from "../../ported_common/dapp/dapp.types.ts";
 import type {
   IMeteorConnectAccount,
   IMeteorConnectAccountIdentifier,
@@ -53,9 +53,14 @@ export interface IMCAInput_Near_SignMessage extends IMCAction_WithExactAccountTa
 // SIGN TRANSACTIONS
 //
 
-export interface IMCAInput_Near_SignTransactions
-  extends IMCAction_WithExactAccountTarget,
-    IORequestSignTransactions_Inputs {}
+export type TSimpleNearTransaction = {
+  receiverId: string;
+  actions: Action[];
+};
+
+export interface IMCA_Near_SignTransactions_Input extends IMCAction_WithExactAccountTarget {
+  transactions: TSimpleNearTransaction[];
+}
 
 // --------------------------
 //
@@ -89,8 +94,8 @@ export const MCNearActions = {
     },
   },
   "near::sign_transactions": {
-    input: {} as IMCAInput_Near_SignTransactions,
-    expandedInput: {} as IMCAInput_Near_SignTransactions & IMCAction_WithFullAccount,
+    input: {} as IMCA_Near_SignTransactions_Input,
+    expandedInput: {} as IMCA_Near_SignTransactions_Input & IMCAction_WithFullAccount,
     output: {} as FinalExecutionOutcome[],
     meta: {
       account: "exact-exists",

@@ -1,9 +1,14 @@
 import { MeteorConnect } from "@meteorwallet/sdk";
-import type { IMCActionDef_Near_SignMessage } from "@meteorwallet/sdk/MeteorConnect/action/mc_action.near.ts";
 import type { IMeteorConnectAccount } from "@meteorwallet/sdk/MeteorConnect/MeteorConnect.types.ts";
 import { webpage_local_storage } from "@meteorwallet/sdk/ported_common/utils/storage/webpage/webpage_local_storage.ts";
+import { actionCreators } from "@near-js/transactions";
+import { parseNearAmount } from "@near-js/utils";
 import { QueryClient, QueryClientProvider, useMutation, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
+import {
+  AddMessageComponent,
+  type IAddMessageParams,
+} from "~/components/wallet_actions/AddMessageComponent.tsx";
 import { createSimpleNonce, GUESTBOOK_CONTRACT_ID } from "~/pages/meteor-sdk-test/guestbook.ts";
 import { NetworkSelector } from "~/pages/near-connect/NetworkSelector.tsx";
 import { Button } from "~/ui/Button.tsx";
@@ -72,13 +77,15 @@ const MeteorConnectTestInitialized = ({ meteorConnect }: { meteorConnect: Meteor
         <Button
           onClick={async () => {
             await meteorConnect.actionRequest({
-              actionId: "near::sign_in",
-              connection: {
-                platformTarget: "v1_web",
-              },
-              target: {
-                blockchain: "near",
-                network,
+              id: "near::sign_in",
+              input: {
+                connection: {
+                  platformTarget: "v1_web",
+                },
+                target: {
+                  blockchain: "near",
+                  network,
+                },
               },
             });
 
@@ -92,8 +99,10 @@ const MeteorConnectTestInitialized = ({ meteorConnect }: { meteorConnect: Meteor
           <Button
             onClick={async () => {
               await meteorConnect.actionRequest({
-                actionId: "near::sign_out",
-                target: account.identifier,
+                id: "near::sign_out",
+                input: {
+                  target: account.identifier,
+                },
               });
 
               await accountQuery.refetch({ cancelRefetch: true });
@@ -108,6 +117,9 @@ const MeteorConnectTestInitialized = ({ meteorConnect }: { meteorConnect: Meteor
   );
 };
 
+const SUGGESTED_DONATION = "0";
+const BOATLOAD_OF_GAS = "30000000000000";
+
 const MeteorConnectWithAccount = ({
   account,
   meteorConnect,
@@ -118,22 +130,49 @@ const MeteorConnectWithAccount = ({
   const mutate_signMessage = useMutation({
     mutationKey: ["mutate_signMessage", account.identifier, account.publicKeys],
     mutationFn: async () => {
-      const response = await meteorConnect.actionRequest<IMCActionDef_Near_SignMessage>({
-        actionId: "near::sign_message",
-        messageParams: {
-          message: "hello",
-          nonce: createSimpleNonce(),
-          recipient: GUESTBOOK_CONTRACT_ID,
+      return await meteorConnect.actionRequest({
+        id: "near::sign_message",
+        input: {
+          messageParams: {
+            message: "hello",
+            nonce: createSimpleNonce(),
+            recipient: GUESTBOOK_CONTRACT_ID,
+          },
+          target: account.identifier,
         },
-        target: account.identifier,
       });
+    },
+  });
 
-      return response.outcome;
+  const mutate_addMessage = useMutation({
+    mutationKey: ["mutate_addMessage", account.identifier],
+    mutationFn: async (params: IAddMessageParams) => {
+      return await meteorConnect.actionRequest({
+        id: "near::sign_transactions",
+        input: {
+          target: account.identifier,
+          transactions: [
+            {
+              actions: [
+                actionCreators.functionCall(
+                  "addMessage",
+                  {
+                    text: params.message,
+                  },
+                  BigInt(BOATLOAD_OF_GAS),
+                  BigInt(parseNearAmount(params.donation)!),
+                ),
+              ],
+              receiverId: GUESTBOOK_CONTRACT_ID,
+            },
+          ],
+        },
+      });
     },
   });
 
   return (
-    <div className={"p-5"}>
+    <div className={"p-5 flex flex-col gap-5 items-start"}>
       <h1>{account.identifier.accountId} Signed In</h1>
       <Button
         onClick={async () => {
@@ -143,6 +182,13 @@ const MeteorConnectWithAccount = ({
       >
         Sign Message
       </Button>
+      <AddMessageComponent
+        onPressAddMessage={async (params) => {
+          console.log("Adding message");
+          const response = await mutate_addMessage.mutateAsync(params);
+          console.log("Sign message response", response);
+        }}
+      />
     </div>
   );
 };

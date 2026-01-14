@@ -1,7 +1,7 @@
 import { KeyPair, KeyType } from "@near-js/crypto";
 import { Transaction as NearFullTransaction } from "@near-js/transactions";
 import type { FinalExecutionOutcome } from "@near-js/types";
-import type { Action, Optional, Transaction } from "@near-wallet-selector/core";
+import type { Action, Transaction } from "@near-wallet-selector/core";
 import { z } from "zod";
 import { ENearNetwork } from "../near/near_basic_types.ts";
 import type { PartialBy } from "../utils/special_typescript_types.ts";
@@ -13,11 +13,11 @@ import {
   EMeteorWalletSignInType,
   EWalletExternalActionStatus,
 } from "./dapp.enums.ts";
+import { EDappActionErrorTag, getExternalActionErrorMessageForEndTag } from "./dapp.errors.ts";
 import {
   ZO_DappSignInAction_AllMethods,
   ZO_DappSignInAction_SelectedMethods,
 } from "./dapp.validation.ts";
-import { EDappActionErrorTag, getExternalActionErrorMessageForEndTag } from "./dapp.errors.ts";
 
 export interface IRejectReason {
   message: string;
@@ -157,9 +157,20 @@ export interface IORequestSignTransactionsRedirect_Inputs {
   meta?: string;
 }
 
+export type TMeteorSdkV1Transaction = Omit<Transaction, "signerId">;
+export type TNearNativeSimpleTransaction = Omit<
+  NearFullTransaction,
+  "publicKey" | "signerId" | "nonce" | "blockHash"
+>;
+
 export interface IORequestSignTransactions_Inputs {
   /** list of transactions to sign */
-  transactions: Array<Optional<Transaction, "signerId">>;
+  transactions: TMeteorSdkV1Transaction[];
+}
+
+export interface IORequestSignTransactionsNearNative_Inputs {
+  /** list of transactions to sign */
+  transactions: TMeteorSdkV1Transaction[];
 }
 
 export interface IDappAction_SignTransactions_Data {

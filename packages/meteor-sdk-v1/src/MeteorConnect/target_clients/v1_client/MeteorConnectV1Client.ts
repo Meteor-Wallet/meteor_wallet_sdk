@@ -3,6 +3,7 @@ import type { BrowserLocalStorageKeyStore } from "@near-js/keystores-browser";
 import * as nearAPI from "near-api-js";
 import { MeteorWallet } from "../../../MeteorWallet.ts";
 import { EMeteorWalletSignInType } from "../../../ported_common/dapp/dapp.enums.ts";
+import type { TMeteorSdkV1Transaction } from "../../../ported_common/dapp/dapp.types.ts";
 import type { TMCActionRegistry } from "../../action/mc_action.combined.ts";
 import type { TMCActionRequestUnionExpandedInput } from "../../action/mc_action.types.ts";
 import type { TMeteorConnectAccountNetwork, TMeteorConnection } from "../../MeteorConnect.types.ts";
@@ -110,6 +111,19 @@ export class MeteorConnectV1Client extends MeteorConnectClientBase {
       }
     }
 
-    throw new Error(`MeteorConnectV1Client: Action ID [${request["actionId"]}] not implemented`);
+    if (request.id === "near::sign_transactions") {
+      const { wallet } = this.getSdkForNetwork(request.expandedInput.account.identifier.network);
+
+      /*await wallet.requestSignTransactions({
+        transactions: request.expandedInput.transactions.map((t): TMeteorSdkV1Transaction => {
+          return {
+            receiverId: t.receiverId,
+            actions: t.actions,
+          };
+        }),
+      });*/
+    }
+
+    throw new Error(`MeteorConnectV1Client: Action ID [${request["id"]}] not implemented`);
   }
 }

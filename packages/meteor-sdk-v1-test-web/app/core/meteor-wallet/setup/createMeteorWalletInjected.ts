@@ -147,7 +147,7 @@ export const createMeteorWalletInjected: WalletBehaviourFactory<
       }
 
       return _state.wallet.requestSignTransactions({
-        transactions,
+        transactions: transactions as any,
       });
     },
 

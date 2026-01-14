@@ -235,6 +235,21 @@ export class MeteorConnect {
       return response.output;
     }
 
+    if (request.id === "near::sign_transactions") {
+      const response = await this.makeTargetedActionRequest(
+        {
+          id: request.id,
+          expandedInput: {
+            ...request.input,
+            account: account!,
+          },
+        },
+        account!.connection,
+      );
+
+      return response.output;
+    }
+
     throw new Error(this.formatMsg(`Request with ID [${request["id"]}] couldn't be resolved`));
   }
 }

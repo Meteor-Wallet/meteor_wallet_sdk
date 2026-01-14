@@ -374,6 +374,36 @@ export class MeteorWallet {
     });
   }
 
+  /*async requestSignTransactionsNearNative(inputs: IORequestSignTransactionsNearNative_Inputs): Promise<FinalExecutionOutcome[]> {
+    console.log("Transformed transactions", transformedTransactions);
+
+    const response =
+      await getMeteorPostMessenger().connectAndWaitForResponse<IODappAction_PostMessage_SignTransactions_Output>(
+        {
+          actionType: EExternalActionType.sign,
+          inputs: {
+            transactions: transformedTransactions
+              .map((transaction) => transaction.encode())
+              .map((serialized) => Buffer.from(serialized).toString("base64"))
+              .join(","),
+          } as IODappAction_PostMessage_SignTransactions_Input,
+          // inputs: { public_key: usingPublicKey, ...options },
+          network: this._networkId as ENearNetwork,
+        },
+      );
+
+    // console.log("Finished sign-in request", response);
+
+    if (response.success) {
+      return response.payload.executionOutcomes;
+    }
+
+    throw new MeteorActionError({
+      endTags: response.endTags,
+      message: response.message,
+    });
+  }*/
+
   /**
    * Sign transactions using Meteor Wallet. Will return a promise with an array of `FinalExecutionOutcome`
    * of the given transactions.
