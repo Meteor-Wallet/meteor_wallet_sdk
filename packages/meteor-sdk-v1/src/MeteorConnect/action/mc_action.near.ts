@@ -1,14 +1,15 @@
 import type { SignedMessage } from "@near-js/signers";
+import type { FinalExecutionOutcome } from "@near-js/types";
+import type { IORequestSignTransactions_Inputs } from "../../ported_common/dapp/dapp.types.ts";
 import type {
   IMeteorConnectAccount,
   IMeteorConnectAccountIdentifier,
 } from "../MeteorConnect.types.ts";
 import type {
-  IMCAction_Base,
   IMCAction_WithConnection,
   IMCAction_WithExactAccountTarget,
+  IMCAction_WithFullAccount,
   IMCAction_WithNetworkTarget,
-  IMCActionDef,
   IMCActionSchema,
   TMCActionId,
 } from "./mc_action.types.ts";
@@ -26,34 +27,11 @@ export interface IMCAInput_Near_SignIn
   };
 }
 
-export interface IMCActionReq_Near_SignIn
-  extends IMCAction_Base<"near::sign_in">,
-    IMCAction_WithConnection,
-    IMCAction_WithNetworkTarget {
-  contract?: {
-    id: string;
-    methodNames?: string[];
-  };
-}
-
-export interface IMCActionDef_Near_SignIn
-  extends IMCActionDef<IMCActionReq_Near_SignIn, IMeteorConnectAccount> {}
-
 // ------------------------------
 //
 // ACTIONS WITH SIGNED-IN ACCOUNT
 //
 // ------------------------------
-//
-// SIGN OUT
-//
-
-export interface IMCActionReq_Near_SignOut
-  extends IMCAction_Base<"near::sign_out">,
-    IMCAction_WithExactAccountTarget {}
-
-export interface IMCActionDef_Near_SignOut
-  extends IMCActionDef<IMCActionReq_Near_SignOut, IMeteorConnectAccountIdentifier> {}
 
 //
 // SIGN MESSAGE (WITH ACCOUNT)
@@ -71,18 +49,13 @@ export interface IMCAInput_Near_SignMessage extends IMCAction_WithExactAccountTa
   messageParams: INearSignMessageParams;
 }
 
-export interface IMCActionReq_Near_SignMessage
-  extends IMCAction_Base<"near::sign_message">,
-    IMCAction_WithExactAccountTarget {
-  messageParams: INearSignMessageParams;
-}
-
-export interface IMCActionDef_Near_SignMessage
-  extends IMCActionDef<IMCActionReq_Near_SignMessage, SignedMessage> {}
-
 //
 // SIGN TRANSACTIONS
 //
+
+export interface IMCAInput_Near_SignTransactions
+  extends IMCAction_WithExactAccountTarget,
+    IORequestSignTransactions_Inputs {}
 
 // --------------------------
 //
@@ -101,7 +74,7 @@ export const MCNearActions = {
   },
   "near::sign_out": {
     input: {} as IMCAction_WithExactAccountTarget,
-    expandedInput: {} as IMeteorConnectAccount,
+    expandedInput: {} as IMCAction_WithFullAccount,
     output: {} as IMeteorConnectAccountIdentifier,
     meta: {
       account: "exact-exists",
@@ -109,8 +82,16 @@ export const MCNearActions = {
   },
   "near::sign_message": {
     input: {} as IMCAInput_Near_SignMessage,
-    expandedInput: {} as IMCAInput_Near_SignMessage,
+    expandedInput: {} as IMCAInput_Near_SignMessage & IMCAction_WithFullAccount,
     output: {} as SignedMessage,
+    meta: {
+      account: "exact-exists",
+    },
+  },
+  "near::sign_transactions": {
+    input: {} as IMCAInput_Near_SignTransactions,
+    expandedInput: {} as IMCAInput_Near_SignTransactions & IMCAction_WithFullAccount,
+    output: {} as FinalExecutionOutcome[],
     meta: {
       account: "exact-exists",
     },

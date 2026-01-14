@@ -3,8 +3,9 @@ import type { BrowserLocalStorageKeyStore } from "@near-js/keystores-browser";
 import * as nearAPI from "near-api-js";
 import { MeteorWallet } from "../../../MeteorWallet.ts";
 import { EMeteorWalletSignInType } from "../../../ported_common/dapp/dapp.enums.ts";
-import type { TMCActionDefinition } from "../../action/mc_action.combined.ts";
-import type { TMeteorConnectAccountNetwork } from "../../MeteorConnect.types.ts";
+import type { TMCActionRegistry } from "../../action/mc_action.combined.ts";
+import type { TMCActionRequestUnionExpandedInput } from "../../action/mc_action.types.ts";
+import type { TMeteorConnectAccountNetwork, TMeteorConnection } from "../../MeteorConnect.types.ts";
 import { MeteorConnectClientBase } from "../base/MeteorConnectClientBase.ts";
 
 interface IMeteorWalletV1AndKeyStore {
@@ -44,55 +45,65 @@ export class MeteorConnectV1Client extends MeteorConnectClientBase {
     return sdkForNetwork[network];
   }
 
-  async resolveRequest<R extends TMCActionDefinition = TMCActionDefinition>(
-    request: R["request"],
-  ): Promise<R["outcome"]> {
-    if (request.actionId === "near::sign_in") {
-      const { wallet } = this.getSdkForNetwork(request.target.network);
+  async makeRequest<R extends TMCActionRequestUnionExpandedInput<TMCActionRegistry>>(
+    request: R,
+    connection: TMeteorConnection,
+  ): Promise<{ output: TMCActionRegistry[R["id"]]["output"] }> {
+    if (request.id === "near::sign_in") {
+      const { wallet } = this.getSdkForNetwork(request.expandedInput.target.network);
+
+      if (request.expandedInput.contract != null) {
+        // TODO need to generate a function call access key to be registered on the account
+      }
 
       const response = await wallet.requestSignIn({
         type: EMeteorWalletSignInType.ALL_METHODS,
-        contract_id: "",
+        contract_id: request.expandedInput.contract?.id ?? "",
+        methods: request.expandedInput.contract?.methodNames,
       });
 
       if (response.success) {
         const signedInAccount = response.payload;
 
         return {
-          connection: request.connection,
-          identifier: {
-            accountId: signedInAccount.accountId,
-            ...request.target,
+          output: {
+            connection,
+            identifier: {
+              accountId: signedInAccount.accountId,
+              ...request.expandedInput.target,
+            },
+            publicKeys: [
+              { type: "ed25519", publicKey: signedInAccount.accessKey.getPublicKey().toString() },
+            ],
           },
-          publicKeys: [
-            { type: "ed25519", publicKey: signedInAccount.accessKey.getPublicKey().toString() },
-          ],
         };
       } else {
         throw new Error(`MeteorConnectV1Client: Sign in failed ${response.message}`);
       }
     }
 
-    if (request.actionId === "near::sign_out") {
-      const { wallet } = this.getSdkForNetwork(request.target.network);
+    if (request.id === "near::sign_out") {
+      const { wallet } = this.getSdkForNetwork(request.expandedInput.account.identifier.network);
 
       await wallet.signOut();
-      return request.target as R["outcome"];
+      return { output: request.expandedInput.account.identifier };
     }
 
-    if (request.actionId === "near::sign_message") {
-      const { wallet } = this.getSdkForNetwork(request.target.network);
+    if (request.id === "near::sign_message") {
+      const { wallet } = this.getSdkForNetwork(request.expandedInput.account.identifier.network);
       const response = await wallet.signMessage({
-        ...request.messageParams,
-        accountId: request.target.accountId,
+        ...request.expandedInput.messageParams,
+        accountId: request.expandedInput.account.identifier.accountId,
       });
 
       if (response.success) {
         return {
-          accountId: response.payload.accountId,
-          publicKey: PublicKey.fromString(response.payload.publicKey),
-          signature: Buffer.from(response.payload.signature, "base64"),
-          state: response.payload.state,
+          output: {
+            accountId: response.payload.accountId,
+            publicKey: PublicKey.fromString(response.payload.publicKey),
+            signature: Buffer.from(response.payload.signature, "base64"),
+            state: response.payload.state,
+          },
         };
       } else {
         throw new Error(this.formatMsg(`Sign message failed ${response.message}`));

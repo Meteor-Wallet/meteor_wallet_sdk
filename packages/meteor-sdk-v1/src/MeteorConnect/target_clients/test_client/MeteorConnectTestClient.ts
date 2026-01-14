@@ -1,32 +1,37 @@
 import { KeyPairEd25519 } from "@near-js/crypto";
 import { KeyPairSigner } from "@near-js/signers";
-import type { TMCActionDefinition } from "../../action/mc_action.combined.ts";
+import type { TMCActionRegistry } from "../../action/mc_action.combined.ts";
+import type { TMCActionRequestUnionExpandedInput } from "../../action/mc_action.types.ts";
+import type { TMeteorConnection } from "../../MeteorConnect.types.ts";
 import { MeteorConnectClientBase } from "../base/MeteorConnectClientBase.ts";
 import { createFakeAccount } from "./utils/testClientFakeData.ts";
 
 export class MeteorConnectTestClient extends MeteorConnectClientBase {
   clientName = "MeteorConnect TEST Client";
 
-  async resolveRequest<R extends TMCActionDefinition = TMCActionDefinition>(
-    request: R["request"],
-  ): Promise<R["outcome"]> {
-    if (request.actionId === "near::sign_in") {
-      return createFakeAccount(request.target, request.connection);
+  async makeRequest<K extends keyof TMCActionRegistry>(
+    request: TMCActionRequestUnionExpandedInput<TMCActionRegistry>,
+    connection: TMeteorConnection,
+  ): Promise<{ output: TMCActionRegistry[K]["output"] }> {
+    if (request.id === "near::sign_in") {
+      return { output: createFakeAccount(request.expandedInput.target, connection) };
     }
 
-    if (request.actionId === "near::sign_out") {
-      return request.target as R["outcome"];
+    if (request.id === "near::sign_out") {
+      return { output: request.expandedInput.account.identifier };
     }
 
-    if (request.actionId === "near::sign_message") {
+    if (request.id === "near::sign_message") {
       const signer = new KeyPairSigner(KeyPairEd25519.fromRandom());
-      return await signer.signNep413Message(
-        request.messageParams.message,
-        request.target.accountId,
-        request.messageParams.recipient,
-        request.messageParams.nonce,
-        request.messageParams.callbackUrl,
-      );
+      return {
+        output: await signer.signNep413Message(
+          request.expandedInput.messageParams.message,
+          request.expandedInput.account.identifier.accountId,
+          request.expandedInput.messageParams.recipient,
+          request.expandedInput.messageParams.nonce,
+          request.expandedInput.messageParams.callbackUrl,
+        ),
+      };
     }
 
     throw new Error(`MeteorConnectTestClient: Action ID [${request["actionId"]}] not implemented`);

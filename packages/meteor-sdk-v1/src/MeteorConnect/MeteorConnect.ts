@@ -4,17 +4,11 @@ import {
   createTypedStorageHelper,
   type ITypedStorageHelper,
 } from "../ported_common/utils/storage/TypedStorageHelper.ts";
-import {
-  MCActionRegistryMap,
-  type TMCActionDefinition,
-  type TMCActionRegistry,
-} from "./action/mc_action.combined.ts";
+import { MCActionRegistryMap, type TMCActionRegistry } from "./action/mc_action.combined.ts";
 import type {
-  IMCActionDef_Near_SignIn,
-  IMCActionDef_Near_SignMessage,
-  IMCActionDef_Near_SignOut,
-} from "./action/mc_action.near.ts";
-import type { TMCActionRequestUnion } from "./action/mc_action.types.ts";
+  TMCActionRequestUnion,
+  TMCActionRequestUnionExpandedInput,
+} from "./action/mc_action.types.ts";
 import { METEOR_CONNECT_STORAGE_KEY_PREFIX } from "./MeteorConnect.static.ts";
 import type {
   IMeteorConnect_Initialize_Input,
@@ -152,23 +146,6 @@ export class MeteorConnect {
     await this.storage.setJson("accounts", newAccounts);
   }
 
-  private async makeTargetedActionRequest<R extends TMCActionDefinition = TMCActionDefinition>(
-    request: R["request"],
-    connection: TMeteorConnection,
-  ): Promise<R> {
-    if (connection.platformTarget === "v1_web" || connection.platformTarget === "v1_ext") {
-      return new MeteorConnectV1Client(this).makeRequest(request);
-    }
-
-    if (connection.platformTarget === "test") {
-      return new MeteorConnectTestClient(this).makeRequest(request);
-    }
-
-    throw new Error(
-      `MeteorConnect Request: Platform [${connection["platformTarget"]}] not implemented`,
-    );
-  }
-
   private async getAccountOrThrow(
     accountIdentifier: PartialBy<IMeteorConnectAccountIdentifier, "accountId">,
   ): Promise<IMeteorConnectAccount> {
@@ -183,20 +160,85 @@ export class MeteorConnect {
     return account;
   }
 
-  async makeActionRequest<K extends keyof TMCActionRegistry>(
-    request: TMCActionRequestUnion<TMCActionRegistry>,
-  ): Promise<TMCActionRegistry[K]["output"]> {
-    const meta = MCActionRegistryMap[request.id].meta;
-
-    throw new Error("Not implemented");
-
-    if (request.id === "near::sign_in") {
-      // action.input
-      // const response = await this.makeTargetedActionRequest();
+  private async makeTargetedActionRequest<
+    R extends TMCActionRequestUnionExpandedInput<TMCActionRegistry>,
+  >(
+    request: R,
+    connection: TMeteorConnection,
+  ): Promise<{ output: TMCActionRegistry[R["id"]]["output"] }> {
+    if (connection.platformTarget === "v1_web" || connection.platformTarget === "v1_ext") {
+      return new MeteorConnectV1Client(this).makeRequest(request, connection);
     }
+
+    if (connection.platformTarget === "test") {
+      return new MeteorConnectTestClient(this).makeRequest(request, connection);
+    }
+
+    throw new Error(
+      `MeteorConnect Request: Platform [${connection["platformTarget"]}] not implemented`,
+    );
   }
 
-  async actionRequest<R extends TMCActionDefinition = TMCActionDefinition>(
+  async actionRequest<R extends TMCActionRequestUnion<TMCActionRegistry>>(
+    request: R,
+  ): Promise<TMCActionRegistry[R["id"]]["output"]> {
+    const meta = MCActionRegistryMap[request.id].meta;
+    let account: IMeteorConnectAccount | undefined;
+
+    if (meta?.account === "exact-exists") {
+      account = await this.getAccountOrThrow(request.input.target);
+    }
+
+    if (request.id === "near::sign_in") {
+      const response = await this.makeTargetedActionRequest(
+        {
+          id: request.id,
+          expandedInput: request.input,
+        },
+        request.input.connection,
+      );
+
+      await this.addSignedInAccount(response.output);
+
+      return response.output;
+    }
+
+    if (request.id === "near::sign_out") {
+      const response = await this.makeTargetedActionRequest(
+        {
+          id: request.id,
+          expandedInput: {
+            ...request.input,
+            account: account!,
+          },
+        },
+        account!.connection,
+      );
+
+      await this.removeSignedInAccount(response.output);
+
+      return response.output;
+    }
+
+    if (request.id === "near::sign_message") {
+      const response = await this.makeTargetedActionRequest(
+        {
+          id: request.id,
+          expandedInput: {
+            ...request.input,
+            account: account!,
+          },
+        },
+        account!.connection,
+      );
+
+      return response.output;
+    }
+
+    throw new Error(this.formatMsg(`Request with ID [${request["id"]}] couldn't be resolved`));
+  }
+
+  /*async actionRequest<R extends TMCActionDefinition = TMCActionDefinition>(
     request: R["request"],
   ): Promise<R> {
     this.log(`Action Request [${request.actionId}]`, request);
@@ -243,5 +285,5 @@ export class MeteorConnect {
     throw new Error(
       this.formatMsg(`Request with ID [${request["actionId"]}] couldn't be resolved`),
     );
-  }
+  }*/
 }

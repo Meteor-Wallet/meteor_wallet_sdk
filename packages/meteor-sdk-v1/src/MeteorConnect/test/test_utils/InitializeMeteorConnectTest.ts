@@ -5,7 +5,6 @@ import {
   createTypedStorageHelper,
   type ITypedStorageHelper,
 } from "../../../ported_common/utils/storage/TypedStorageHelper.ts";
-import type { IMCActionDef_Near_SignIn } from "../../action/mc_action.near.ts";
 import { METEOR_CONNECT_STORAGE_KEY_PREFIX } from "../../MeteorConnect.static.ts";
 import { MeteorConnect } from "../../MeteorConnect.ts";
 import type {
@@ -58,15 +57,17 @@ export async function initializeMeteorConnectTest({
 
   if (addNetworkAccounts.length > 0) {
     for (const networkTarget of addNetworkAccounts) {
-      const response = await meteorConnect.actionRequest<IMCActionDef_Near_SignIn>({
-        actionId: "near::sign_in",
-        connection: {
-          platformTarget: "test",
+      const response = await meteorConnect.actionRequest({
+        id: "near::sign_in",
+        input: {
+          connection: {
+            platformTarget: "test",
+          },
+          target: networkTarget,
         },
-        target: networkTarget,
       });
 
-      addedAccounts.push(response.outcome);
+      addedAccounts.push(response);
     }
   }
 

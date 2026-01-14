@@ -1,7 +1,5 @@
 import type { ILocalStorageInterface } from "../ported_common/utils/storage/storage.types.ts";
 
-import type { TMCActionDefinition } from "./action/mc_action.combined.ts";
-
 export type TMCLoggingLevel = "none" | "basic" | "debug";
 
 export type TMeteorConnectAccountType = "near";
@@ -85,10 +83,4 @@ export interface IMeteorConnectTypedStorage {
 
 export interface IMeteorConnect_Initialize_Input {
   storage: ILocalStorageInterface;
-}
-
-export interface IMeteorConnect_TargetClient {
-  makeRequest: <R extends TMCActionDefinition = TMCActionDefinition>(
-    request: R["request"],
-  ) => Promise<R>;
 }

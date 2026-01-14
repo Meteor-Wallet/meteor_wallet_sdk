@@ -1,5 +1,7 @@
-import type { TMCActionDefinition } from "../../action/mc_action.combined.ts";
+import type { TMCActionRegistry } from "../../action/mc_action.combined.ts";
+import type { TMCActionRequestUnionExpandedInput } from "../../action/mc_action.types.ts";
 import { MeteorConnect } from "../../MeteorConnect.ts";
+import type { TMeteorConnection } from "../../MeteorConnect.types.ts";
 
 export abstract class MeteorConnectClientBase {
   abstract readonly clientName: string;
@@ -26,16 +28,8 @@ export abstract class MeteorConnectClientBase {
     return `${this.clientName}: ${message}`;
   }
 
-  async makeRequest<R extends TMCActionDefinition = TMCActionDefinition>(
-    request: R["request"],
-  ): Promise<R> {
-    return {
-      request,
-      outcome: await this.resolveRequest(request),
-    } as R;
-  }
-
-  abstract resolveRequest<R extends TMCActionDefinition = TMCActionDefinition>(
-    request: R["request"],
-  ): Promise<R["outcome"]>;
+  abstract makeRequest<K extends keyof TMCActionRegistry>(
+    request: TMCActionRequestUnionExpandedInput<TMCActionRegistry>,
+    connection: TMeteorConnection,
+  ): Promise<{ output: TMCActionRegistry[K]["output"] }>;
 }

@@ -1,9 +1,5 @@
 import { describe, expect, it } from "bun:test";
 import { create_bun_test_local_storage } from "../../ported_common/utils/storage/bun_test/create_bun_test_local_storage.ts";
-import type {
-  IMCActionDef_Near_SignIn,
-  IMCActionDef_Near_SignMessage,
-} from "../action/mc_action.near.ts";
 import { MeteorConnect } from "../MeteorConnect.ts";
 import type {
   IMeteorConnectAccount,
@@ -40,7 +36,7 @@ describe("MeteorConnect", () => {
       const createdAccounts: IMeteorConnectAccount[] = [];
 
       for (const network of networks) {
-        /*const res = await meteorConnect.makeActionRequest({
+        const response = await meteorConnect.actionRequest({
           id: "near::sign_in",
           input: {
             connection: {
@@ -51,29 +47,16 @@ describe("MeteorConnect", () => {
               blockchain: "near",
             },
           },
-        });*/
-
-        const response = await meteorConnect.actionRequest<IMCActionDef_Near_SignIn>({
-          actionId: "near::sign_in",
-          connection: {
-            platformTarget: "test",
-          },
-          target: {
-            network: network,
-            blockchain: "near",
-          },
         });
 
-        expect(response.request.actionId).toEqual("near::sign_in");
+        expect(response).toBeDefined();
+        expect(response.publicKeys.length).toEqual(1);
+        expect(response.identifier.blockchain).toEqual("near");
+        expect(response.identifier.accountId).toBeString();
 
-        expect(response.outcome).toBeDefined();
-        expect(response.outcome.publicKeys.length).toEqual(1);
-        expect(response.outcome.identifier.blockchain).toEqual("near");
-        expect(response.outcome.identifier.accountId).toBeString();
+        createdAccounts.push(response);
 
-        createdAccounts.push(response.outcome);
-
-        const splitId = response.outcome.identifier.accountId.split(".");
+        const splitId = response.identifier.accountId.split(".");
 
         expect(splitId.length).toEqual(2);
         expect(splitId[1]).toEqual(network === "mainnet" ? "near" : "testnet");
@@ -127,8 +110,10 @@ describe("MeteorConnect", () => {
       expect(accountsFromStorage.length).toEqual(1);
 
       await meteorConnect.actionRequest({
-        actionId: "near::sign_out",
-        target: accountsFromStorage[0].identifier,
+        id: "near::sign_out",
+        input: {
+          target: accountsFromStorage[0].identifier,
+        },
       });
 
       const accounts = await meteorConnect.getAllAccounts();
@@ -148,18 +133,20 @@ describe("MeteorConnect", () => {
 
       const [account] = addedAccounts;
 
-      const response = await meteorConnect.actionRequest<IMCActionDef_Near_SignMessage>({
-        actionId: "near::sign_message",
-        messageParams: {
-          message: "hello",
-          nonce: test_createSimpleNonce(),
-          recipient: GUESTBOOK_CONTRACT_ID,
+      const response = await meteorConnect.actionRequest({
+        id: "near::sign_message",
+        input: {
+          messageParams: {
+            message: "hello",
+            nonce: test_createSimpleNonce(),
+            recipient: GUESTBOOK_CONTRACT_ID,
+          },
+          target: account.identifier,
         },
-        target: account.identifier,
       });
 
-      expect(response.outcome).toBeDefined();
-      expect(response.outcome.accountId).toEqual(account.identifier.accountId);
+      expect(response).toBeDefined();
+      expect(response.accountId).toEqual(account.identifier.accountId);
     });
   });
 });
