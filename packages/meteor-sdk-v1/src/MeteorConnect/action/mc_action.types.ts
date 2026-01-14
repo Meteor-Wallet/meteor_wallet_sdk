@@ -9,17 +9,18 @@ export type TMCActionDomainId = "near";
 
 export type TMCActionId<D extends TMCActionDomainId = TMCActionDomainId> = `${D}::${string}`;
 
-export type TMCActionMetaAccount = "connected" | "new-connection";
+export type TMCActionMetaAccountState = "exact-exists" | "new-connection";
 
 export interface IMCActionMeta {
-  account?: TMCActionMetaAccount;
+  account?: TMCActionMetaAccountState;
 }
 
 export interface IMCActionSchema {
   input: Record<string, any>;
   output: Record<string, any>;
+  expandedInput: Record<string, any>;
   meta?: IMCActionMeta;
-  clientInput?: Record<string, any>;
+  // clientOutput?: Record<string, any>;
 }
 
 // A helper type to convert your Registry into a Union of all possible requests

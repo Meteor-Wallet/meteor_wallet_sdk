@@ -1,5 +1,4 @@
 import type { SignedMessage } from "@near-js/signers";
-import type { IORequestSignTransactions_Inputs } from "../../ported_common/dapp/dapp.types.ts";
 import type {
   IMeteorConnectAccount,
   IMeteorConnectAccountIdentifier,
@@ -40,6 +39,7 @@ export interface IMCActionReq_Near_SignIn
 export interface IMCActionDef_Near_SignIn
   extends IMCActionDef<IMCActionReq_Near_SignIn, IMeteorConnectAccount> {}
 
+// ------------------------------
 //
 // ACTIONS WITH SIGNED-IN ACCOUNT
 //
@@ -67,7 +67,7 @@ export interface INearSignMessageParams {
   state?: string;
 }
 
-interface IMCAInput_Near_SignMessage extends IMCAction_WithExactAccountTarget {
+export interface IMCAInput_Near_SignMessage extends IMCAction_WithExactAccountTarget {
   messageParams: INearSignMessageParams;
 }
 
@@ -84,14 +84,16 @@ export interface IMCActionDef_Near_SignMessage
 // SIGN TRANSACTIONS
 //
 
-export interface IMCActionReq_Near_SignAndSendTransaction
-  extends IMCAction_Base<"near::sign_send_transactions">,
-    IMCAction_WithExactAccountTarget,
-    IORequestSignTransactions_Inputs {}
+// --------------------------
+//
+// NEAR ACTION DEFINITION MAP
+//
+// --------------------------
 
 export const MCNearActions = {
   "near::sign_in": {
     input: {} as IMCAInput_Near_SignIn,
+    expandedInput: {} as IMCAInput_Near_SignIn,
     output: {} as IMeteorConnectAccount,
     meta: {
       account: "new-connection",
@@ -99,10 +101,18 @@ export const MCNearActions = {
   },
   "near::sign_out": {
     input: {} as IMCAction_WithExactAccountTarget,
+    expandedInput: {} as IMeteorConnectAccount,
     output: {} as IMeteorConnectAccountIdentifier,
     meta: {
-      account: "connected",
+      account: "exact-exists",
     },
-    clientInput: {} as IMeteorConnectAccount,
+  },
+  "near::sign_message": {
+    input: {} as IMCAInput_Near_SignMessage,
+    expandedInput: {} as IMCAInput_Near_SignMessage,
+    output: {} as SignedMessage,
+    meta: {
+      account: "exact-exists",
+    },
   },
 } satisfies Record<TMCActionId<"near">, IMCActionSchema>;
