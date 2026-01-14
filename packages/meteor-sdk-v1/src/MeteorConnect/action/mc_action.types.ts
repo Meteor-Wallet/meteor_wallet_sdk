@@ -7,7 +7,28 @@ import type {
 
 export type TMCActionDomainId = "near";
 
-export type TMCActionId = `${TMCActionDomainId}::${string}`;
+export type TMCActionId<D extends TMCActionDomainId = TMCActionDomainId> = `${D}::${string}`;
+
+export type TMCActionMetaAccount = "connected" | "new-connection";
+
+export interface IMCActionMeta {
+  account?: TMCActionMetaAccount;
+}
+
+export interface IMCActionSchema {
+  input: Record<string, any>;
+  output: Record<string, any>;
+  meta?: IMCActionMeta;
+  clientInput?: Record<string, any>;
+}
+
+// A helper type to convert your Registry into a Union of all possible requests
+export type TMCActionRequestUnion<T extends Record<string, IMCActionSchema>> = {
+  [K in keyof T]: {
+    id: K;
+    input: T[K]["input"];
+  };
+}[keyof T];
 
 export interface IMCAction_Base<ID extends TMCActionId = TMCActionId> {
   actionId: ID;

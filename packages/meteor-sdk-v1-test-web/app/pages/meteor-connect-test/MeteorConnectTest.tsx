@@ -1,5 +1,5 @@
 import { MeteorConnect } from "@meteorwallet/sdk";
-import type { IMCActionDef_Near_SignMessage } from "@meteorwallet/sdk/MeteorConnect/action/mc_action.near.types.ts";
+import type { IMCActionDef_Near_SignMessage } from "@meteorwallet/sdk/MeteorConnect/action/mc_action.near.ts";
 import type { IMeteorConnectAccount } from "@meteorwallet/sdk/MeteorConnect/MeteorConnect.types.ts";
 import { webpage_local_storage } from "@meteorwallet/sdk/ported_common/utils/storage/webpage/webpage_local_storage.ts";
 import { QueryClient, QueryClientProvider, useMutation, useQuery } from "@tanstack/react-query";

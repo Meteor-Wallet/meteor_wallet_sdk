@@ -4,12 +4,17 @@ import {
   createTypedStorageHelper,
   type ITypedStorageHelper,
 } from "../ported_common/utils/storage/TypedStorageHelper.ts";
-import type { TMCActionDefinition } from "./action/mc_action.combined.types.ts";
+import {
+  MCActionRegistryMap,
+  type TMCActionDefinition,
+  type TMCActionRegistry,
+} from "./action/mc_action.combined.ts";
 import type {
   IMCActionDef_Near_SignIn,
   IMCActionDef_Near_SignMessage,
   IMCActionDef_Near_SignOut,
-} from "./action/mc_action.near.types.ts";
+} from "./action/mc_action.near.ts";
+import type { TMCActionRequestUnion } from "./action/mc_action.types.ts";
 import { METEOR_CONNECT_STORAGE_KEY_PREFIX } from "./MeteorConnect.static.ts";
 import type {
   IMeteorConnect_Initialize_Input,
@@ -176,6 +181,19 @@ export class MeteorConnect {
     }
 
     return account;
+  }
+
+  async makeActionRequest<K extends keyof TMCActionRegistry>(
+    request: TMCActionRequestUnion<TMCActionRegistry>,
+  ): Promise<TMCActionRegistry[K]["output"]> {
+    const meta = MCActionRegistryMap[request.id].meta;
+
+    throw new Error("Not implemented");
+
+    if (request.id === "near::sign_in") {
+      // action.input
+      // const response = await this.makeTargetedActionRequest();
+    }
   }
 
   async actionRequest<R extends TMCActionDefinition = TMCActionDefinition>(

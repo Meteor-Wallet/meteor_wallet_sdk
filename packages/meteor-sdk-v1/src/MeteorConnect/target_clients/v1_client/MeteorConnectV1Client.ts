@@ -3,7 +3,7 @@ import type { BrowserLocalStorageKeyStore } from "@near-js/keystores-browser";
 import * as nearAPI from "near-api-js";
 import { MeteorWallet } from "../../../MeteorWallet.ts";
 import { EMeteorWalletSignInType } from "../../../ported_common/dapp/dapp.enums.ts";
-import type { TMCActionDefinition } from "../../action/mc_action.combined.types.ts";
+import type { TMCActionDefinition } from "../../action/mc_action.combined.ts";
 import type { TMeteorConnectAccountNetwork } from "../../MeteorConnect.types.ts";
 import { MeteorConnectClientBase } from "../base/MeteorConnectClientBase.ts";
 

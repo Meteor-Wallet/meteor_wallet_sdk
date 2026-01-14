@@ -1,6 +1,6 @@
 import type { ILocalStorageInterface } from "../ported_common/utils/storage/storage.types.ts";
 
-import type { TMCActionDefinition } from "./action/mc_action.combined.types.ts";
+import type { TMCActionDefinition } from "./action/mc_action.combined.ts";
 
 export type TMCLoggingLevel = "none" | "basic" | "debug";
 

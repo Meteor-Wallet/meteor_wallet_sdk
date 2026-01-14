@@ -1,6 +1,6 @@
 import { KeyPairEd25519 } from "@near-js/crypto";
 import { KeyPairSigner } from "@near-js/signers";
-import type { TMCActionDefinition } from "../../action/mc_action.combined.types.ts";
+import type { TMCActionDefinition } from "../../action/mc_action.combined.ts";
 import { MeteorConnectClientBase } from "../base/MeteorConnectClientBase.ts";
 import { createFakeAccount } from "./utils/testClientFakeData.ts";
 

@@ -3,7 +3,7 @@ import { create_bun_test_local_storage } from "../../ported_common/utils/storage
 import type {
   IMCActionDef_Near_SignIn,
   IMCActionDef_Near_SignMessage,
-} from "../action/mc_action.near.types.ts";
+} from "../action/mc_action.near.ts";
 import { MeteorConnect } from "../MeteorConnect.ts";
 import type {
   IMeteorConnectAccount,
@@ -40,6 +40,19 @@ describe("MeteorConnect", () => {
       const createdAccounts: IMeteorConnectAccount[] = [];
 
       for (const network of networks) {
+        /*const res = await meteorConnect.makeActionRequest({
+          id: "near::sign_in",
+          input: {
+            connection: {
+              platformTarget: "test",
+            },
+            target: {
+              network: network,
+              blockchain: "near",
+            },
+          },
+        });*/
+
         const response = await meteorConnect.actionRequest<IMCActionDef_Near_SignIn>({
           actionId: "near::sign_in",
           connection: {

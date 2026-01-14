@@ -1,4 +1,4 @@
-import type { TMCActionDefinition } from "../../action/mc_action.combined.types.ts";
+import type { TMCActionDefinition } from "../../action/mc_action.combined.ts";
 import { MeteorConnect } from "../../MeteorConnect.ts";
 
 export abstract class MeteorConnectClientBase {
