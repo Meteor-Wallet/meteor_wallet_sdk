@@ -1,5 +1,4 @@
 import { MeteorConnect } from "@meteorwallet/sdk";
-import { EMCActionId } from "@meteorwallet/sdk/MeteorConnect/action/mc_action.types.ts";
 import type { IMeteorConnectAccount } from "@meteorwallet/sdk/MeteorConnect/MeteorConnect.types.ts";
 import { webpage_local_storage } from "@meteorwallet/sdk/ported_common/utils/storage/webpage/webpage_local_storage.ts";
 import { QueryClient, QueryClientProvider, useMutation, useQuery } from "@tanstack/react-query";
@@ -71,11 +70,11 @@ const MeteorConnectTestInitialized = ({ meteorConnect }: { meteorConnect: Meteor
         <Button
           onClick={async () => {
             await meteorConnect.actionRequest({
-              actionId: EMCActionId.account_sign_in,
+              actionId: "near::sign_in",
               connection: {
                 platformTarget: "v1_web",
               },
-              networkTarget: {
+              target: {
                 blockchain: "near",
                 network,
               },
@@ -91,7 +90,7 @@ const MeteorConnectTestInitialized = ({ meteorConnect }: { meteorConnect: Meteor
           <Button
             onClick={async () => {
               await meteorConnect.actionRequest({
-                actionId: EMCActionId.account_sign_out,
+                actionId: "near::sign_out",
                 accountIdentifier: account.identifier,
               });
 

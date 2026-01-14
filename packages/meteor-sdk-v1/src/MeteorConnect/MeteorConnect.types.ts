@@ -73,9 +73,14 @@ export interface IMeteorConnectAccount {
 
 export type TNetworkTargetKey = `${TMeteorConnectAccountType}::${TMeteorConnectAccountNetwork}`;
 
+export type TMCSelectedAccountForNetwork = {
+  [key in TNetworkTargetKey]: IMeteorConnectAccountIdentifier;
+};
+
 export interface IMeteorConnectTypedStorage {
   accounts: IMeteorConnectAccount[];
   lastInitialized: number;
+  selectedNetworkAccounts: TMCSelectedAccountForNetwork;
 }
 
 export interface IMeteorConnect_Initialize_Input {

@@ -29,15 +29,13 @@ export abstract class MeteorConnectClientBase {
   async makeRequest<R extends TMCActionDefinition = TMCActionDefinition>(
     request: R["request"],
   ): Promise<R> {
-    const response = await this.resolveRequest(request);
-
     return {
       request,
-      responsePayload: response,
+      response: await this.resolveRequest(request),
     } as R;
   }
 
   abstract resolveRequest<R extends TMCActionDefinition = TMCActionDefinition>(
     request: R["request"],
-  ): Promise<R["responsePayload"]>;
+  ): Promise<R["response"]>;
 }

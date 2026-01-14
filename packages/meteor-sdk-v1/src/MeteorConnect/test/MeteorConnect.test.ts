@@ -2,38 +2,43 @@ import { describe, expect, it } from "bun:test";
 import {
   create_bun_test_local_storage,
   create_bun_test_local_storage_with_adapter,
-} from "../ported_common/utils/storage/bun_test/create_bun_test_local_storage.ts";
-import type { CEnvironmentStorageAdapter } from "../ported_common/utils/storage/EnvironmentStorageAdapter.ts";
-import type { ILocalStorageInterface } from "../ported_common/utils/storage/storage.types.ts";
+} from "../../ported_common/utils/storage/bun_test/create_bun_test_local_storage.ts";
+import type { CEnvironmentStorageAdapter } from "../../ported_common/utils/storage/EnvironmentStorageAdapter.ts";
+import type { ILocalStorageInterface } from "../../ported_common/utils/storage/storage.types.ts";
 import {
   createTypedStorageHelper,
   type ITypedStorageHelper,
-} from "../ported_common/utils/storage/TypedStorageHelper.ts";
-import type { IMCActionDef_Account_SignIn } from "./action/mc_action.near.types.ts";
-import { METEOR_CONNECT_STORAGE_KEY_PREFIX } from "./MeteorConnect.static.ts";
-import { MeteorConnect } from "./MeteorConnect.ts";
+} from "../../ported_common/utils/storage/TypedStorageHelper.ts";
+import type { IMCActionDef_Near_SignIn } from "../action/mc_action.near.types.ts";
+import { METEOR_CONNECT_STORAGE_KEY_PREFIX } from "../MeteorConnect.static.ts";
+import { MeteorConnect } from "../MeteorConnect.ts";
 import type {
   IMeteorConnectAccount,
   IMeteorConnectNetworkTarget,
   IMeteorConnectTypedStorage,
   TMeteorConnectAccountNetwork,
-} from "./MeteorConnect.types.ts";
+} from "../MeteorConnect.types.ts";
+import { GUESTBOOK_CONTRACT_ID } from "./MeteorConnect.test.static.ts";
+import { test_createSimpleNonce } from "./test_utils/createSimpleNonce.ts";
 
 interface IMeteorConnectTestInitialized {
   storageInterface: ILocalStorageInterface;
   storage: CEnvironmentStorageAdapter;
   typedStorage: ITypedStorageHelper<IMeteorConnectTypedStorage>;
   meteorConnect: MeteorConnect;
+  addedAccounts: IMeteorConnectAccount[];
 }
 
 interface IInitializeMeteorConnectTest_Input {
   initialLocalStorageData?: Record<string, string | undefined>;
   addNetworkAccounts?: IMeteorConnectNetworkTarget[];
+  addTestnetAccount?: boolean;
 }
 
 async function initializeMeteorConnectTest({
   initialLocalStorageData,
   addNetworkAccounts = [],
+  addTestnetAccount = false,
 }: IInitializeMeteorConnectTest_Input = {}): Promise<IMeteorConnectTestInitialized> {
   const storage = create_bun_test_local_storage_with_adapter(initialLocalStorageData);
   const meteorConnect = new MeteorConnect();
@@ -49,21 +54,33 @@ async function initializeMeteorConnectTest({
     storage: storage.storageInterface,
   });
 
+  const addedAccounts: IMeteorConnectAccount[] = [];
+
+  if (addNetworkAccounts.length === 0 && addTestnetAccount) {
+    addNetworkAccounts.push({
+      network: "testnet",
+      blockchain: "near",
+    });
+  }
+
   if (addNetworkAccounts.length > 0) {
     for (const networkTarget of addNetworkAccounts) {
-      await meteorConnect.actionRequest<IMCActionDef_Account_SignIn>({
+      const response = await meteorConnect.actionRequest<IMCActionDef_Near_SignIn>({
         actionId: "near::sign_in",
         connection: {
           platformTarget: "test",
         },
-        networkTarget,
+        target: networkTarget,
       });
+
+      addedAccounts.push(response.response);
     }
   }
 
   return {
     meteorConnect,
     typedStorage,
+    addedAccounts,
     ...storage,
   };
 }
@@ -95,12 +112,12 @@ describe("MeteorConnect", () => {
       const createdAccounts: IMeteorConnectAccount[] = [];
 
       for (const network of networks) {
-        const response = await meteorConnect.actionRequest<IMCActionDef_Account_SignIn>({
+        const response = await meteorConnect.actionRequest<IMCActionDef_Near_SignIn>({
           actionId: "near::sign_in",
           connection: {
             platformTarget: "test",
           },
-          networkTarget: {
+          target: {
             network: network,
             blockchain: "near",
           },
@@ -108,14 +125,14 @@ describe("MeteorConnect", () => {
 
         expect(response.request.actionId).toEqual("near::sign_in");
 
-        expect(response.responsePayload).toBeDefined();
-        expect(response.responsePayload.publicKeys.length).toEqual(1);
-        expect(response.responsePayload.identifier.blockchain).toEqual("near");
-        expect(response.responsePayload.identifier.accountId).toBeString();
+        expect(response.response).toBeDefined();
+        expect(response.response.publicKeys.length).toEqual(1);
+        expect(response.response.identifier.blockchain).toEqual("near");
+        expect(response.response.identifier.accountId).toBeString();
 
-        createdAccounts.push(response.responsePayload);
+        createdAccounts.push(response.response);
 
-        const splitId = response.responsePayload.identifier.accountId.split(".");
+        const splitId = response.response.identifier.accountId.split(".");
 
         expect(splitId.length).toEqual(2);
         expect(splitId[1]).toEqual(network === "mainnet" ? "near" : "testnet");
@@ -170,7 +187,7 @@ describe("MeteorConnect", () => {
 
       await meteorConnect.actionRequest({
         actionId: "near::sign_out",
-        accountIdentifier: accountsFromStorage[0].identifier,
+        target: accountsFromStorage[0].identifier,
       });
 
       const accounts = await meteorConnect.getAllAccounts();
@@ -184,9 +201,21 @@ describe("MeteorConnect", () => {
     });
 
     it("should be able to create Near actions", async () => {
-      const { meteorConnect } = await initializeMeteorConnectTest();
+      const { meteorConnect, addedAccounts } = await initializeMeteorConnectTest({
+        addTestnetAccount: true,
+      });
 
-      // meteorConnect.actionRequest();
+      const [account] = addedAccounts;
+
+      meteorConnect.actionRequest({
+        actionId: "near::sign_message",
+        messageParams: {
+          message: "hello",
+          nonce: test_createSimpleNonce(),
+          recipient: GUESTBOOK_CONTRACT_ID,
+        },
+        target: account.identifier,
+      });
     });
   });
 });

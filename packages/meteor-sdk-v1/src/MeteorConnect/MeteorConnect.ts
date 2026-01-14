@@ -6,9 +6,8 @@ import {
 } from "../ported_common/utils/storage/TypedStorageHelper.ts";
 import type { TMCActionDefinition } from "./action/mc_action.combined.types.ts";
 import type {
-  IMCAction_Near_SignOut,
-  IMCActionDef_Account_SignIn,
-  IMCActionDef_Account_SignOut,
+  IMCActionDef_Near_SignIn,
+  IMCActionDef_Near_SignOut,
 } from "./action/mc_action.near.types.ts";
 import { METEOR_CONNECT_STORAGE_KEY_PREFIX } from "./MeteorConnect.static.ts";
 import type {
@@ -170,34 +169,34 @@ export class MeteorConnect {
     this.log(`Action Request [${request.actionId}]`, request);
 
     if (request.actionId === "near::sign_in") {
-      const response = await this.makeTargetedActionRequest<IMCActionDef_Account_SignIn>(
+      const response = await this.makeTargetedActionRequest<IMCActionDef_Near_SignIn>(
         request,
         request.connection,
       );
-      await this.addSignedInAccount(response.responsePayload);
+      await this.addSignedInAccount(response.response);
       return response as R;
     }
 
     if (request.actionId === "near::sign_out") {
-      const account = await this.getAccount(request.accountIdentifier);
+      const account = await this.getAccount(request.target);
 
       if (account == null) {
         throw new Error(
           this.formatMsg(
-            `Sign Out: Account [${accountTargetToText(request.accountIdentifier)}] does not exist to sign out of`,
+            `Sign Out: Account [${accountTargetToText(request.target)}] does not exist to sign out of`,
           ),
         );
       }
 
-      const response = await this.makeTargetedActionRequest<IMCActionDef_Account_SignOut>(
+      const response = await this.makeTargetedActionRequest<IMCActionDef_Near_SignOut>(
         {
           ...request,
-          accountId: account.identifier.accountId,
-        } as IMCAction_Near_SignOut,
+          target: account.identifier,
+        },
         account.connection,
       );
 
-      await this.removeSignedInAccount(response.responsePayload);
+      await this.removeSignedInAccount(response.response);
 
       return response as R;
     }

@@ -45,9 +45,9 @@ export class MeteorConnectV1Client extends MeteorConnectClientBase {
 
   async resolveRequest<R extends TMCActionDefinition = TMCActionDefinition>(
     request: R["request"],
-  ): Promise<R["responsePayload"]> {
+  ): Promise<R["response"]> {
     if (request.actionId === "near::sign_in") {
-      const { wallet } = this.getSdkForNetwork(request.networkTarget.network);
+      const { wallet } = this.getSdkForNetwork(request.target.network);
 
       const response = await wallet.requestSignIn({
         type: EMeteorWalletSignInType.ALL_METHODS,
@@ -61,7 +61,7 @@ export class MeteorConnectV1Client extends MeteorConnectClientBase {
           connection: request.connection,
           identifier: {
             accountId: signedInAccount.accountId,
-            ...request.networkTarget,
+            ...request.target,
           },
           publicKeys: [
             { type: "ed25519", publicKey: signedInAccount.accessKey.getPublicKey().toString() },
@@ -73,10 +73,10 @@ export class MeteorConnectV1Client extends MeteorConnectClientBase {
     }
 
     if (request.actionId === "near::sign_out") {
-      const { wallet } = this.getSdkForNetwork(request.accountIdentifier.network);
+      const { wallet } = this.getSdkForNetwork(request.target.network);
 
       await wallet.signOut();
-      return request.accountIdentifier;
+      return request.target as R["response"];
     }
 
     throw new Error(`MeteorConnectV1Client: Action ID [${request["actionId"]}] not implemented`);

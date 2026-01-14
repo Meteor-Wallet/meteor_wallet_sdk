@@ -7,13 +7,13 @@ export class MeteorConnectTestClient extends MeteorConnectClientBase {
 
   async resolveRequest<R extends TMCActionDefinition = TMCActionDefinition>(
     request: R["request"],
-  ): Promise<R["responsePayload"]> {
+  ): Promise<R["response"]> {
     if (request.actionId === "near::sign_in") {
-      return createFakeAccount(request.networkTarget, request.connection);
+      return createFakeAccount(request.target, request.connection);
     }
 
     if (request.actionId === "near::sign_out") {
-      return request.accountIdentifier;
+      return request.target as R["response"];
     }
 
     throw new Error(`MeteorConnectTestClient: Action ID [${request["actionId"]}] not implemented`);
