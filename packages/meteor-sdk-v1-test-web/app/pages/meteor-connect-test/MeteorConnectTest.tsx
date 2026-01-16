@@ -171,6 +171,19 @@ const MeteorConnectWithAccount = ({
     },
   });
 
+  const mutate_verifyOwner = useMutation({
+    mutationKey: ["verify_owner", account.identifier],
+    mutationFn: async () => {
+      return await meteorConnect.actionRequest({
+        id: "near::verify_owner",
+        input: {
+          target: account.identifier,
+          message: "TEST",
+        },
+      });
+    },
+  });
+
   return (
     <div className={"p-5 flex flex-col gap-5 items-start"}>
       <h1>{account.identifier.accountId} Signed In</h1>
@@ -181,6 +194,14 @@ const MeteorConnectWithAccount = ({
         }}
       >
         Sign Message
+      </Button>
+      <Button
+        onClick={async () => {
+          const verified = await mutate_verifyOwner.mutateAsync();
+          console.log(verified);
+        }}
+      >
+        Verify Owner
       </Button>
       <AddMessageComponent
         onPressAddMessage={async (params) => {

@@ -10,10 +10,10 @@ export type TMCActionDomainId = "near";
 
 export type TMCActionId<D extends TMCActionDomainId = TMCActionDomainId> = `${D}::${string}`;
 
-export type TMCActionMetaAccountState = "exact-exists" | "new-connection";
+export type TMCActionInputTransform = "targeted_account" | "custom_expansion";
 
 export interface IMCActionMeta {
-  account?: TMCActionMetaAccountState;
+  inputTransform?: TMCActionInputTransform[];
 }
 
 export interface IMCActionSchema {

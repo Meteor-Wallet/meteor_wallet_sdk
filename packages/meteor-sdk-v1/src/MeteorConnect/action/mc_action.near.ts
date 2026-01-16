@@ -1,6 +1,7 @@
 import type { SignedMessage } from "@near-js/signers";
 import type { Action } from "@near-js/transactions";
 import type { FinalExecutionOutcome } from "@near-js/types";
+import type { IODappAction_VerifyOwner_Output } from "../../ported_common/dapp/dapp.types.ts";
 import type {
   IMeteorConnectAccount,
   IMeteorConnectAccountIdentifier,
@@ -50,6 +51,14 @@ export interface IMCAInput_Near_SignMessage extends IMCAction_WithExactAccountTa
 }
 
 //
+// VERIFY OWNER
+//
+
+export interface IMCAInput_Near_VerifyOwner extends IMCAction_WithExactAccountTarget {
+  message: string;
+}
+
+//
 // SIGN TRANSACTIONS
 //
 
@@ -73,16 +82,13 @@ export const MCNearActions = {
     input: {} as IMCAInput_Near_SignIn,
     expandedInput: {} as IMCAInput_Near_SignIn,
     output: {} as IMeteorConnectAccount,
-    meta: {
-      account: "new-connection",
-    },
   },
   "near::sign_out": {
     input: {} as IMCAction_WithExactAccountTarget,
     expandedInput: {} as IMCAction_WithFullAccount,
     output: {} as IMeteorConnectAccountIdentifier,
     meta: {
-      account: "exact-exists",
+      inputTransform: ["targeted_account"],
     },
   },
   "near::sign_message": {
@@ -90,7 +96,7 @@ export const MCNearActions = {
     expandedInput: {} as IMCAInput_Near_SignMessage & IMCAction_WithFullAccount,
     output: {} as SignedMessage,
     meta: {
-      account: "exact-exists",
+      inputTransform: ["targeted_account"],
     },
   },
   "near::sign_transactions": {
@@ -98,7 +104,15 @@ export const MCNearActions = {
     expandedInput: {} as IMCA_Near_SignTransactions_Input & IMCAction_WithFullAccount,
     output: {} as FinalExecutionOutcome[],
     meta: {
-      account: "exact-exists",
+      inputTransform: ["targeted_account"],
     },
   },
-} satisfies Record<TMCActionId<"near">, IMCActionSchema>;
+  "near::verify_owner": {
+    input: {} as IMCAInput_Near_VerifyOwner,
+    expandedInput: {} as IMCAInput_Near_VerifyOwner & IMCAction_WithFullAccount,
+    output: {} as IODappAction_VerifyOwner_Output,
+    meta: {
+      inputTransform: ["targeted_account"],
+    },
+  },
+} as const satisfies Record<TMCActionId<"near">, IMCActionSchema>;

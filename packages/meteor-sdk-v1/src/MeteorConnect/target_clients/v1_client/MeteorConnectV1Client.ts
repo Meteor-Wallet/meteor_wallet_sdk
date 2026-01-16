@@ -4,7 +4,7 @@ import * as nearAPI from "near-api-js";
 import { MeteorWallet } from "../../../MeteorWallet.ts";
 import { EMeteorWalletSignInType } from "../../../ported_common/dapp/dapp.enums.ts";
 import type { TMeteorSdkV1Transaction } from "../../../ported_common/dapp/dapp.types.ts";
-import type { TMCActionRegistry } from "../../action/mc_action.combined.ts";
+import type { TMCActionOutput, TMCActionRegistry } from "../../action/mc_action.combined.ts";
 import type { TMCActionRequestUnionExpandedInput } from "../../action/mc_action.types.ts";
 import type { TMeteorConnectAccountNetwork, TMeteorConnection } from "../../MeteorConnect.types.ts";
 import { MeteorConnectClientBase } from "../base/MeteorConnectClientBase.ts";
@@ -50,7 +50,7 @@ export class MeteorConnectV1Client extends MeteorConnectClientBase {
   async makeRequest<R extends TMCActionRequestUnionExpandedInput<TMCActionRegistry>>(
     request: R,
     connection: TMeteorConnection,
-  ): Promise<{ output: TMCActionRegistry[R["id"]]["output"] }> {
+  ): Promise<{ output: TMCActionOutput<R> }> {
     if (request.id === "near::sign_in") {
       const { wallet } = this.getSdkForNetwork(request.expandedInput.target.network);
 
@@ -125,6 +125,23 @@ export class MeteorConnectV1Client extends MeteorConnectClientBase {
           }),
         }),
       };
+    }
+
+    if (request.id === "near::verify_owner") {
+      const { wallet } = this.getSdkForNetwork(request.expandedInput.account.identifier.network);
+
+      const response = await wallet.verifyOwner({
+        accountId: request.expandedInput.account.identifier.accountId,
+        message: request.expandedInput.message,
+      });
+
+      if (response.success) {
+        return {
+          output: response.payload,
+        };
+      } else {
+        throw new Error(this.formatMsg(`Verify owner failed ${response.message}`));
+      }
     }
 
     throw new Error(`MeteorConnectV1Client: Action ID [${request["id"]}] not implemented`);

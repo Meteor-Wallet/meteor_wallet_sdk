@@ -166,6 +166,8 @@ export class MeteorConnect {
     request: R,
     connection: TMeteorConnection,
   ): Promise<{ output: TMCActionRegistry[R["id"]]["output"] }> {
+    this.log(`Requesting action [${request.id}] for connection [${connection.platformTarget}]`);
+
     if (connection.platformTarget === "v1_web" || connection.platformTarget === "v1_ext") {
       return new MeteorConnectV1Client(this).makeRequest(request, connection);
     }
@@ -182,13 +184,6 @@ export class MeteorConnect {
   async actionRequest<R extends TMCActionRequestUnion<TMCActionRegistry>>(
     request: R,
   ): Promise<TMCActionRegistry[R["id"]]["output"]> {
-    const meta = MCActionRegistryMap[request.id].meta;
-    let account: IMeteorConnectAccount | undefined;
-
-    if (meta?.account === "exact-exists") {
-      account = await this.getAccountOrThrow(request.input.target);
-    }
-
     if (request.id === "near::sign_in") {
       const response = await this.makeTargetedActionRequest(
         {
@@ -203,53 +198,34 @@ export class MeteorConnect {
       return response.output;
     }
 
-    if (request.id === "near::sign_out") {
-      const response = await this.makeTargetedActionRequest(
-        {
-          id: request.id,
-          expandedInput: {
-            ...request.input,
-            account: account!,
-          },
-        },
-        account!.connection,
-      );
+    const expandedInput: any = {
+      ...request.input,
+    };
 
-      await this.removeSignedInAccount(response.output);
+    let connection: any = expandedInput.connection;
 
-      return response.output;
+    const meta = MCActionRegistryMap[request.id].meta;
+
+    if (meta.inputTransform.some((i) => i === "targeted_account")) {
+      const account = await this.getAccountOrThrow(request.input.target);
+      expandedInput.account = account;
+      connection = account.connection;
     }
 
-    if (request.id === "near::sign_message") {
-      const response = await this.makeTargetedActionRequest(
-        {
-          id: request.id,
-          expandedInput: {
-            ...request.input,
-            account: account!,
-          },
-        },
-        account!.connection,
+    if (connection == null) {
+      throw new Error(
+        this.formatMsg("Couldn't find a connection configuration to complete the wallet action"),
       );
-
-      return response.output;
     }
 
-    if (request.id === "near::sign_transactions") {
-      const response = await this.makeTargetedActionRequest(
-        {
-          id: request.id,
-          expandedInput: {
-            ...request.input,
-            account: account!,
-          },
-        },
-        account!.connection,
-      );
+    const response = await this.makeTargetedActionRequest(
+      {
+        id: request.id,
+        expandedInput: expandedInput,
+      },
+      connection,
+    );
 
-      return response.output;
-    }
-
-    throw new Error(this.formatMsg(`Request with ID [${request["id"]}] couldn't be resolved`));
+    return response.output;
   }
 }
