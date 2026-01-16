@@ -1,6 +1,7 @@
 {
   "name": "meteor-near-connect",
   "version": "0.0.1",
+  "type": "module",
   "description": "Meteor NEAR Connect SDK",
   "scripts": {
     "build": "vite build",
@@ -14,6 +15,7 @@
     "url": "https://github.com/Meteor-Wallet/meteor_wallet_sdk.git"
   },
   "dependencies": {
+    "@meteorwallet/sdk": "workspace:*",
     "@near-js/utils": "2.2.5",
     "@hot-labs/near-connect": "0.8.2"
   },

@@ -1,12 +1,16 @@
-import type {
-  NearWalletBase,
-  SignAndSendTransactionParams,
-  SignAndSendTransactionsParams,
-  SignMessageParams,
+import {
+  type NearWalletBase,
+  type SignAndSendTransactionParams,
+  type SignAndSendTransactionsParams,
+  type SignMessageParams,
 } from "@hot-labs/near-connect";
+import { MeteorConnect } from "@meteorwallet/sdk";
+import type {
+  IMeteorConnectAccount,
+  IMeteorConnectAccountIdentifier,
+} from "@meteorwallet/sdk/MeteorConnect/MeteorConnect.types.ts";
+import { createAction } from "@meteorwallet/sdk/utils/create-action.ts";
 import type { FinalExecutionOutcome } from "@near-js/types";
-import { baseEncode } from "@near-js/utils";
-import crypto from "crypto";
 import { isMobile } from "../utils/isMobile.ts";
 import type {
   NearConnectAccount,
@@ -28,123 +32,46 @@ const renderUI = () => {
   else root.innerHTML = bodyDesktop;
 };
 
-export const proxyApi = "https://h4n.app";
+const meteorConnect = new MeteorConnect();
 
-export const uuid4 = () => {
-  return window.crypto.randomUUID();
-};
+async function getMeteorConnect(): Promise<MeteorConnect> {
+  await meteorConnect.initialize({
+    storage: {
+      getItem: async (key: string) => {
+        return await window.selector.storage.get(key);
+      },
+      setItem: async (key: string, value: string) => {
+        return await window.selector.storage.set(key, value);
+      },
+      removeItem: async (key: string) => {
+        return await window.selector.storage.remove(key);
+      },
+    },
+  });
 
-export const wait = (timeout: number) => {
-  return new Promise<void>((resolve) => setTimeout(resolve, timeout));
-};
-
-export class RequestFailed extends Error {
-  name = "RequestFailed";
-  constructor(readonly payload: any) {
-    super();
-  }
+  return meteorConnect;
 }
 
-class MeteorNearConnect {
-  static shared = new MeteorNearConnect();
+function meteorConnectToNearConnectAccount(metAccount: IMeteorConnectAccount): NearConnectAccount {
+  return {
+    accountId: metAccount.identifier.accountId,
+    publicKey: metAccount.publicKeys[0]?.publicKey,
+  };
+}
 
-  async getTimestamp() {
-    const { ts } = await fetch("https://api0.herewallet.app/api/v1/web/time").then((res) =>
-      res.json(),
-    );
-    const seconds = BigInt(ts) / 10n ** 12n;
-    return Number(seconds) * 1000;
-  }
+interface IMeteorStoredData {
+  account: NearConnectAccount;
+  identifier: IMeteorConnectAccountIdentifier;
+}
 
-  async getResponse(id: string) {
-    const res = await fetch(`${proxyApi}/${id}/response`, {
-      headers: { "content-type": "application/json" },
-      method: "GET",
-    });
+async function setMeteorData(data: IMeteorStoredData): Promise<void> {
+  await window.selector.storage.set("meteor-account-data", JSON.stringify(data));
+}
 
-    if (res.ok === false) throw Error(await res.text());
-    const { data } = await res.json();
-    return JSON.parse(data);
-  }
-
-  async computeRequestId(request: object) {
-    const origin = window.selector.location;
-    const timestamp = await this.getTimestamp().catch(() => Date.now());
-
-    const query = baseEncode(
-      JSON.stringify({
-        ...request,
-        deadline: timestamp + 60_000,
-        id: uuid4(),
-        $hot: true,
-        origin,
-      }),
-    );
-
-    const hashsum = crypto.createHash("sha1").update(query).digest("hex");
-    return { requestId: hashsum, query };
-  }
-
-  async createRequest(request: object, signal?: AbortSignal) {
-    const { query, requestId } = await this.computeRequestId(request);
-    const res = await fetch(`${proxyApi}/${requestId}/request`, {
-      body: JSON.stringify({ data: query }),
-      headers: { "content-type": "application/json" },
-      method: "POST",
-      signal,
-    });
-
-    if (res.ok === false) throw Error(await res.text());
-    return requestId;
-  }
-
-  async request(method: string, request: any): Promise<any> {
-    renderUI();
-
-    window.selector.ui.showIframe();
-    const requestId = await this.createRequest({ method, request });
-    /*const link = `hotcall-${requestId}`;
-    const qrcode = new QRCode({
-      value: `https://app.hot-labs.org/link?${link}`,
-      logo: logoImage,
-      size: 140,
-      radius: 0.8,
-      ecLevel: "H",
-
-      fill: {
-        type: "linear-gradient",
-        position: [0, 0, 1, 1],
-        colorStops: [
-          [0, "#fff"],
-          [0.34, "#fff"],
-          [1, "#fff"],
-        ],
-      },
-
-      withLogo: true,
-      imageEcCover: 0.3,
-      quiet: 1,
-    });*/
-
-    /*qrcode.render();
-    qr?.appendChild(qrcode.canvas);*/
-
-    // @ts-ignore
-    // window.openTelegram = () =>
-    //   window.selector.open(`https://t.me/hot_wallet/app?startapp=${link}`); // @ts-ignore
-    // window.openExtension = () => window.selector.open(`https://download.hot-labs.org?hotconnector`); // @ts-ignore
-    window.openMobile = () => window.selector.open(`meteorwallet://${link}`);
-
-    const poolResponse = async () => {
-      await wait(3000);
-      const data: any = await this.getResponse(requestId).catch(() => null);
-      if (data == null) return await poolResponse();
-      if (data.success) return data.payload;
-      throw new RequestFailed(data.payload);
-    };
-
-    const result = await poolResponse();
-    return result;
+async function getMeteorData(): Promise<IMeteorStoredData | undefined> {
+  const str = await window.selector.storage.get("meteor-account-data");
+  if (str != null) {
+    return JSON.parse(str);
   }
 }
 
@@ -152,9 +79,14 @@ class NearWallet implements Omit<NearWalletBase, "manifest"> {
   getAccounts = async (data?: {
     network?: NearConnectNetwork;
   }): Promise<Array<NearConnectAccount>> => {
-    const currentAccount = await window.selector.storage.get("meteor-account");
-    if (currentAccount) return [JSON.parse(currentAccount)];
-    return [];
+    const accounts = await (await getMeteorConnect()).getAllAccounts({
+      blockchain: "near",
+      network: data?.network ?? window.selector.network,
+    });
+
+    console.log("Found accounts", accounts);
+
+    return accounts.map(meteorConnectToNearConnectAccount);
   };
 
   signIn = async (data?: {
@@ -162,42 +94,118 @@ class NearWallet implements Omit<NearWalletBase, "manifest"> {
     contractId?: string;
     methodNames?: Array<string>;
   }): Promise<Array<NearConnectAccount>> => {
-    const result = await MeteorNearConnect.shared.request("near:signIn", {});
-    window.selector.storage.set("meteor-account", JSON.stringify(result));
-    return [result];
+    const met = await getMeteorConnect();
+    const response = await met.actionRequest({
+      id: "near::sign_in",
+      input: {
+        target: {
+          blockchain: "near",
+          network: data?.network ?? window.selector.network,
+        },
+        contract:
+          data?.contractId != null
+            ? {
+                id: data.contractId,
+                methodNames: data.methodNames ?? [],
+              }
+            : undefined,
+        connection: {
+          platformTarget: "v1_web",
+        },
+      },
+    });
+
+    const account = meteorConnectToNearConnectAccount(response);
+
+    await setMeteorData({
+      account,
+      identifier: response.identifier,
+    });
+
+    return [account];
   };
 
   signOut = async (data?: { network?: NearConnectNetwork }): Promise<void> => {
-    await window.selector.storage.remove("meteor-account");
+    const meteorData = await getMeteorData();
+
+    if (meteorData != null) {
+      const met = await getMeteorConnect();
+      await met.actionRequest({
+        id: "near::sign_out",
+        input: {
+          target: meteorData.identifier,
+        },
+      });
+    }
   };
 
   signMessage = async (payload: SignMessageParams): Promise<NearConnectSignedMessage> => {
-    const res = await MeteorNearConnect.shared.request("near:signMessage", payload);
-    return res;
+    const meteorData = await getMeteorData();
+
+    if (meteorData != null) {
+      const met = await getMeteorConnect();
+      const response = await met.actionRequest({
+        id: "near::sign_message",
+        input: {
+          target: meteorData.identifier,
+          messageParams: payload,
+        },
+      });
+
+      return {
+        accountId: response.accountId,
+        publicKey: response.publicKey.toString(),
+        signature: response.signature.toString(),
+      };
+    }
   };
 
   signAndSendTransaction = async (
     payload: SignAndSendTransactionParams,
   ): Promise<FinalExecutionOutcome> => {
-    const { transactions } = await MeteorNearConnect.shared.request(
-      "near:signAndSendTransactions",
-      {
-        transactions: [payload],
-      },
-    );
-    return transactions[0];
+    const meteorData = await getMeteorData();
+
+    if (meteorData != null) {
+      const met = await getMeteorConnect();
+      const response = await met.actionRequest({
+        id: "near::sign_transactions",
+        input: {
+          target: meteorData.identifier,
+          transactions: [
+            {
+              actions: payload.actions.map(createAction),
+              receiverId: payload.receiverId,
+            },
+          ],
+        },
+      });
+
+      return response[0];
+    }
   };
 
   signAndSendTransactions = async (
     payload: SignAndSendTransactionsParams,
   ): Promise<Array<FinalExecutionOutcome>> => {
-    const { transactions } = await MeteorNearConnect.shared.request(
-      "near:signAndSendTransactions",
-      {
-        transactions: payload.transactions,
-      },
-    );
-    return transactions;
+    const meteorData = await getMeteorData();
+
+    if (meteorData != null) {
+      const met = await getMeteorConnect();
+      const response = await met.actionRequest({
+        id: "near::sign_transactions",
+        input: {
+          target: meteorData.identifier,
+          transactions: payload.transactions.map((transaction) => {
+            return {
+              actions: transaction.actions.map(createAction),
+              receiverId: transaction.receiverId,
+            };
+          }),
+        },
+      });
+
+      return response;
+    }
   };
 }
 
