@@ -2,7 +2,7 @@ import { KeyPairEd25519 } from "@near-js/crypto";
 import type {
   IMeteorConnectAccount,
   IMeteorConnectNetworkTarget,
-  TMeteorConnection,
+  TMeteorConnectionTarget,
   TMeteorConnectPublicKey,
 } from "../../../MeteorConnect.types.ts";
 
@@ -18,7 +18,7 @@ export function createFakePublicKey(): TMeteorConnectPublicKey {
 
 export function createFakeAccount(
   networkTarget: IMeteorConnectNetworkTarget,
-  connection: TMeteorConnection,
+  connection: TMeteorConnectionTarget,
 ): IMeteorConnectAccount {
   return {
     identifier: {

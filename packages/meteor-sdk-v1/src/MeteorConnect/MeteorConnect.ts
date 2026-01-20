@@ -17,7 +17,8 @@ import type {
   IMeteorConnectNetworkTarget,
   IMeteorConnectTypedStorage,
   TMCLoggingLevel,
-  TMeteorConnection,
+  TMeteorConnectionExecutionTarget,
+  TMeteorConnectionTarget,
 } from "./MeteorConnect.types.ts";
 import { MeteorConnectTestClient } from "./target_clients/test_client/MeteorConnectTestClient.ts";
 import { MeteorConnectV1Client } from "./target_clients/v1_client/MeteorConnectV1Client.ts";
@@ -76,6 +77,10 @@ export class MeteorConnect {
     return this._typedStorageHelper.get();
   }
 
+  async getAvailablePlatforms(): Promise<TMeteorConnectionExecutionTarget[]> {
+    return ["v1_web"];
+  }
+
   async hasAccounts(networkTarget?: IMeteorConnectNetworkTarget): Promise<boolean> {
     const accounts = await this.getAllAccounts(networkTarget);
     return accounts.length > 0;
@@ -132,7 +137,7 @@ export class MeteorConnect {
     return account;
   }
 
-  private async addSignedInAccount(account: IMeteorConnectAccount): Promise<void> {
+  async addSignedInAccount(account: IMeteorConnectAccount): Promise<void> {
     const currentAccounts = await this.storage.getJsonOrDef("accounts", []);
     const newAccounts: IMeteorConnectAccount[] = [...currentAccounts, account];
     await this.storage.setJson("accounts", newAccounts);
@@ -146,7 +151,7 @@ export class MeteorConnect {
     await this.storage.setJson("accounts", newAccounts);
   }
 
-  private async getAccountOrThrow(
+  async getAccountOrThrow(
     accountIdentifier: PartialBy<IMeteorConnectAccountIdentifier, "accountId">,
   ): Promise<IMeteorConnectAccount> {
     const account = await this.getAccount(accountIdentifier);
@@ -164,15 +169,15 @@ export class MeteorConnect {
     R extends TMCActionRequestUnionExpandedInput<TMCActionRegistry>,
   >(
     request: R,
-    connection: TMeteorConnection,
+    connection: TMeteorConnectionTarget,
   ): Promise<{ output: TMCActionRegistry[R["id"]]["output"] }> {
-    this.log(`Requesting action [${request.id}] for connection [${connection.platformTarget}]`);
+    this.log(`Requesting action [${request.id}] for connection [${connection.executionTarget}]`);
 
-    if (connection.platformTarget === "v1_web" || connection.platformTarget === "v1_ext") {
+    if (connection.executionTarget === "v1_web" || connection.executionTarget === "v1_ext") {
       return new MeteorConnectV1Client(this).makeRequest(request, connection);
     }
 
-    if (connection.platformTarget === "test") {
+    if (connection.executionTarget === "test") {
       return new MeteorConnectTestClient(this).makeRequest(request, connection);
     }
 
@@ -180,6 +185,10 @@ export class MeteorConnect {
       `MeteorConnect Request: Platform [${connection["platformTarget"]}] not implemented`,
     );
   }
+
+  async createExecutableAction<R extends TMCActionRequestUnionExpandedInput<TMCActionRegistry>>(
+    request: R,
+  ) {}
 
   async actionRequest<R extends TMCActionRequestUnion<TMCActionRegistry>>(
     request: R,

@@ -6,7 +6,11 @@ import { EMeteorWalletSignInType } from "../../../ported_common/dapp/dapp.enums.
 import type { TMeteorSdkV1Transaction } from "../../../ported_common/dapp/dapp.types.ts";
 import type { TMCActionOutput, TMCActionRegistry } from "../../action/mc_action.combined.ts";
 import type { TMCActionRequestUnionExpandedInput } from "../../action/mc_action.types.ts";
-import type { TMeteorConnectAccountNetwork, TMeteorConnection } from "../../MeteorConnect.types.ts";
+import type {
+  TMeteorConnectAccountNetwork,
+  TMeteorConnectionExecutionTarget,
+  TMeteorConnectionTarget,
+} from "../../MeteorConnect.types.ts";
 import { MeteorConnectClientBase } from "../base/MeteorConnectClientBase.ts";
 import { nearActionToSdkV1Action } from "./utils/nearActionToSdkV1Action.ts";
 
@@ -47,9 +51,18 @@ export class MeteorConnectV1Client extends MeteorConnectClientBase {
     return sdkForNetwork[network];
   }
 
+  async getSupportedExecutionTargets(): Promise<TMeteorConnectionTarget[]> {
+    // TODO add "v1_ext" detection to this
+    return [
+      {
+        executionTarget: "v1_web",
+      },
+    ];
+  }
+
   async makeRequest<R extends TMCActionRequestUnionExpandedInput<TMCActionRegistry>>(
     request: R,
-    connection: TMeteorConnection,
+    connection: TMeteorConnectionTarget,
   ): Promise<{ output: TMCActionOutput<R> }> {
     if (request.id === "near::sign_in") {
       const { wallet } = this.getSdkForNetwork(request.expandedInput.target.network);

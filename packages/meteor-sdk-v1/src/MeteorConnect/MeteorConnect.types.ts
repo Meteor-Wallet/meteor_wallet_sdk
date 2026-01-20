@@ -48,25 +48,28 @@ export interface IMeteorConnectTargetedClient<
   protocol: P;
 }*/
 
-export type TMeteorConnectionPlatformTarget = "v1_web" | "v1_ext" | "v2_mobile" | "test";
+export type TMeteorConnectionExecutionTarget = "v1_web" | "v1_ext" | "v2_mobile_deep_link" | "test";
 
-export interface IMeteorConnection_Base<T extends TMeteorConnectionPlatformTarget> {
-  platformTarget: T;
+export interface IMeteorConnection_Base<T extends TMeteorConnectionExecutionTarget> {
+  executionTarget: T;
 }
 
+export interface IMeteorConnection_Test extends IMeteorConnection_Base<"test"> {}
 export interface IMeteorConnection_V1_Web extends IMeteorConnection_Base<"v1_web"> {}
 export interface IMeteorConnection_V1_Ext extends IMeteorConnection_Base<"v1_ext"> {}
-export interface IMeteorConnection_Test extends IMeteorConnection_Base<"test"> {}
+export interface IMeteorConnection_V2_MobileDeepLink
+  extends IMeteorConnection_Base<"v2_mobile_deep_link"> {}
 
-export type TMeteorConnection =
+export type TMeteorConnectionTarget =
   | IMeteorConnection_V1_Web
   | IMeteorConnection_V1_Ext
+  | IMeteorConnection_V2_MobileDeepLink
   | IMeteorConnection_Test;
 
 export interface IMeteorConnectAccount {
   identifier: TMeteorConnectAccountIdentifier;
   publicKeys: TMeteorConnectPublicKey[];
-  connection: TMeteorConnection;
+  connection: TMeteorConnectionTarget;
 }
 
 export type TNetworkTargetKey = `${TMeteorConnectAccountType}::${TMeteorConnectAccountNetwork}`;

@@ -3,7 +3,7 @@ import type {
   IMeteorConnectAccount,
   IMeteorConnectAccountIdentifier,
   IMeteorConnectNetworkTarget,
-  TMeteorConnection,
+  TMeteorConnectionTarget,
 } from "../MeteorConnect.types.ts";
 
 export type TMCActionDomainId = "near";
@@ -40,7 +40,7 @@ export type TMCActionRequestUnionExpandedInput<T extends Record<string, IMCActio
 }[keyof T];
 
 export interface IMCAction_WithConnection {
-  connection: TMeteorConnection;
+  connection: TMeteorConnectionTarget;
 }
 
 export interface IMCAction_WithNetworkTarget {

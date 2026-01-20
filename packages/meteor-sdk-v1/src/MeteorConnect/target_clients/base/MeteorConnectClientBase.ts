@@ -1,7 +1,10 @@
 import type { TMCActionRegistry } from "../../action/mc_action.combined.ts";
 import type { TMCActionRequestUnionExpandedInput } from "../../action/mc_action.types.ts";
 import { MeteorConnect } from "../../MeteorConnect.ts";
-import type { TMeteorConnection } from "../../MeteorConnect.types.ts";
+import type {
+  TMeteorConnectionExecutionTarget,
+  TMeteorConnectionTarget,
+} from "../../MeteorConnect.types.ts";
 
 export abstract class MeteorConnectClientBase {
   abstract readonly clientName: string;
@@ -28,8 +31,10 @@ export abstract class MeteorConnectClientBase {
     return `${this.clientName}: ${message}`;
   }
 
+  abstract getSupportedExecutionTargets(): Promise<TMeteorConnectionTarget[]>;
+
   abstract makeRequest<K extends keyof TMCActionRegistry>(
     request: TMCActionRequestUnionExpandedInput<TMCActionRegistry>,
-    connection: TMeteorConnection,
+    connection: TMeteorConnectionTarget,
   ): Promise<{ output: TMCActionRegistry[K]["output"] }>;
 }
