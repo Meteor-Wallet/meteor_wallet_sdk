@@ -30,6 +30,7 @@ export class ExecutableAction<R extends TMCActionRequestUnion<TMCActionRegistry>
     this.id = request.id;
     this.expandedInput = expandedInput;
     this.meta = MCActionRegistryMap[this.id].meta;
+    this.loggingLevel = meteorConnect.getLoggingLevel();
   }
 
   private loggingLevel: TMCLoggingLevel = "basic";
@@ -49,7 +50,7 @@ export class ExecutableAction<R extends TMCActionRequestUnion<TMCActionRegistry>
   }
 
   private formatMsg(message: string): string {
-    return `MeteorConnect: ${message}`;
+    return `MeteorConnect [ExecutableAction]: ${message}`;
   }
 
   getAllExecutionTargetConfigs(): TMeteorExecutionTargetConfig[] {
@@ -91,6 +92,20 @@ Available targets: [${this.connectionTargetConfig.allExecutionTargets.map((c) =>
       return response.output;
     }
 
+    if (request.id === "near::sign_out") {
+      const response = await this.makeTargetedActionRequest(
+        {
+          id: request.id,
+          expandedInput: this.expandedInput,
+        },
+        executionTargetConfig,
+      );
+
+      await this.meteorConnect.removeSignedInAccount(response.output);
+
+      return response.output;
+    }
+
     const response = await this.makeTargetedActionRequest(
       {
         id: request.id,
@@ -111,11 +126,21 @@ Available targets: [${this.connectionTargetConfig.allExecutionTargets.map((c) =>
     this.log(`Requesting action [${request.id}] for connection [${connection.executionTarget}]`);
 
     if (connection.executionTarget === "v1_web" || connection.executionTarget === "v1_ext") {
-      return new MeteorConnectV1Client(this.meteorConnect).makeRequest(request, connection);
+      return {
+        output: await new MeteorConnectV1Client(this.meteorConnect).makeRequest(
+          request,
+          connection,
+        ),
+      };
     }
 
     if (connection.executionTarget === "test") {
-      return new MeteorConnectTestClient(this.meteorConnect).makeRequest(request, connection);
+      return {
+        output: await new MeteorConnectTestClient(this.meteorConnect).makeRequest(
+          request,
+          connection,
+        ),
+      };
     }
 
     throw new Error(

@@ -13,6 +13,7 @@ import type {
   Transaction,
 } from "@near-wallet-selector/core";
 import { type ConnectConfig, utils } from "near-api-js";
+import { isExtensionAvailable } from "./MeteorConnect/utils/isExtensionAvailable.ts";
 import { EExternalActionType } from "./ported_common/dapp/dapp.enums.ts";
 import {
   type IDappAction_Logout_Data,
@@ -180,7 +181,7 @@ export class MeteorWallet {
   }
 
   isExtensionInstalled(): boolean {
-    return (window as any).meteorWallet != null;
+    return isExtensionAvailable();
   }
 
   /**

@@ -95,7 +95,7 @@ class NearWallet implements Omit<NearWalletBase, "manifest"> {
     methodNames?: Array<string>;
   }): Promise<Array<NearConnectAccount>> => {
     const met = await getMeteorConnect();
-    const response = await met.actionRequest({
+    const action = await met.createAction({
       id: "near::sign_in",
       input: {
         target: {
@@ -109,11 +109,10 @@ class NearWallet implements Omit<NearWalletBase, "manifest"> {
                 methodNames: data.methodNames ?? [],
               }
             : undefined,
-        connection: {
-          platformTarget: "v1_web",
-        },
       },
     });
+
+    const response = await action.execute("v1_web");
 
     const account = meteorConnectToNearConnectAccount(response);
 
@@ -130,12 +129,13 @@ class NearWallet implements Omit<NearWalletBase, "manifest"> {
 
     if (meteorData != null) {
       const met = await getMeteorConnect();
-      await met.actionRequest({
+      const action = await met.createAction({
         id: "near::sign_out",
         input: {
           target: meteorData.identifier,
         },
       });
+      await action.execute();
     }
   };
 
@@ -144,13 +144,15 @@ class NearWallet implements Omit<NearWalletBase, "manifest"> {
 
     if (meteorData != null) {
       const met = await getMeteorConnect();
-      const response = await met.actionRequest({
+      const action = await met.createAction({
         id: "near::sign_message",
         input: {
           target: meteorData.identifier,
           messageParams: payload,
         },
       });
+
+      const response = await action.execute();
 
       return {
         accountId: response.accountId,
@@ -167,7 +169,7 @@ class NearWallet implements Omit<NearWalletBase, "manifest"> {
 
     if (meteorData != null) {
       const met = await getMeteorConnect();
-      const response = await met.actionRequest({
+      const action = await met.createAction({
         id: "near::sign_transactions",
         input: {
           target: meteorData.identifier,
@@ -180,6 +182,8 @@ class NearWallet implements Omit<NearWalletBase, "manifest"> {
         },
       });
 
+      const response = action.execute();
+
       return response[0];
     }
   };
@@ -191,7 +195,7 @@ class NearWallet implements Omit<NearWalletBase, "manifest"> {
 
     if (meteorData != null) {
       const met = await getMeteorConnect();
-      const response = await met.actionRequest({
+      const action = await met.createAction({
         id: "near::sign_transactions",
         input: {
           target: meteorData.identifier,
@@ -204,7 +208,7 @@ class NearWallet implements Omit<NearWalletBase, "manifest"> {
         },
       });
 
-      return response;
+      return await action.execute();
     }
   };
 }

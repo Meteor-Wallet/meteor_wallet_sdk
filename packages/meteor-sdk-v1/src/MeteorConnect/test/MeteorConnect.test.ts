@@ -1,6 +1,12 @@
 import { describe, expect, it } from "bun:test";
 import { create_bun_test_local_storage } from "../../ported_common/utils/storage/bun_test/create_bun_test_local_storage.ts";
 import { MeteorConnect } from "../MeteorConnect.ts";
+import type {
+  IMeteorConnectAccount,
+  TMeteorConnectAccountNetwork,
+} from "../MeteorConnect.types.ts";
+import { GUESTBOOK_CONTRACT_ID } from "./MeteorConnect.test.static.ts";
+import { test_createSimpleNonce } from "./test_utils/createSimpleNonce.ts";
 // import type {
 //   IMeteorConnectAccount,
 //   TMeteorConnectAccountNetwork,
@@ -55,7 +61,7 @@ describe("MeteorConnect", () => {
       expect(response.identifier.accountId).toBeString();
     });
 
-    /*it("should be able to sign in", async () => {
+    it("should be able to sign in", async () => {
       const { typedStorage, meteorConnect } = await initializeMeteorConnectTest();
 
       const networks: TMeteorConnectAccountNetwork[] = ["testnet", "mainnet"];
@@ -63,18 +69,17 @@ describe("MeteorConnect", () => {
       const createdAccounts: IMeteorConnectAccount[] = [];
 
       for (const network of networks) {
-        const response = await meteorConnect.actionRequest({
+        const action = await meteorConnect.createAction({
           id: "near::sign_in",
           input: {
-            connection: {
-              platformTarget: "test",
-            },
             target: {
               network: network,
               blockchain: "near",
             },
           },
         });
+
+        const response = await action.execute("test");
 
         expect(response).toBeDefined();
         expect(response.publicKeys.length).toEqual(1);
@@ -136,12 +141,14 @@ describe("MeteorConnect", () => {
       expect(accountsFromStorage).toBeDefined();
       expect(accountsFromStorage.length).toEqual(1);
 
-      await meteorConnect.actionRequest({
+      const action = await meteorConnect.createAction({
         id: "near::sign_out",
         input: {
           target: accountsFromStorage[0].identifier,
         },
       });
+
+      await action.execute();
 
       const accounts = await meteorConnect.getAllAccounts();
 
@@ -160,7 +167,7 @@ describe("MeteorConnect", () => {
 
       const [account] = addedAccounts;
 
-      const response = await meteorConnect.actionRequest({
+      const action = await meteorConnect.createAction({
         id: "near::sign_message",
         input: {
           messageParams: {
@@ -172,8 +179,10 @@ describe("MeteorConnect", () => {
         },
       });
 
+      const response = await action.execute();
+
       expect(response).toBeDefined();
       expect(response.accountId).toEqual(account.identifier.accountId);
-    });*/
+    });
   });
 });

@@ -10,6 +10,7 @@ import type {
   TMeteorConnectAccountNetwork,
   TMeteorExecutionTargetConfig,
 } from "../../MeteorConnect.types.ts";
+import { isExtensionAvailable } from "../../utils/isExtensionAvailable.ts";
 import { MeteorConnectClientBase } from "../base/MeteorConnectClientBase.ts";
 import { nearActionToSdkV1Action } from "./utils/nearActionToSdkV1Action.ts";
 
@@ -51,20 +52,27 @@ export class MeteorConnectV1Client extends MeteorConnectClientBase {
   }
 
   async getExecutionTargetConfigs<R extends TMCActionRequestUnionExpandedInput<TMCActionRegistry>>(
-    request: R,
+    _request: R,
   ): Promise<TMeteorExecutionTargetConfig[]> {
-    // TODO add "v1_ext" detection to this
-    return [
+    const supportedTargets: TMeteorExecutionTargetConfig[] = [
       {
         executionTarget: "v1_web",
       },
     ];
+
+    if (isExtensionAvailable()) {
+      supportedTargets.push({
+        executionTarget: "v1_ext",
+      });
+    }
+
+    return supportedTargets;
   }
 
   async makeRequest<R extends TMCActionRequestUnionExpandedInput<TMCActionRegistry>>(
     request: R,
     connection: TMeteorExecutionTargetConfig,
-  ): Promise<{ output: TMCActionOutput<R> }> {
+  ): Promise<TMCActionOutput<R>> {
     if (request.id === "near::sign_in") {
       const { wallet } = this.getSdkForNetwork(request.expandedInput.target.network);
 
@@ -82,16 +90,14 @@ export class MeteorConnectV1Client extends MeteorConnectClientBase {
         const signedInAccount = response.payload;
 
         return {
-          output: {
-            connection,
-            identifier: {
-              accountId: signedInAccount.accountId,
-              ...request.expandedInput.target,
-            },
-            publicKeys: [
-              { type: "ed25519", publicKey: signedInAccount.accessKey.getPublicKey().toString() },
-            ],
+          connection,
+          identifier: {
+            accountId: signedInAccount.accountId,
+            ...request.expandedInput.target,
           },
+          publicKeys: [
+            { type: "ed25519", publicKey: signedInAccount.accessKey.getPublicKey().toString() },
+          ],
         };
       } else {
         throw new Error(`MeteorConnectV1Client: Sign in failed ${response.message}`);
@@ -102,7 +108,7 @@ export class MeteorConnectV1Client extends MeteorConnectClientBase {
       const { wallet } = this.getSdkForNetwork(request.expandedInput.account.identifier.network);
 
       await wallet.signOut();
-      return { output: request.expandedInput.account.identifier };
+      return request.expandedInput.account.identifier;
     }
 
     if (request.id === "near::sign_message") {
@@ -114,12 +120,10 @@ export class MeteorConnectV1Client extends MeteorConnectClientBase {
 
       if (response.success) {
         return {
-          output: {
-            accountId: response.payload.accountId,
-            publicKey: PublicKey.fromString(response.payload.publicKey),
-            signature: Buffer.from(response.payload.signature, "base64"),
-            state: response.payload.state,
-          },
+          accountId: response.payload.accountId,
+          publicKey: PublicKey.fromString(response.payload.publicKey),
+          signature: Buffer.from(response.payload.signature, "base64"),
+          state: response.payload.state,
         };
       } else {
         throw new Error(this.formatMsg(`Sign message failed ${response.message}`));
@@ -129,16 +133,14 @@ export class MeteorConnectV1Client extends MeteorConnectClientBase {
     if (request.id === "near::sign_transactions") {
       const { wallet } = this.getSdkForNetwork(request.expandedInput.account.identifier.network);
 
-      return {
-        output: await wallet.requestSignTransactions({
-          transactions: request.expandedInput.transactions.map((t): TMeteorSdkV1Transaction => {
-            return {
-              receiverId: t.receiverId,
-              actions: t.actions.map((action) => nearActionToSdkV1Action(action)),
-            };
-          }),
+      return await wallet.requestSignTransactions({
+        transactions: request.expandedInput.transactions.map((t): TMeteorSdkV1Transaction => {
+          return {
+            receiverId: t.receiverId,
+            actions: t.actions.map((action) => nearActionToSdkV1Action(action)),
+          };
         }),
-      };
+      });
     }
 
     if (request.id === "near::verify_owner") {
@@ -150,9 +152,7 @@ export class MeteorConnectV1Client extends MeteorConnectClientBase {
       });
 
       if (response.success) {
-        return {
-          output: response.payload,
-        };
+        return response.payload;
       } else {
         throw new Error(this.formatMsg(`Verify owner failed ${response.message}`));
       }

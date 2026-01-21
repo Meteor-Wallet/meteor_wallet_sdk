@@ -35,5 +35,5 @@ export abstract class MeteorConnectClientBase {
   abstract makeRequest<R extends TMCActionRequestUnionExpandedInput<TMCActionRegistry>>(
     request: R,
     connection: TMeteorExecutionTargetConfig,
-  ): Promise<{ output: TMCActionOutput<R> }>;
+  ): Promise<TMCActionOutput<R>>;
 }

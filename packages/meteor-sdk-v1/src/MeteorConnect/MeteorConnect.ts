@@ -162,7 +162,7 @@ export class MeteorConnect {
     await this.storage.setJson("accounts", newAccounts);
   }
 
-  private async removeSignedInAccount(identifier: IMeteorConnectAccountIdentifier): Promise<void> {
+  async removeSignedInAccount(identifier: IMeteorConnectAccountIdentifier): Promise<void> {
     const currentAccounts = await this.storage.getJsonOrDef("accounts", []);
     const newAccounts: IMeteorConnectAccount[] = currentAccounts.filter(
       (a) => !isEqual(a.identifier, identifier),
@@ -184,47 +184,12 @@ export class MeteorConnect {
     return account;
   }
 
-  /*private async makeTargetedActionRequest<
-    R extends TMCActionRequestUnionExpandedInput<TMCActionRegistry>,
-  >(
-    request: R,
-    connection: TMeteorExecutionTargetConfig,
-  ): Promise<{ output: TMCActionRegistry[R["id"]]["output"] }> {
-    this.log(`Requesting action [${request.id}] for connection [${connection.executionTarget}]`);
-
-    if (connection.executionTarget === "v1_web" || connection.executionTarget === "v1_ext") {
-      return new MeteorConnectV1Client(this).makeRequest(request, connection);
-    }
-
-    if (connection.executionTarget === "test") {
-      return new MeteorConnectTestClient(this).makeRequest(request, connection);
-    }
-
-    throw new Error(
-      `MeteorConnect Request: Platform [${connection["platformTarget"]}] not implemented`,
-    );
-  }*/
-
   async createAction<R extends TMCActionRequestUnion<TMCActionRegistry>>(
     request: R,
   ): Promise<ExecutableAction<R>> {
     const expandedInput: TMCActionRegistry[R["id"]]["expandedInput"] = {
       ...request.input,
     };
-
-    /*if (request.id === "near::sign_in") {
-      const response = await this.makeTargetedActionRequest(
-        {
-          id: request.id,
-          expandedInput: request.input,
-        },
-        request.input.connection,
-      );
-
-      await this.addSignedInAccount(response.output);
-
-      return response.output;
-    }*/
 
     const meta = MCActionRegistryMap[request.id].meta as IMCActionMeta;
 
@@ -255,17 +220,7 @@ export class MeteorConnect {
       );
     }
 
-    /*const response = await this.makeTargetedActionRequest(
-      {
-        id: request.id,
-        expandedInput: expandedInput,
-      },
-      selectedExecutionConfig,
-    );*/
-
     const clients = this.getClients();
-
-    // console.log(clients.map((c) => c.clientName));
 
     const expandedRequest = {
       ...request,
@@ -285,52 +240,4 @@ export class MeteorConnect {
       contextualExecutionTarget: selectedExecutionTarget,
     });
   }
-
-  /*async actionRequest<R extends TMCActionRequestUnion<TMCActionRegistry>>(
-    request: R,
-  ): Promise<TMCActionRegistry[R["id"]]["output"]> {
-    if (request.id === "near::sign_in") {
-      const response = await this.makeTargetedActionRequest(
-        {
-          id: request.id,
-          expandedInput: request.input,
-        },
-        request.input.connection,
-      );
-
-      await this.addSignedInAccount(response.output);
-
-      return response.output;
-    }
-
-    const expandedInput: any = {
-      ...request.input,
-    };
-
-    let connection: any = expandedInput.connection;
-
-    const meta = MCActionRegistryMap[request.id].meta;
-
-    if (meta.inputTransform.some((i) => i === "targeted_account")) {
-      const account = await this.getAccountOrThrow(request.input.target);
-      expandedInput.account = account;
-      connection = account.connection;
-    }
-
-    if (connection == null) {
-      throw new Error(
-        this.formatMsg("Couldn't find a connection configuration to complete the wallet action"),
-      );
-    }
-
-    const response = await this.makeTargetedActionRequest(
-      {
-        id: request.id,
-        expandedInput: expandedInput,
-      },
-      connection,
-    );
-
-    return response.output;
-  }*/
 }
