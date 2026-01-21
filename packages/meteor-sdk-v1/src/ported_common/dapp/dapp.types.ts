@@ -297,6 +297,7 @@ export interface IPostMessageConnection {
   lastAttemptedConnection: number;
   lastConnection: number;
   network: ENearNetwork;
+  forceExecutionTarget?: "v1_web" | "v1_ext";
 }
 
 export type TPostMessageSend = Pick<

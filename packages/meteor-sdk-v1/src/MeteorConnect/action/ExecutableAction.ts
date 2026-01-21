@@ -63,7 +63,7 @@ export class ExecutableAction<R extends TMCActionRequestUnion<TMCActionRegistry>
     const request = this.request;
 
     const resolvedExecutionTarget: TMeteorConnectionExecutionTarget | undefined =
-      executionTarget ?? this.connectionTargetConfig.contextualExecutionTarget;
+      this.connectionTargetConfig.contextualExecutionTarget ?? executionTarget;
 
     const executionTargetConfig = this.connectionTargetConfig.allExecutionTargets.find(
       (config) => config.executionTarget === resolvedExecutionTarget,

@@ -13,7 +13,7 @@ import type {
   Transaction,
 } from "@near-wallet-selector/core";
 import { type ConnectConfig, utils } from "near-api-js";
-import { isExtensionAvailable } from "./MeteorConnect/utils/isExtensionAvailable.ts";
+import { isV1ExtensionAvailable } from "./MeteorConnect/utils/isV1ExtensionAvailable.ts";
 import { EExternalActionType } from "./ported_common/dapp/dapp.enums.ts";
 import {
   type IDappAction_Logout_Data,
@@ -70,6 +70,7 @@ export interface IMeteorWallet_Init_Inputs extends Partial<ConnectConfig> {
 }
 
 export interface IMeteorWallet_Constructor extends IMeteorWallet_Init_Inputs {
+  forceTargetPlatform?: "v1_web" | "v1_ext";
   keyStore: KeyStore;
 }
 
@@ -123,6 +124,8 @@ export class MeteorWallet {
   /** @hidden */
   _connectedAccount: ConnectedMeteorWalletAccount | undefined;
 
+  _forceTargetPlatform?: "v1_web" | "v1_ext";
+
   /** @hidden */
   _initializationPromises: Promise<any>[] = [];
 
@@ -167,7 +170,10 @@ export class MeteorWallet {
     networkId,
     walletUrl,
     nodeUrl,
+    forceTargetPlatform,
   }: IMeteorWallet_Constructor) {
+    this._forceTargetPlatform = forceTargetPlatform;
+
     const authDataKey = appKeyPrefix + LOCAL_STORAGE_KEY_SUFFIX;
     this._authDataKey = authDataKey;
     this._authData = localStorageAdapter.getJson<IMeteorAuthData>(authDataKey) ?? { allKeys: [] };
@@ -181,7 +187,7 @@ export class MeteorWallet {
   }
 
   isExtensionInstalled(): boolean {
-    return isExtensionAvailable();
+    return isV1ExtensionAvailable();
   }
 
   /**
@@ -238,6 +244,7 @@ export class MeteorWallet {
           message: options.message,
         } as IODappAction_VerifyOwner_Input,
         network: this._networkId as ENearNetwork,
+        forceExecutionTarget: this._forceTargetPlatform,
       });
 
     if (response.success) {
@@ -271,6 +278,7 @@ export class MeteorWallet {
           actionType: EExternalActionType.login,
           inputs: { public_key: usingPublicKey, ...restOptions },
           network: this._networkId as ENearNetwork,
+          forceExecutionTarget: this._forceTargetPlatform,
         },
       );
 
@@ -318,6 +326,7 @@ export class MeteorWallet {
         actionType: EExternalActionType.logout,
         inputs,
         network: this._networkId as ENearNetwork,
+        forceExecutionTarget: this._forceTargetPlatform,
       });
     }
 
@@ -363,6 +372,7 @@ export class MeteorWallet {
           accountId,
         },
         network: this._networkId as ENearNetwork,
+        forceExecutionTarget: this._forceTargetPlatform,
       });
     if (response.success) {
       response.payload.state = state;
@@ -430,6 +440,7 @@ export class MeteorWallet {
           } as IODappAction_PostMessage_SignTransactions_Input,
           // inputs: { public_key: usingPublicKey, ...options },
           network: this._networkId as ENearNetwork,
+          forceExecutionTarget: this._forceTargetPlatform,
         },
       );
 

@@ -1,5 +1,8 @@
 import { MeteorConnect } from "@meteorwallet/sdk";
-import type { IMeteorConnectAccount } from "@meteorwallet/sdk/MeteorConnect/MeteorConnect.types.ts";
+import type {
+  IMeteorConnectAccount,
+  TMeteorConnectionExecutionTarget,
+} from "@meteorwallet/sdk/MeteorConnect/MeteorConnect.types.ts";
 import { webpage_local_storage } from "@meteorwallet/sdk/ported_common/utils/storage/webpage/webpage_local_storage.ts";
 import { actionCreators } from "@near-js/transactions";
 import { parseNearAmount } from "@near-js/utils";
@@ -86,7 +89,14 @@ const MeteorConnectTestInitialized = ({ meteorConnect }: { meteorConnect: Meteor
               },
             });
 
-            const response = await action.execute("v1_web");
+            const availableTargets = action.getAllExecutionTargetConfigs();
+            let target: TMeteorConnectionExecutionTarget = "v1_web";
+
+            if (availableTargets.some((target) => target.executionTarget === "v1_ext")) {
+              target = "v1_ext";
+            }
+
+            const response = await action.execute(target);
 
             await accountQuery.refetch({ cancelRefetch: true });
           }}
@@ -104,7 +114,7 @@ const MeteorConnectTestInitialized = ({ meteorConnect }: { meteorConnect: Meteor
                 },
               });
 
-              await action.execute("v1_web");
+              await action.execute();
 
               await accountQuery.refetch({ cancelRefetch: true });
             }}
@@ -143,7 +153,7 @@ const MeteorConnectWithAccount = ({
         },
       });
 
-      return await action.execute("v1_web");
+      return await action.execute();
     },
   });
 
@@ -172,7 +182,7 @@ const MeteorConnectWithAccount = ({
         },
       });
 
-      return await action.execute("v1_web");
+      return await action.execute();
     },
   });
 
@@ -187,7 +197,7 @@ const MeteorConnectWithAccount = ({
         },
       });
 
-      return await action.execute("v1_web");
+      return await action.execute();
     },
   });
 

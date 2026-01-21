@@ -10,7 +10,7 @@ import type {
   TMeteorConnectAccountNetwork,
   TMeteorExecutionTargetConfig,
 } from "../../MeteorConnect.types.ts";
-import { isExtensionAvailable } from "../../utils/isExtensionAvailable.ts";
+import { isV1ExtensionAvailable } from "../../utils/isV1ExtensionAvailable.ts";
 import { MeteorConnectClientBase } from "../base/MeteorConnectClientBase.ts";
 import { nearActionToSdkV1Action } from "./utils/nearActionToSdkV1Action.ts";
 
@@ -19,18 +19,34 @@ interface IMeteorWalletV1AndKeyStore {
   keyStore: BrowserLocalStorageKeyStore;
 }
 
-const sdkForNetwork: Record<TMeteorConnectAccountNetwork, IMeteorWalletV1AndKeyStore | undefined> =
-  {
-    mainnet: undefined,
-    testnet: undefined,
-  };
+const sdkForNetworkAndTarget: Record<
+  `${TMeteorConnectAccountNetwork}::${"v1_web" | "v1_ext"}`,
+  IMeteorWalletV1AndKeyStore | undefined
+> = {
+  "mainnet::v1_web": undefined,
+  "testnet::v1_web": undefined,
+  "mainnet::v1_ext": undefined,
+  "testnet::v1_ext": undefined,
+};
+
+function createKeyForNetworkAndTarget(
+  network: TMeteorConnectAccountNetwork,
+  target: "v1_web" | "v1_ext",
+): `${TMeteorConnectAccountNetwork}::${"v1_web" | "v1_ext"}` {
+  return `${network}::${target}`;
+}
 
 export class MeteorConnectV1Client extends MeteorConnectClientBase {
   clientName = "MeteorConnect V1 Client";
 
-  private getSdkForNetwork(network: TMeteorConnectAccountNetwork): IMeteorWalletV1AndKeyStore {
-    if (sdkForNetwork[network] != null) {
-      return sdkForNetwork[network];
+  private getSdkForNetworkAndTarget(
+    network: TMeteorConnectAccountNetwork,
+    executionTarget: "v1_web" | "v1_ext",
+  ): IMeteorWalletV1AndKeyStore {
+    const key = createKeyForNetworkAndTarget(network, executionTarget);
+
+    if (sdkForNetworkAndTarget[key] != null) {
+      return sdkForNetworkAndTarget[key];
     }
 
     const keyStore = new nearAPI.keyStores.BrowserLocalStorageKeyStore(
@@ -41,14 +57,15 @@ export class MeteorConnectV1Client extends MeteorConnectClientBase {
     const wallet = new MeteorWallet({
       networkId: network,
       keyStore,
+      forceTargetPlatform: executionTarget,
     });
 
-    sdkForNetwork[network] = {
+    sdkForNetworkAndTarget[key] = {
       wallet,
       keyStore,
     };
 
-    return sdkForNetwork[network];
+    return sdkForNetworkAndTarget[key];
   }
 
   async getExecutionTargetConfigs<R extends TMCActionRequestUnionExpandedInput<TMCActionRegistry>>(
@@ -60,7 +77,7 @@ export class MeteorConnectV1Client extends MeteorConnectClientBase {
       },
     ];
 
-    if (isExtensionAvailable()) {
+    if (isV1ExtensionAvailable()) {
       supportedTargets.push({
         executionTarget: "v1_ext",
       });
@@ -73,8 +90,21 @@ export class MeteorConnectV1Client extends MeteorConnectClientBase {
     request: R,
     connection: TMeteorExecutionTargetConfig,
   ): Promise<TMCActionOutput<R>> {
+    const executionTarget = connection.executionTarget;
+
+    if (executionTarget !== "v1_web" && executionTarget !== "v1_ext") {
+      throw new Error(
+        this.formatMsg(
+          `Can't target environment [${executionTarget}] using [${this.clientName}] client`,
+        ),
+      );
+    }
+
     if (request.id === "near::sign_in") {
-      const { wallet } = this.getSdkForNetwork(request.expandedInput.target.network);
+      const { wallet } = this.getSdkForNetworkAndTarget(
+        request.expandedInput.target.network,
+        executionTarget,
+      );
 
       if (request.expandedInput.contract != null) {
         // TODO need to generate a function call access key to be registered on the account
@@ -105,14 +135,20 @@ export class MeteorConnectV1Client extends MeteorConnectClientBase {
     }
 
     if (request.id === "near::sign_out") {
-      const { wallet } = this.getSdkForNetwork(request.expandedInput.account.identifier.network);
+      const { wallet } = this.getSdkForNetworkAndTarget(
+        request.expandedInput.account.identifier.network,
+        executionTarget,
+      );
 
       await wallet.signOut();
       return request.expandedInput.account.identifier;
     }
 
     if (request.id === "near::sign_message") {
-      const { wallet } = this.getSdkForNetwork(request.expandedInput.account.identifier.network);
+      const { wallet } = this.getSdkForNetworkAndTarget(
+        request.expandedInput.account.identifier.network,
+        executionTarget,
+      );
       const response = await wallet.signMessage({
         ...request.expandedInput.messageParams,
         accountId: request.expandedInput.account.identifier.accountId,
@@ -131,7 +167,10 @@ export class MeteorConnectV1Client extends MeteorConnectClientBase {
     }
 
     if (request.id === "near::sign_transactions") {
-      const { wallet } = this.getSdkForNetwork(request.expandedInput.account.identifier.network);
+      const { wallet } = this.getSdkForNetworkAndTarget(
+        request.expandedInput.account.identifier.network,
+        executionTarget,
+      );
 
       return await wallet.requestSignTransactions({
         transactions: request.expandedInput.transactions.map((t): TMeteorSdkV1Transaction => {
@@ -144,7 +183,10 @@ export class MeteorConnectV1Client extends MeteorConnectClientBase {
     }
 
     if (request.id === "near::verify_owner") {
-      const { wallet } = this.getSdkForNetwork(request.expandedInput.account.identifier.network);
+      const { wallet } = this.getSdkForNetworkAndTarget(
+        request.expandedInput.account.identifier.network,
+        executionTarget,
+      );
 
       const response = await wallet.verifyOwner({
         accountId: request.expandedInput.account.identifier.accountId,

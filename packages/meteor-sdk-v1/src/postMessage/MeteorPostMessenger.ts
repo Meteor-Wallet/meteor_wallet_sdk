@@ -23,6 +23,7 @@ interface IOConnectAndWaitForResponse_Input {
   network: ENearNetwork;
   actionType: EExternalActionType;
   inputs: any;
+  forceExecutionTarget: "v1_web" | "v1_ext" | undefined;
 }
 
 declare global {
@@ -46,9 +47,15 @@ class ComWindow {
     const url = new URL(baseWalletUrl);
     this.walletOrigin = url.origin;
 
-    if (window.meteorCom == null) {
+    const forceWeb = connection.forceExecutionTarget === "v1_web";
+
+    if (forceWeb || window.meteorCom == null) {
       this.comType = EDappActionSource.website_post_message;
-      console.log("No extension found. Need to connect to web popup for Meteor communication");
+      console.log(
+        window.meteorCom == null
+          ? "No extension found. Need to connect to web popup for Meteor communication"
+          : "Extension found but user requested Meteor Web wallet for action",
+      );
 
       const queryParams: {
         source: EDappActionSource.website_post_message;
@@ -329,6 +336,7 @@ class MeteorPostMessenger {
     actionType,
     network,
     inputs,
+    forceExecutionTarget,
   }: IOConnectAndWaitForResponse_Input): Promise<IMeteorActionResponse_Output<T>> {
     let newConnection: IPostMessageConnection = {
       uid: nanoid(),
@@ -343,7 +351,10 @@ class MeteorPostMessenger {
       inputs,
       network,
       endTags: [],
+      forceExecutionTarget,
     };
+
+    console.log("Starting execution for V1", newConnection);
 
     const promise = new Promise<IMeteorActionResponse_Output<any>>((resolve, reject) => {
       newConnection.resolve = resolve;
