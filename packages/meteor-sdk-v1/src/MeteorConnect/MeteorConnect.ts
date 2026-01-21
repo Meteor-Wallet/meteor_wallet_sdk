@@ -4,8 +4,10 @@ import {
   createTypedStorageHelper,
   type ITypedStorageHelper,
 } from "../ported_common/utils/storage/TypedStorageHelper.ts";
+import { ExecutableAction } from "./action/ExecutableAction.ts";
 import { MCActionRegistryMap, type TMCActionRegistry } from "./action/mc_action.combined.ts";
 import type {
+  IMCActionMeta,
   TMCActionRequestUnion,
   TMCActionRequestUnionExpandedInput,
 } from "./action/mc_action.types.ts";
@@ -18,8 +20,8 @@ import type {
   IMeteorConnectTypedStorage,
   TMCLoggingLevel,
   TMeteorConnectionExecutionTarget,
-  TMeteorConnectionTarget,
 } from "./MeteorConnect.types.ts";
+import type { MeteorConnectClientBase } from "./target_clients/base/MeteorConnectClientBase.ts";
 import { MeteorConnectTestClient } from "./target_clients/test_client/MeteorConnectTestClient.ts";
 import { MeteorConnectV1Client } from "./target_clients/v1_client/MeteorConnectV1Client.ts";
 import { accountTargetToText } from "./utils/accountTargetToText.ts";
@@ -27,10 +29,21 @@ import { initProp } from "./utils/initProp.ts";
 import { isEqual } from "./utils/isEqual.ts";
 
 export class MeteorConnect {
-  // private _isInitialized: boolean = false;
   private _localStorageAdapter = initProp<CEnvironmentStorageAdapter>();
   private _typedStorageHelper = initProp<ITypedStorageHelper<IMeteorConnectTypedStorage>>();
+  private isDev: boolean = false;
   private loggingLevel: TMCLoggingLevel = "basic";
+  private clients: {
+    test: MeteorConnectTestClient;
+    v1: MeteorConnectV1Client;
+  } = {
+    test: new MeteorConnectTestClient(this),
+    v1: new MeteorConnectV1Client(this),
+  };
+
+  constructor({ isDev = false }: { isDev?: boolean } = {}) {
+    this.isDev = isDev;
+  }
 
   setLoggingLevel(level: TMCLoggingLevel): void {
     this.loggingLevel = level;
@@ -77,8 +90,14 @@ export class MeteorConnect {
     return this._typedStorageHelper.get();
   }
 
-  async getAvailablePlatforms(): Promise<TMeteorConnectionExecutionTarget[]> {
-    return ["v1_web"];
+  private getClients(): MeteorConnectClientBase[] {
+    let clients: MeteorConnectClientBase[] = [this.clients.v1];
+
+    if (this.isDev) {
+      clients = [this.clients.test];
+    }
+
+    return clients;
   }
 
   async hasAccounts(networkTarget?: IMeteorConnectNetworkTarget): Promise<boolean> {
@@ -165,11 +184,11 @@ export class MeteorConnect {
     return account;
   }
 
-  private async makeTargetedActionRequest<
+  /*private async makeTargetedActionRequest<
     R extends TMCActionRequestUnionExpandedInput<TMCActionRegistry>,
   >(
     request: R,
-    connection: TMeteorConnectionTarget,
+    connection: TMeteorExecutionTargetConfig,
   ): Promise<{ output: TMCActionRegistry[R["id"]]["output"] }> {
     this.log(`Requesting action [${request.id}] for connection [${connection.executionTarget}]`);
 
@@ -184,13 +203,90 @@ export class MeteorConnect {
     throw new Error(
       `MeteorConnect Request: Platform [${connection["platformTarget"]}] not implemented`,
     );
+  }*/
+
+  async createAction<R extends TMCActionRequestUnion<TMCActionRegistry>>(
+    request: R,
+  ): Promise<ExecutableAction<R>> {
+    const expandedInput: TMCActionRegistry[R["id"]]["expandedInput"] = {
+      ...request.input,
+    };
+
+    /*if (request.id === "near::sign_in") {
+      const response = await this.makeTargetedActionRequest(
+        {
+          id: request.id,
+          expandedInput: request.input,
+        },
+        request.input.connection,
+      );
+
+      await this.addSignedInAccount(response.output);
+
+      return response.output;
+    }*/
+
+    const meta = MCActionRegistryMap[request.id].meta as IMCActionMeta;
+
+    const executionTargetSource = meta.executionTargetSource ?? "on_execution";
+
+    let selectedExecutionTarget: TMeteorConnectionExecutionTarget | undefined;
+    let targetedAccount: IMeteorConnectAccount | undefined;
+
+    const addAccountToInput = meta.inputTransform?.some((i) => i === "targeted_account");
+
+    if (addAccountToInput || executionTargetSource === "targeted_account") {
+      targetedAccount = await this.getAccountOrThrow(request.input.target);
+
+      if (addAccountToInput) {
+        expandedInput["account"] = targetedAccount;
+      }
+
+      if (executionTargetSource === "targeted_account") {
+        selectedExecutionTarget = targetedAccount.connection.executionTarget;
+      }
+    }
+
+    if (executionTargetSource !== "on_execution" && selectedExecutionTarget == null) {
+      throw new Error(
+        this.formatMsg(
+          "Couldn't find a required execution target configuration to complete the wallet action",
+        ),
+      );
+    }
+
+    /*const response = await this.makeTargetedActionRequest(
+      {
+        id: request.id,
+        expandedInput: expandedInput,
+      },
+      selectedExecutionConfig,
+    );*/
+
+    const clients = this.getClients();
+
+    // console.log(clients.map((c) => c.clientName));
+
+    const expandedRequest = {
+      ...request,
+      expandedInput,
+    } as TMCActionRequestUnionExpandedInput<TMCActionRegistry>;
+
+    const executionConfigs = (
+      await Promise.all(clients.map((c) => c.getExecutionTargetConfigs(expandedRequest)))
+    ).flat();
+
+    if (executionConfigs.length === 0) {
+      throw new Error(this.formatMsg(`No execution clients found for action [${request.id}]`));
+    }
+
+    return new ExecutableAction(request, expandedRequest.expandedInput, this, {
+      allExecutionTargets: executionConfigs,
+      contextualExecutionTarget: selectedExecutionTarget,
+    });
   }
 
-  async createExecutableAction<R extends TMCActionRequestUnionExpandedInput<TMCActionRegistry>>(
-    request: R,
-  ) {}
-
-  async actionRequest<R extends TMCActionRequestUnion<TMCActionRegistry>>(
+  /*async actionRequest<R extends TMCActionRequestUnion<TMCActionRegistry>>(
     request: R,
   ): Promise<TMCActionRegistry[R["id"]]["output"]> {
     if (request.id === "near::sign_in") {
@@ -236,5 +332,5 @@ export class MeteorConnect {
     );
 
     return response.output;
-  }
+  }*/
 }

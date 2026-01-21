@@ -33,7 +33,7 @@ export async function initializeMeteorConnectTest({
   addTestnetAccount = false,
 }: IInitializeMeteorConnectTest_Input = {}): Promise<IMeteorConnectTestInitialized> {
   const storage = create_bun_test_local_storage_with_adapter(initialLocalStorageData);
-  const meteorConnect = new MeteorConnect();
+  const meteorConnect = new MeteorConnect({ isDev: true });
 
   const typedStorage = createTypedStorageHelper<IMeteorConnectTypedStorage>({
     storageAdapter: storage.storage,
@@ -57,7 +57,15 @@ export async function initializeMeteorConnectTest({
 
   if (addNetworkAccounts.length > 0) {
     for (const networkTarget of addNetworkAccounts) {
-      const response = await meteorConnect.actionRequest({
+      const signInAction = await meteorConnect.createAction({
+        id: "near::sign_in",
+        input: {
+          target: networkTarget,
+        },
+      });
+
+      const response = await signInAction.execute("test");
+      /*const response = await meteorConnect.actionRequest({
         id: "near::sign_in",
         input: {
           connection: {
@@ -65,7 +73,7 @@ export async function initializeMeteorConnectTest({
           },
           target: networkTarget,
         },
-      });
+      });*/
 
       addedAccounts.push(response);
     }

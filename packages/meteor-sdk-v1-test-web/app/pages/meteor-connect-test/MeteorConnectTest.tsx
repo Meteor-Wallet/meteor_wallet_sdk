@@ -76,18 +76,17 @@ const MeteorConnectTestInitialized = ({ meteorConnect }: { meteorConnect: Meteor
       {account == null ? (
         <Button
           onClick={async () => {
-            await meteorConnect.actionRequest({
+            const action = await meteorConnect.createAction({
               id: "near::sign_in",
               input: {
-                connection: {
-                  platformTarget: "v1_web",
-                },
                 target: {
                   blockchain: "near",
                   network,
                 },
               },
             });
+
+            const response = await action.execute("v1_web");
 
             await accountQuery.refetch({ cancelRefetch: true });
           }}
@@ -98,12 +97,14 @@ const MeteorConnectTestInitialized = ({ meteorConnect }: { meteorConnect: Meteor
         <>
           <Button
             onClick={async () => {
-              await meteorConnect.actionRequest({
+              const action = await meteorConnect.createAction({
                 id: "near::sign_out",
                 input: {
                   target: account.identifier,
                 },
               });
+
+              await action.execute("v1_web");
 
               await accountQuery.refetch({ cancelRefetch: true });
             }}
@@ -130,7 +131,7 @@ const MeteorConnectWithAccount = ({
   const mutate_signMessage = useMutation({
     mutationKey: ["mutate_signMessage", account.identifier, account.publicKeys],
     mutationFn: async () => {
-      return await meteorConnect.actionRequest({
+      const action = await meteorConnect.createAction({
         id: "near::sign_message",
         input: {
           messageParams: {
@@ -141,13 +142,15 @@ const MeteorConnectWithAccount = ({
           target: account.identifier,
         },
       });
+
+      return await action.execute("v1_web");
     },
   });
 
   const mutate_addMessage = useMutation({
     mutationKey: ["mutate_addMessage", account.identifier],
     mutationFn: async (params: IAddMessageParams) => {
-      return await meteorConnect.actionRequest({
+      const action = await meteorConnect.createAction({
         id: "near::sign_transactions",
         input: {
           target: account.identifier,
@@ -168,19 +171,23 @@ const MeteorConnectWithAccount = ({
           ],
         },
       });
+
+      return await action.execute("v1_web");
     },
   });
 
   const mutate_verifyOwner = useMutation({
     mutationKey: ["verify_owner", account.identifier],
     mutationFn: async () => {
-      return await meteorConnect.actionRequest({
+      const action = await meteorConnect.createAction({
         id: "near::verify_owner",
         input: {
           target: account.identifier,
           message: "TEST",
         },
       });
+
+      return await action.execute("v1_web");
     },
   });
 

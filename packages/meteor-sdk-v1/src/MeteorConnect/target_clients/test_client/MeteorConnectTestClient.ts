@@ -2,17 +2,14 @@ import { KeyPairEd25519 } from "@near-js/crypto";
 import { KeyPairSigner } from "@near-js/signers";
 import type { TMCActionRegistry } from "../../action/mc_action.combined.ts";
 import type { TMCActionRequestUnionExpandedInput } from "../../action/mc_action.types.ts";
-import type {
-  TMeteorConnectionExecutionTarget,
-  TMeteorConnectionTarget,
-} from "../../MeteorConnect.types.ts";
+import type { TMeteorExecutionTargetConfig } from "../../MeteorConnect.types.ts";
 import { MeteorConnectClientBase } from "../base/MeteorConnectClientBase.ts";
 import { createFakeAccount } from "./utils/testClientFakeData.ts";
 
 export class MeteorConnectTestClient extends MeteorConnectClientBase {
   clientName = "MeteorConnect TEST Client";
 
-  async getSupportedExecutionTargets(): Promise<TMeteorConnectionTarget[]> {
+  async getExecutionTargetConfigs(): Promise<TMeteorExecutionTargetConfig[]> {
     return [
       {
         executionTarget: "test",
@@ -22,7 +19,7 @@ export class MeteorConnectTestClient extends MeteorConnectClientBase {
 
   async makeRequest<K extends keyof TMCActionRegistry>(
     request: TMCActionRequestUnionExpandedInput<TMCActionRegistry>,
-    connection: TMeteorConnectionTarget,
+    connection: TMeteorExecutionTargetConfig,
   ): Promise<{ output: TMCActionRegistry[K]["output"] }> {
     if (request.id === "near::sign_in") {
       return { output: createFakeAccount(request.expandedInput.target, connection) };

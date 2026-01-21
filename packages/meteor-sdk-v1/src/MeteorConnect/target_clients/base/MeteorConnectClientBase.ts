@@ -1,10 +1,7 @@
-import type { TMCActionRegistry } from "../../action/mc_action.combined.ts";
+import type { TMCActionOutput, TMCActionRegistry } from "../../action/mc_action.combined.ts";
 import type { TMCActionRequestUnionExpandedInput } from "../../action/mc_action.types.ts";
 import { MeteorConnect } from "../../MeteorConnect.ts";
-import type {
-  TMeteorConnectionExecutionTarget,
-  TMeteorConnectionTarget,
-} from "../../MeteorConnect.types.ts";
+import type { TMeteorExecutionTargetConfig } from "../../MeteorConnect.types.ts";
 
 export abstract class MeteorConnectClientBase {
   abstract readonly clientName: string;
@@ -31,10 +28,12 @@ export abstract class MeteorConnectClientBase {
     return `${this.clientName}: ${message}`;
   }
 
-  abstract getSupportedExecutionTargets(): Promise<TMeteorConnectionTarget[]>;
+  abstract getExecutionTargetConfigs<
+    R extends TMCActionRequestUnionExpandedInput<TMCActionRegistry>,
+  >(request: R): Promise<TMeteorExecutionTargetConfig[]>;
 
-  abstract makeRequest<K extends keyof TMCActionRegistry>(
-    request: TMCActionRequestUnionExpandedInput<TMCActionRegistry>,
-    connection: TMeteorConnectionTarget,
-  ): Promise<{ output: TMCActionRegistry[K]["output"] }>;
+  abstract makeRequest<R extends TMCActionRequestUnionExpandedInput<TMCActionRegistry>>(
+    request: R,
+    connection: TMeteorExecutionTargetConfig,
+  ): Promise<{ output: TMCActionOutput<R> }>;
 }

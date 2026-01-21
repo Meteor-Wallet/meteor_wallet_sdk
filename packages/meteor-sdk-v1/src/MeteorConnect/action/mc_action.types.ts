@@ -3,7 +3,6 @@ import type {
   IMeteorConnectAccount,
   IMeteorConnectAccountIdentifier,
   IMeteorConnectNetworkTarget,
-  TMeteorConnectionTarget,
 } from "../MeteorConnect.types.ts";
 
 export type TMCActionDomainId = "near";
@@ -11,9 +10,11 @@ export type TMCActionDomainId = "near";
 export type TMCActionId<D extends TMCActionDomainId = TMCActionDomainId> = `${D}::${string}`;
 
 export type TMCActionInputTransform = "targeted_account" | "custom_expansion";
+export type TMCActionExecutionTargetSource = "on_execution" | "targeted_account";
 
 export interface IMCActionMeta {
   inputTransform?: TMCActionInputTransform[];
+  executionTargetSource?: TMCActionExecutionTargetSource;
 }
 
 export interface IMCActionSchema {
@@ -39,9 +40,9 @@ export type TMCActionRequestUnionExpandedInput<T extends Record<string, IMCActio
   };
 }[keyof T];
 
-export interface IMCAction_WithConnection {
-  connection: TMeteorConnectionTarget;
-}
+// export interface IMCAction_WithConnection {
+//   connection: TMeteorConnectionTarget;
+// }
 
 export interface IMCAction_WithNetworkTarget {
   target: IMeteorConnectNetworkTarget;

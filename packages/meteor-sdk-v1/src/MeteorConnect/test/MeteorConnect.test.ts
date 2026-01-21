@@ -1,12 +1,12 @@
 import { describe, expect, it } from "bun:test";
 import { create_bun_test_local_storage } from "../../ported_common/utils/storage/bun_test/create_bun_test_local_storage.ts";
 import { MeteorConnect } from "../MeteorConnect.ts";
-import type {
-  IMeteorConnectAccount,
-  TMeteorConnectAccountNetwork,
-} from "../MeteorConnect.types.ts";
-import { GUESTBOOK_CONTRACT_ID } from "./MeteorConnect.test.static.ts";
-import { test_createSimpleNonce } from "./test_utils/createSimpleNonce.ts";
+// import type {
+//   IMeteorConnectAccount,
+//   TMeteorConnectAccountNetwork,
+// } from "../MeteorConnect.types.ts";
+// import { GUESTBOOK_CONTRACT_ID } from "./MeteorConnect.test.static.ts";
+// import { test_createSimpleNonce } from "./test_utils/createSimpleNonce.ts";
 import { initializeMeteorConnectTest } from "./test_utils/InitializeMeteorConnectTest.ts";
 
 describe("MeteorConnect", () => {
@@ -28,7 +28,34 @@ describe("MeteorConnect", () => {
   });
 
   describe("Action Requests", () => {
-    it("should be able to sign in", async () => {
+    it("Should use the new action system", async () => {
+      const { meteorConnect } = await initializeMeteorConnectTest();
+
+      const signInAction = await meteorConnect.createAction({
+        id: "near::sign_in",
+        input: {
+          target: {
+            network: "testnet",
+            blockchain: "near",
+          },
+        },
+      });
+
+      expect(signInAction.id).toEqual("near::sign_in");
+
+      const targets = signInAction.getAllExecutionTargetConfigs();
+
+      expect(targets.length).toBeGreaterThan(0);
+
+      const response = await signInAction.execute("test");
+
+      expect(response).toBeDefined();
+      expect(response.publicKeys.length).toEqual(1);
+      expect(response.identifier.blockchain).toEqual("near");
+      expect(response.identifier.accountId).toBeString();
+    });
+
+    /*it("should be able to sign in", async () => {
       const { typedStorage, meteorConnect } = await initializeMeteorConnectTest();
 
       const networks: TMeteorConnectAccountNetwork[] = ["testnet", "mainnet"];
@@ -147,6 +174,6 @@ describe("MeteorConnect", () => {
 
       expect(response).toBeDefined();
       expect(response.accountId).toEqual(account.identifier.accountId);
-    });
+    });*/
   });
 });

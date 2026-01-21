@@ -2,25 +2,33 @@ import type { MeteorConnect } from "../MeteorConnect.ts";
 import type {
   TMCLoggingLevel,
   TMeteorConnectionExecutionTarget,
-  TMeteorConnectionTarget,
+  TMeteorExecutionTargetConfig,
 } from "../MeteorConnect.types.ts";
 import { MeteorConnectTestClient } from "../target_clients/test_client/MeteorConnectTestClient.ts";
 import { MeteorConnectV1Client } from "../target_clients/v1_client/MeteorConnectV1Client.ts";
 import { MCActionRegistryMap, type TMCActionRegistry } from "./mc_action.combined.ts";
 import type {
+  IMCActionMeta,
   TMCActionRequestUnion,
   TMCActionRequestUnionExpandedInput,
 } from "./mc_action.types.ts";
 
 export class ExecutableAction<R extends TMCActionRequestUnion<TMCActionRegistry>> {
+  readonly id: R["id"];
+  private readonly meta: IMCActionMeta;
+
   constructor(
-    private request: R,
-    private meteorConnect: MeteorConnect,
-    private connectionTargetConfig: {
-      allTargets: TMeteorConnectionTarget[];
-      currentTarget?: TMeteorConnectionTarget;
+    private readonly request: R,
+    private readonly expandedInput: any,
+    private readonly meteorConnect: MeteorConnect,
+    private readonly connectionTargetConfig: {
+      allExecutionTargets: TMeteorExecutionTargetConfig[];
+      contextualExecutionTarget?: TMeteorConnectionExecutionTarget;
     },
-  ) {}
+  ) {
+    this.id = request.id;
+    this.meta = MCActionRegistryMap[this.id].meta;
+  }
 
   private loggingLevel: TMCLoggingLevel = "basic";
 
@@ -42,18 +50,30 @@ export class ExecutableAction<R extends TMCActionRequestUnion<TMCActionRegistry>
     return `MeteorConnect: ${message}`;
   }
 
-  getLastUsedExecutionTarget(): TMeteorConnectionExecutionTarget | undefined {
-    return this.connectionTargetConfig.currentTarget?.executionTarget;
-  }
-
-  getExecutionTargets(): TMeteorConnectionExecutionTarget[] {
-    return this.connectionTargetConfig.allTargets.map((t) => t.executionTarget);
+  getAllExecutionTargetConfigs(): TMeteorExecutionTargetConfig[] {
+    return this.connectionTargetConfig.allExecutionTargets;
   }
 
   async execute(
-    executionTarget: TMeteorConnectionExecutionTarget,
+    executionTarget?: TMeteorConnectionExecutionTarget,
   ): Promise<TMCActionRegistry[R["id"]]["output"]> {
     const request = this.request;
+
+    const resolvedExecutionTarget: TMeteorConnectionExecutionTarget | undefined =
+      executionTarget ?? this.connectionTargetConfig.contextualExecutionTarget;
+
+    const executionTargetConfig = this.connectionTargetConfig.allExecutionTargets.find(
+      (config) => config.executionTarget === resolvedExecutionTarget,
+    );
+
+    if (executionTargetConfig == null) {
+      throw new Error(
+        this.formatMsg(
+          `Couldn't execute action (targeted platform / protocol needs to be provided on execution, or otherwise targeted platform doesn't support the action)
+Available targets: [${this.connectionTargetConfig.allExecutionTargets.map((c) => c.executionTarget)}]`,
+        ),
+      );
+    }
 
     if (request.id === "near::sign_in") {
       const response = await this.makeTargetedActionRequest(
@@ -61,9 +81,7 @@ export class ExecutableAction<R extends TMCActionRequestUnion<TMCActionRegistry>
           id: request.id,
           expandedInput: request.input,
         },
-        {
-          executionTarget: executionTarget,
-        },
+        executionTargetConfig,
       );
 
       await this.meteorConnect.addSignedInAccount(response.output);
@@ -106,7 +124,7 @@ export class ExecutableAction<R extends TMCActionRequestUnion<TMCActionRegistry>
     R extends TMCActionRequestUnionExpandedInput<TMCActionRegistry>,
   >(
     request: R,
-    connection: TMeteorConnectionTarget,
+    connection: TMeteorExecutionTargetConfig,
   ): Promise<{ output: TMCActionRegistry[R["id"]]["output"] }> {
     this.log(`Requesting action [${request.id}] for connection [${connection.executionTarget}]`);
 

@@ -7,7 +7,6 @@ import type {
   IMeteorConnectAccountIdentifier,
 } from "../MeteorConnect.types.ts";
 import type {
-  IMCAction_WithConnection,
   IMCAction_WithExactAccountTarget,
   IMCAction_WithFullAccount,
   IMCAction_WithNetworkTarget,
@@ -19,9 +18,7 @@ import type {
 // SIGN IN
 //
 
-export interface IMCAInput_Near_SignIn
-  extends IMCAction_WithConnection,
-    IMCAction_WithNetworkTarget {
+export interface IMCAInput_Near_SignIn extends IMCAction_WithNetworkTarget {
   contract?: {
     id: string;
     methodNames?: string[];
@@ -82,6 +79,9 @@ export const MCNearActions = {
     input: {} as IMCAInput_Near_SignIn,
     expandedInput: {} as IMCAInput_Near_SignIn,
     output: {} as IMeteorConnectAccount,
+    meta: {
+      executionTargetSource: "on_execution",
+    },
   },
   "near::sign_out": {
     input: {} as IMCAction_WithExactAccountTarget,
@@ -89,6 +89,7 @@ export const MCNearActions = {
     output: {} as IMeteorConnectAccountIdentifier,
     meta: {
       inputTransform: ["targeted_account"],
+      executionTargetSource: "targeted_account",
     },
   },
   "near::sign_message": {
@@ -97,6 +98,7 @@ export const MCNearActions = {
     output: {} as SignedMessage,
     meta: {
       inputTransform: ["targeted_account"],
+      executionTargetSource: "targeted_account",
     },
   },
   "near::sign_transactions": {
@@ -105,6 +107,7 @@ export const MCNearActions = {
     output: {} as FinalExecutionOutcome[],
     meta: {
       inputTransform: ["targeted_account"],
+      executionTargetSource: "targeted_account",
     },
   },
   "near::verify_owner": {
@@ -113,6 +116,7 @@ export const MCNearActions = {
     output: {} as IODappAction_VerifyOwner_Output,
     meta: {
       inputTransform: ["targeted_account"],
+      executionTargetSource: "targeted_account",
     },
   },
 } as const satisfies Record<TMCActionId<"near">, IMCActionSchema>;

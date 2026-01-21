@@ -60,7 +60,7 @@ export interface IMeteorConnection_V1_Ext extends IMeteorConnection_Base<"v1_ext
 export interface IMeteorConnection_V2_MobileDeepLink
   extends IMeteorConnection_Base<"v2_mobile_deep_link"> {}
 
-export type TMeteorConnectionTarget =
+export type TMeteorExecutionTargetConfig =
   | IMeteorConnection_V1_Web
   | IMeteorConnection_V1_Ext
   | IMeteorConnection_V2_MobileDeepLink
@@ -69,7 +69,7 @@ export type TMeteorConnectionTarget =
 export interface IMeteorConnectAccount {
   identifier: TMeteorConnectAccountIdentifier;
   publicKeys: TMeteorConnectPublicKey[];
-  connection: TMeteorConnectionTarget;
+  connection: TMeteorExecutionTargetConfig;
 }
 
 export type TNetworkTargetKey = `${TMeteorConnectAccountType}::${TMeteorConnectAccountNetwork}`;
