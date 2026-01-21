@@ -15,11 +15,12 @@ import type {
 
 export class ExecutableAction<R extends TMCActionRequestUnion<TMCActionRegistry>> {
   readonly id: R["id"];
+  readonly expandedInput: any;
   private readonly meta: IMCActionMeta;
 
   constructor(
     private readonly request: R,
-    private readonly expandedInput: any,
+    expandedInput: any,
     private readonly meteorConnect: MeteorConnect,
     private readonly connectionTargetConfig: {
       allExecutionTargets: TMeteorExecutionTargetConfig[];
@@ -27,6 +28,7 @@ export class ExecutableAction<R extends TMCActionRequestUnion<TMCActionRegistry>
     },
   ) {
     this.id = request.id;
+    this.expandedInput = expandedInput;
     this.meta = MCActionRegistryMap[this.id].meta;
   }
 
@@ -79,7 +81,7 @@ Available targets: [${this.connectionTargetConfig.allExecutionTargets.map((c) =>
       const response = await this.makeTargetedActionRequest(
         {
           id: request.id,
-          expandedInput: request.input,
+          expandedInput: this.expandedInput,
         },
         executionTargetConfig,
       );
@@ -89,32 +91,12 @@ Available targets: [${this.connectionTargetConfig.allExecutionTargets.map((c) =>
       return response.output;
     }
 
-    const expandedInput: any = {
-      ...request.input,
-    };
-
-    let connection: any = expandedInput.connection;
-
-    const meta = MCActionRegistryMap[request.id].meta;
-
-    if (meta.inputTransform.some((i) => i === "targeted_account")) {
-      const account = await this.meteorConnect.getAccountOrThrow(request.input.target);
-      expandedInput.account = account;
-      connection = account.connection;
-    }
-
-    if (connection == null) {
-      throw new Error(
-        this.formatMsg("Couldn't find a connection configuration to complete the wallet action"),
-      );
-    }
-
     const response = await this.makeTargetedActionRequest(
       {
         id: request.id,
-        expandedInput: expandedInput,
+        expandedInput: this.expandedInput,
       },
-      connection,
+      executionTargetConfig,
     );
 
     return response.output;
