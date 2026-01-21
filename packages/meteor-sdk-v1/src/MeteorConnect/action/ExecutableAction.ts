@@ -17,6 +17,12 @@ export class ExecutableAction<R extends TMCActionRequestUnion<TMCActionRegistry>
   readonly id: R["id"];
   readonly expandedInput: any;
   private readonly meta: IMCActionMeta;
+  private execute_promise?: Promise<TMCActionRegistry[R["id"]]["output"]>;
+
+  private waitForExecutionOutput_promise?: Promise<TMCActionRegistry[R["id"]]["output"]>;
+  private waitForExecutionOutput_resolve?: (
+    outputPromise: Promise<TMCActionRegistry[R["id"]]["output"]>,
+  ) => void;
 
   constructor(
     private readonly request: R,
@@ -57,7 +63,11 @@ export class ExecutableAction<R extends TMCActionRequestUnion<TMCActionRegistry>
     return this.connectionTargetConfig.allExecutionTargets;
   }
 
-  async execute(
+  getActionKnownContextualTarget(): TMeteorConnectionExecutionTarget | undefined {
+    return this.connectionTargetConfig.contextualExecutionTarget;
+  }
+
+  private async _execute(
     executionTarget?: TMeteorConnectionExecutionTarget,
   ): Promise<TMCActionRegistry[R["id"]]["output"]> {
     const request = this.request;
@@ -115,6 +125,35 @@ Available targets: [${this.connectionTargetConfig.allExecutionTargets.map((c) =>
     );
 
     return response.output;
+  }
+
+  async execute(
+    executionTarget?: TMeteorConnectionExecutionTarget,
+  ): Promise<TMCActionRegistry[R["id"]]["output"]> {
+    if (this.execute_promise == null) {
+      this.execute_promise = this._execute(executionTarget);
+      this.waitForExecutionOutput_resolve?.(this.execute_promise);
+    }
+
+    return this.execute_promise;
+  }
+
+  private async _waitForExecutionOutput(): Promise<TMCActionRegistry[R["id"]]["output"]> {
+    return new Promise<TMCActionRegistry[R["id"]]["output"]>((resolve) => {
+      this.waitForExecutionOutput_resolve = resolve;
+
+      if (this.execute_promise != null) {
+        this.waitForExecutionOutput_resolve(this.execute_promise);
+      }
+    });
+  }
+
+  async waitForExecutionOutput(): Promise<TMCActionRegistry[R["id"]]["output"]> {
+    if (this.waitForExecutionOutput_promise == null) {
+      this.waitForExecutionOutput_promise = this._waitForExecutionOutput();
+    }
+
+    return this.waitForExecutionOutput_promise;
   }
 
   private async makeTargetedActionRequest<

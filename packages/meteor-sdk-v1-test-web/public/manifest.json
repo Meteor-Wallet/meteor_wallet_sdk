@@ -27,7 +27,8 @@
 
       "permissions": {
         "storage": true,
-        "allowsOpen": ["https://wallet.meteorwallet.app"]
+        "allowsOpen": ["https://wallet.meteorwallet.app", "https://meteorwallet.app"],
+        "external": ["meteorCom"]
       }
     }
   ]

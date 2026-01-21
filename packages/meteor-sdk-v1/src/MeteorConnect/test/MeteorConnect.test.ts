@@ -34,7 +34,7 @@ describe("MeteorConnect", () => {
   });
 
   describe("Action Requests", () => {
-    it("Should use the new action system", async () => {
+    it("Should by able to use the new action system correctly", async () => {
       const { meteorConnect } = await initializeMeteorConnectTest();
 
       const signInAction = await meteorConnect.createAction({
@@ -53,12 +53,42 @@ describe("MeteorConnect", () => {
 
       expect(targets.length).toBeGreaterThan(0);
 
+      const waitForOutput = signInAction.waitForExecutionOutput();
+
       const response = await signInAction.execute("test");
 
       expect(response).toBeDefined();
       expect(response.publicKeys.length).toEqual(1);
       expect(response.identifier.blockchain).toEqual("near");
       expect(response.identifier.accountId).toBeString();
+
+      const waitedResponse = await waitForOutput;
+
+      expect(waitedResponse).toEqual(response);
+
+      const responseTwo = await signInAction.execute("test");
+
+      expect(response).toEqual(responseTwo);
+
+      const waitedResponseTwo = await signInAction.waitForExecutionOutput();
+
+      expect(waitedResponseTwo).toEqual(response);
+
+      const signOutAction = await meteorConnect.createAction({
+        id: "near::sign_out",
+        input: {
+          target: response.identifier,
+        },
+      });
+
+      const signOutWaitPromise = signOutAction.waitForExecutionOutput();
+
+      const signOutResponse = await signOutAction.execute();
+
+      const signOutWaitResponse = await signOutWaitPromise;
+
+      expect(signOutResponse).toBeDefined();
+      expect(signOutResponse).toEqual(signOutWaitResponse);
     });
 
     it("should be able to sign in", async () => {

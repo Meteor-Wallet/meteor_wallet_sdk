@@ -9,6 +9,10 @@ import type {
   IMeteorConnectAccount,
   IMeteorConnectAccountIdentifier,
 } from "@meteorwallet/sdk/MeteorConnect/MeteorConnect.types.ts";
+import type {
+  IMeteorComInjectedObject,
+  TMeteorComListener,
+} from "@meteorwallet/sdk/ported_common/dapp/dapp.types.ts";
 import { createAction } from "@meteorwallet/sdk/utils/create-action.ts";
 import type { FinalExecutionOutcome } from "@near-js/types";
 import { isMobile } from "../utils/isMobile.ts";
@@ -34,6 +38,23 @@ const renderUI = () => {
 
 const meteorConnect = new MeteorConnect();
 
+async function createMeteorCom(): Promise<IMeteorComInjectedObject> {
+  const features = await window.selector.external("meteorCom", "features", []);
+
+  return {
+    addMessageDataListener: (listener: TMeteorComListener<any>) => {
+      window.selector.external("meteorCom", "addMessageDataListener", [listener]);
+    },
+    directAction: async (data) => {
+      return await window.selector.external("meteorCom", "directAction", [data]);
+    },
+    features,
+    sendMessageData: async (data) => {
+      return await window.selector.external("meteorCom", "sendMessageData", [data]);
+    },
+  };
+}
+
 async function getMeteorConnect(): Promise<MeteorConnect> {
   await meteorConnect.initialize({
     storage: {
@@ -48,6 +69,14 @@ async function getMeteorConnect(): Promise<MeteorConnect> {
       },
     },
   });
+
+  try {
+    window.meteorCom = await createMeteorCom();
+  } catch (e) {
+    console.log(
+      `Couldn't find extension, or error was thrown on attempt to create connection to extension [err: ${e.message}]`,
+    );
+  }
 
   return meteorConnect;
 }
