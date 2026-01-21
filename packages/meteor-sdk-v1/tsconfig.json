@@ -8,7 +8,7 @@
     "sourceMap": true,
     "noEmit": false,
     "declaration": true,
-    "sourceRoot": "./src",
+    "declarationMap": true,
     "esModuleInterop": true,
     "isolatedModules": false,
     "moduleResolution": "bundler",

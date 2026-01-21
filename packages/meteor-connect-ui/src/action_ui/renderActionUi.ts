@@ -1,4 +1,4 @@
-import type { ExecutableAction } from "../action/ExecutableAction.ts";
+import { ExecutableAction } from "@meteorwallet/sdk";
 
 export type TRenderStrategy =
   | {

@@ -1,4 +1,5 @@
 export { setEnvConfig } from "./envConfig";
+export * from "./MeteorConnect/action/ExecutableAction";
 export * from "./MeteorConnect/MeteorConnect";
 export * from "./MeteorWallet";
 export * from "./MeteorWalletConstants";
