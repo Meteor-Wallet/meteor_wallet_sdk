@@ -19,14 +19,14 @@ export const bodyMobile = /* html */ `
       <h2 class="title">Approve in <span>App</span></h2>
 
       <div style="display: flex; gap: 12px;">
-        <button class="button" style="white-space: nowrap; width: 140px; margin-top: 16px; margin-bottom: 32px" onclick="window.openMobile()">
+        <button class="button" style="white-space: nowrap; width: 140px; margin-top: 16px; margin-bottom: 32px" onclick="window.openMobileDeepLink()">
            Open Mobile
         </button>
       </div>
 
       <p class="text">
         Don’t have a wallet?<br />
-        <a target="_blank" href="https://meteorwallet.app">Get extension • iOS • Android</a>
+        <a target="_blank" href="https://meteorwallet.app">Get App • iOS • Android</a>
       </p>
     </div>
 `;
@@ -36,18 +36,20 @@ export const bodyDesktop = /* html */ `
       <h1 class="title" style="margin-bottom: 14px">
         <span>Meteor Wallet</span>
       </h1>
+      
+      <div style="display: flex; gap: 12px;">
+        <button class="button" style="width: 240px; margin-top: 16px; margin-bottom: 32px" onclick="window.openMeteorWeb()">
+           Web App
+        </button>
+      </div>
 
       <h2 class="divider">OR</h2>
       <h2 class="title">Approve in <span>App</span></h2>
 
       <div style="display: flex; gap: 12px;">
-        <button class="button" style="width: 240px; margin-top: 16px; margin-bottom: 32px" onclick="window.openExtension()">
-           Download Extension
+        <button class="button" style="width: 240px; margin-top: 16px; margin-bottom: 32px" onclick="window.openMeteorExtension()">
+           Extension
         </button>
       </div>
-
-      <p class="text">
-        <a style="cursor: pointer" onclick="window.openTelegram()">Open via Telegram</a>
-      </p>
     </div>
 `;

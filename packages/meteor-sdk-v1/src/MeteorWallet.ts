@@ -76,7 +76,7 @@ export interface IMeteorWallet_Constructor extends IMeteorWallet_Init_Inputs {
 
 declare global {
   interface Window {
-    meteorWallet: any;
+    // meteorWallet: any;
   }
 }
 
