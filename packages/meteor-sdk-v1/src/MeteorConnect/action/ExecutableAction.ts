@@ -1,3 +1,5 @@
+import { ActionUi } from "../action_ui/ActionUi.ts";
+import type { IRenderActionUi_Input } from "../action_ui/action_ui.types.ts";
 import type { MeteorConnect } from "../MeteorConnect.ts";
 import type {
   TMCLoggingLevel,
@@ -16,6 +18,7 @@ export class ExecutableAction<R extends TMCActionRequestUnion<TMCActionRegistry>
   readonly expandedInput: any;
   private readonly meta: IMCActionMeta;
   private execute_promise?: Promise<TMCActionRegistry[R["id"]]["output"]>;
+  private exeucteWithUi_promise?: Promise<TMCActionRegistry[R["id"]]["output"]>;
 
   private waitForExecutionOutput_promise?: Promise<TMCActionRegistry[R["id"]]["output"]>;
   private waitForExecutionOutput_resolve?: (
@@ -130,10 +133,32 @@ Available targets: [${this.connectionTargetConfig.allExecutionTargets.map((c) =>
   ): Promise<TMCActionRegistry[R["id"]]["output"]> {
     if (this.execute_promise == null) {
       this.execute_promise = this._execute(executionTarget);
+      this.waitForExecutionOutput_promise = this.execute_promise;
       this.waitForExecutionOutput_resolve?.(this.execute_promise);
     }
 
     return this.execute_promise;
+  }
+
+  private async _promptForExecution(
+    input?: Omit<IRenderActionUi_Input<this>, "action">,
+  ): Promise<TMCActionRegistry[R["id"]]["output"]> {
+    return (await ActionUi.shared.prompt({
+      action: this,
+      strategy: input?.strategy,
+    })) as any;
+  }
+
+  async promptForExecution(
+    input?: Omit<IRenderActionUi_Input<this>, "action">,
+  ): Promise<TMCActionRegistry[R["id"]]["output"]> {
+    if (this.exeucteWithUi_promise == null) {
+      this.exeucteWithUi_promise = this._promptForExecution(input);
+      this.waitForExecutionOutput_promise = this.execute_promise;
+      this.waitForExecutionOutput_resolve?.(this.exeucteWithUi_promise);
+    }
+
+    return this.exeucteWithUi_promise;
   }
 
   private async _waitForExecutionOutput(): Promise<TMCActionRegistry[R["id"]]["output"]> {

@@ -48,23 +48,38 @@ export interface IMeteorConnectTargetedClient<
   protocol: P;
 }*/
 
-export type TMeteorConnectionExecutionTarget = "v1_web" | "v1_ext" | "v2_mobile_deep_link" | "test";
+export type TMeteorConnectionExecutionTarget =
+  | "v1_web"
+  | "v1_ext"
+  | "v2_rid_mobile_deep_link"
+  | "v2_rid_qr_code"
+  | "test"
+  | "test_rid_deep_link"
+  | "test_rid_qr_code";
 
 export interface IMeteorConnection_Base<T extends TMeteorConnectionExecutionTarget> {
   executionTarget: T;
 }
 
 export interface IMeteorConnection_Test extends IMeteorConnection_Base<"test"> {}
+export interface IMeteorConnection_Test_RidDeepLink
+  extends IMeteorConnection_Base<"test_rid_deep_link"> {}
+export interface IMeteorConnection_Test_RidQrCode
+  extends IMeteorConnection_Base<"test_rid_qr_code"> {}
 export interface IMeteorConnection_V1_Web extends IMeteorConnection_Base<"v1_web"> {}
 export interface IMeteorConnection_V1_Ext extends IMeteorConnection_Base<"v1_ext"> {}
 export interface IMeteorConnection_V2_MobileDeepLink
-  extends IMeteorConnection_Base<"v2_mobile_deep_link"> {}
+  extends IMeteorConnection_Base<"v2_rid_mobile_deep_link"> {}
+export interface IMeteorConnection_V2_QrCode extends IMeteorConnection_Base<"v2_rid_qr_code"> {}
 
 export type TMeteorExecutionTargetConfig =
   | IMeteorConnection_V1_Web
   | IMeteorConnection_V1_Ext
   | IMeteorConnection_V2_MobileDeepLink
-  | IMeteorConnection_Test;
+  | IMeteorConnection_V2_QrCode
+  | IMeteorConnection_Test
+  | IMeteorConnection_Test_RidDeepLink
+  | IMeteorConnection_Test_RidQrCode;
 
 export interface IMeteorConnectAccount {
   identifier: TMeteorConnectAccountIdentifier;

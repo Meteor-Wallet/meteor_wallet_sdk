@@ -24,6 +24,7 @@ import type {
 import type { MeteorConnectClientBase } from "./target_clients/base/MeteorConnectClientBase.ts";
 import { MeteorConnectTestClient } from "./target_clients/test_client/MeteorConnectTestClient.ts";
 import { MeteorConnectV1Client } from "./target_clients/v1_client/MeteorConnectV1Client.ts";
+import { MeteorConnectV2MessengerClient } from "./target_clients/v2_client/MeteorConnectV2MessengerClient.ts";
 import { accountTargetToText } from "./utils/accountTargetToText.ts";
 import { initProp } from "./utils/initProp.ts";
 import { isEqual } from "./utils/isEqual.ts";
@@ -36,9 +37,11 @@ export class MeteorConnect {
   private clients: {
     test: MeteorConnectTestClient;
     v1: MeteorConnectV1Client;
+    v2MessengerClient: MeteorConnectV2MessengerClient;
   } = {
     test: new MeteorConnectTestClient(this),
     v1: new MeteorConnectV1Client(this),
+    v2MessengerClient: new MeteorConnectV2MessengerClient(this),
   };
 
   constructor({ isDev = false }: { isDev?: boolean } = {}) {
@@ -91,7 +94,7 @@ export class MeteorConnect {
   }
 
   private getClients(): MeteorConnectClientBase[] {
-    let clients: MeteorConnectClientBase[] = [this.clients.v1];
+    let clients: MeteorConnectClientBase[] = [this.clients.v1, this.clients.v2MessengerClient];
 
     if (this.isDev) {
       clients = [this.clients.test];

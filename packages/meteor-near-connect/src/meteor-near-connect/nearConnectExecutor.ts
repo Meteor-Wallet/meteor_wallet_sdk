@@ -15,26 +15,24 @@ import type {
 } from "@meteorwallet/sdk/ported_common/dapp/dapp.types.ts";
 import { createAction } from "@meteorwallet/sdk/utils/create-action.ts";
 import type { FinalExecutionOutcome } from "@near-js/types";
-import { isMobile } from "../utils/isMobile.ts";
 import type {
   NearConnectAccount,
   NearConnectNetwork,
   NearConnectSignedMessage,
 } from "./near-connect.types.ts";
-import { bodyDesktop, bodyMobile, head } from "./view";
 
 const logoImage = new Image();
 logoImage.src = "https://meteorwallet.app/loader.gif";
 
-const renderUI = () => {
-  const root = document.createElement("div");
-  root.style.height = "100%";
-  document.body.appendChild(root);
-  document.head.innerHTML = head;
-
-  if (isMobile()) root.innerHTML = bodyMobile;
-  else root.innerHTML = bodyDesktop;
-};
+// const renderUI = () => {
+//   const root = document.createElement("div");
+//   root.style.height = "100%";
+//   document.body.appendChild(root);
+//   document.head.innerHTML = head;
+//
+//   if (isMobile()) root.innerHTML = bodyMobile;
+//   else root.innerHTML = bodyDesktop;
+// };
 
 const meteorConnect = new MeteorConnect();
 

@@ -1,5 +1,4 @@
 import { MeteorConnect } from "@meteorwallet/sdk";
-import { renderActionUi } from "@meteorwallet/sdk/MeteorConnect/action_ui/renderActionUi.ts";
 import type { IMeteorConnectAccount } from "@meteorwallet/sdk/MeteorConnect/MeteorConnect.types.ts";
 import { webpage_local_storage } from "@meteorwallet/sdk/ported_common/utils/storage/webpage/webpage_local_storage.ts";
 import { actionCreators } from "@near-js/transactions";
@@ -94,11 +93,7 @@ const MeteorConnectTestInitialized = ({ meteorConnect }: { meteorConnect: Meteor
               target = "v1_ext";
             }*/
 
-            renderActionUi({
-              action,
-            });
-
-            const response = await action.waitForExecutionOutput();
+            await action.promptForExecution();
 
             await accountQuery.refetch({ cancelRefetch: true });
           }}
@@ -116,11 +111,7 @@ const MeteorConnectTestInitialized = ({ meteorConnect }: { meteorConnect: Meteor
                 },
               });
 
-              renderActionUi({
-                action,
-              });
-
-              await action.waitForExecutionOutput();
+              await action.promptForExecution();
 
               await accountQuery.refetch({ cancelRefetch: true });
             }}

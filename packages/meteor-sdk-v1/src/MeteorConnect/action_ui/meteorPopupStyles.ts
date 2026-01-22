@@ -1,9 +1,9 @@
+/*
 import {
-  METEOR_ACTION_UI_POPUP_CONTAINER_CLASS,
   METEOR_ACTION_UI_POPUP_PARENT_CLASS,
 } from "./action_ui.static.ts";
 
-export const meteorPopupStyles = /* css */ `
+export const meteorPopupStyles = /!* css *!/ `
 .${METEOR_ACTION_UI_POPUP_PARENT_CLASS} {
   position: fixed;
   top: 0;
@@ -18,13 +18,13 @@ export const meteorPopupStyles = /* css */ `
   align-items: center;
 }
 
-.${METEOR_ACTION_UI_POPUP_CONTAINER_CLASS} {
+.${METEOR_ACTION_UI_CONTAINER_CLASS} {
   background: #0a0a17;
   position: relative;
   width: 100%;
   height: 100%;
   border-radius: 16px;
-  /*background: var(--surface-common-default, #1d1f20);*/
+  /!*background: var(--surface-common-default, #1d1f20);*!/
   display: flex;
   justify-content: center;
   align-items: center;
@@ -33,7 +33,7 @@ export const meteorPopupStyles = /* css */ `
 }
 
 .title {
-  /*color: var(--text-primary, #ebdedc);*/
+  /!*color: var(--text-primary, #ebdedc);*!/
   font-feature-settings: "liga" off;
   font-family: "Cabinet Grotesk";
   font-size: 24px;
@@ -43,7 +43,7 @@ export const meteorPopupStyles = /* css */ `
   margin: 0;
 }
 .title span {
-  /*color: var(--text-orange, #e9c363);*/
+  /!*color: var(--text-orange, #e9c363);*!/
   font-feature-settings: "liga" off;
   font-family: "Cabinet Grotesk";
   font-size: 24px;
@@ -53,7 +53,7 @@ export const meteorPopupStyles = /* css */ `
 }
 
 .divider {
-  /*color: var(--text-secondary, #ada5a4);*/
+  /!*color: var(--text-secondary, #ada5a4);*!/
   font-family: Inter;
   font-size: 18px;
   font-style: normal;
@@ -69,7 +69,7 @@ export const meteorPopupStyles = /* css */ `
 .divider::before,
 .divider::after {
   height: 1px;
-  /*background: var(--border-lowest, rgba(255, 255, 255, 0.07));*/
+  /!*background: var(--border-lowest, rgba(255, 255, 255, 0.07));*!/
   content: "";
   display: block;
   flex: 1;
@@ -83,11 +83,11 @@ export const meteorPopupStyles = /* css */ `
   gap: 8px;
   align-self: stretch;
   border-radius: 16px;
-  /*border: 1px solid var(--border-high, rgba(255, 255, 255, 0.25));*/
-  /*background: var(--controls-teriary-3, #ffedb2);*/
-  /*box-shadow: 4px 4px 0px 0px var(--controls-primary-dark-dark, #2c3034),*/
-  /*  5px 5px 0px 0px var(--controls-shadow-stroke, #3d3f46);*/
-  /*color: var(--text-dark-dark, #2c3034);*/
+  /!*border: 1px solid var(--border-high, rgba(255, 255, 255, 0.25));*!/
+  /!*background: var(--controls-teriary-3, #ffedb2);*!/
+  /!*box-shadow: 4px 4px 0px 0px var(--controls-primary-dark-dark, #2c3034),*!/
+  /!*  5px 5px 0px 0px var(--controls-shadow-stroke, #3d3f46);*!/
+  /!*color: var(--text-dark-dark, #2c3034);*!/
   text-align: center;
   font-feature-settings: "liga" off, "calt" off;
   font-family: Inter;
@@ -126,7 +126,7 @@ export const meteorPopupStyles = /* css */ `
   outline: none;
   cursor: pointer;
   height: 32px;
-  /*background: var(--surface-common-container--low, #262729);*/
+  /!*background: var(--surface-common-container--low, #262729);*!/
   border-radius: 50px;
   justify-content: center;
   align-items: center;
@@ -145,7 +145,7 @@ export const meteorPopupStyles = /* css */ `
 }
 
 .text {
-  /*color: var(--text-secondary, #ada5a4);*/
+  /!*color: var(--text-secondary, #ada5a4);*!/
   text-align: center;
   font-family: Inter;
   font-size: 16px;
@@ -156,7 +156,7 @@ export const meteorPopupStyles = /* css */ `
 }
 
 .text a {
-  /*color: var(--text-blue, #6385ff);*/
+  /!*color: var(--text-blue, #6385ff);*!/
   font-family: Inter;
   font-size: 16px;
   font-style: normal;
@@ -170,3 +170,4 @@ export const meteorPopupStyles = /* css */ `
   text-underline-position: from-font;
 }
 `;
+*/

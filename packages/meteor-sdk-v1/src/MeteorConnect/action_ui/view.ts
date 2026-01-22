@@ -1,7 +1,8 @@
-import { METEOR_ACTION_UI_POPUP_CONTAINER_CLASS } from "./action_ui.static.ts";
+/*
+import { METEOR_ACTION_UI_CONTAINER_CLASS } from "./action_ui.static.ts";
 import { meteorPopupStyles } from "./meteorPopupStyles.ts";
 
-export const head = /* html */ `
+export const head = /!* html *!/ `
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="preconnect" href="https://rsms.me/" />
@@ -15,8 +16,8 @@ export const head = /* html */ `
     <title>Meteor Connector</title>
 `;
 
-export const bodyMobile = /* html */ `
-    <div class="${METEOR_ACTION_UI_POPUP_CONTAINER_CLASS}">
+export const bodyMobile = /!* html *!/ `
+    <div class="${METEOR_ACTION_UI_CONTAINER_CLASS}">
       <h2 class="title">Approve in <span>App</span></h2>
 
       <div style="display: flex; gap: 12px;">
@@ -32,8 +33,8 @@ export const bodyMobile = /* html */ `
     </div>
 `;
 
-export const bodyDesktop = /* html */ `
-    <div class="${METEOR_ACTION_UI_POPUP_CONTAINER_CLASS}">
+export const bodyDesktop = /!* html *!/ `
+    <div class="${METEOR_ACTION_UI_CONTAINER_CLASS}">
       <h1 class="title" style="margin-bottom: 14px">
         <span>Meteor Wallet</span>
       </h1>
@@ -54,3 +55,4 @@ export const bodyDesktop = /* html */ `
       </div>
     </div>
 `;
+*/

@@ -11,12 +11,24 @@ import { createFakeAccount } from "./utils/testClientFakeData.ts";
 
 export class MeteorConnectTestClient extends MeteorConnectClientBase {
   clientName = "MeteorConnect TEST Client";
-  executionTargets: TMeteorConnectionExecutionTarget[] = ["test"];
+  executionTargets: TMeteorConnectionExecutionTarget[] = [
+    "test",
+    "test_rid_deep_link",
+    "test_rid_qr_code",
+  ];
 
-  async getExecutionTargetConfigs(): Promise<TMeteorExecutionTargetConfig[]> {
+  async getExecutionTargetConfigs<R extends TMCActionRequestUnionExpandedInput<TMCActionRegistry>>(
+    _request: R,
+  ): Promise<TMeteorExecutionTargetConfig[]> {
     return [
       {
         executionTarget: "test",
+      },
+      {
+        executionTarget: "test_rid_deep_link",
+      },
+      {
+        executionTarget: "test_rid_qr_code",
       },
     ];
   }

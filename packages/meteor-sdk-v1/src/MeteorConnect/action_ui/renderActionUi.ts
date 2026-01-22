@@ -1,43 +1,17 @@
+/*
 import type { ExecutableAction } from "../action/ExecutableAction.ts";
-import type { TMCActionRegistry } from "../action/mc_action.combined.ts";
 import {
   METEOR_ACTION_UI_POPUP_CONTAINER_CLASS,
   METEOR_ACTION_UI_POPUP_CONTAINER_ID,
   METEOR_ACTION_UI_POPUP_PARENT_CLASS,
   METEOR_ACTION_UI_POPUP_PARENT_ID,
 } from "./action_ui.static.ts";
+import type { IRenderActionUi_Input } from "./MeteorConnectActionUi.ts";
 import { isMobile } from "./utils/isMobile.ts";
 import { bodyDesktop, bodyMobile, head } from "./view.ts";
 
-declare global {
-  interface Window {
-    // meteorWallet: any;
-    openMeteorExtension: () => void;
-    openMeteorWeb: () => void;
-    openMobileDeepLink: () => void;
-  }
-}
-
-export type TRenderStrategy =
-  | {
-      strategy: "provide_container_element";
-      element: HTMLElement;
-    }
-  | {
-      strategy: "create_popup";
-    };
-
-export interface IRenderActionUi_Input<A extends ExecutableAction<any>> {
-  action: A;
-  strategy?: TRenderStrategy;
-  onExecutionComplete?: (
-    output: A extends ExecutableAction<infer O> ? TMCActionRegistry[O["id"]]["output"] : never,
-  ) => void;
-}
-
 export function renderActionUi<A extends ExecutableAction<any>>({
   action,
-  onExecutionComplete,
   strategy = {
     strategy: "create_popup",
   },
@@ -46,7 +20,7 @@ export function renderActionUi<A extends ExecutableAction<any>>({
 
   document.head.innerHTML = head;
 
-  if (strategy.strategy === "provide_container_element") {
+  if (strategy.strategy === "target_element") {
     root = strategy.element;
   } else if (strategy.strategy === "create_popup") {
     const foundPopupContainer = document.getElementById(METEOR_ACTION_UI_POPUP_CONTAINER_ID);
@@ -101,3 +75,4 @@ export function renderActionUi<A extends ExecutableAction<any>>({
     root.innerHTML = bodyDesktop;
   }
 }
+*/

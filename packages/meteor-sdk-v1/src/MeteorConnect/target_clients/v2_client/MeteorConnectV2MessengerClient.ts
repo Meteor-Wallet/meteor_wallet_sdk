@@ -4,27 +4,26 @@ import type {
   TMeteorConnectionExecutionTarget,
   TMeteorExecutionTargetConfig,
 } from "../../MeteorConnect.types.ts";
-import { isV1ExtensionAvailable } from "../../utils/isV1ExtensionAvailable.ts";
 import { MeteorConnectClientBase } from "../base/MeteorConnectClientBase.ts";
 
 export class MeteorConnectV2MessengerClient extends MeteorConnectClientBase {
   clientName = "MeteorConnect V2 Messenger Client";
-  executionTargets: TMeteorConnectionExecutionTarget[] = ["v2_mobile_deep_link"];
+  executionTargets: TMeteorConnectionExecutionTarget[] = [
+    "v2_rid_mobile_deep_link",
+    "v2_rid_qr_code",
+  ];
 
   async getExecutionTargetConfigs<R extends TMCActionRequestUnionExpandedInput<TMCActionRegistry>>(
     _request: R,
   ): Promise<TMeteorExecutionTargetConfig[]> {
     const supportedTargets: TMeteorExecutionTargetConfig[] = [
       {
-        executionTarget: "v1_web",
+        executionTarget: "v2_rid_mobile_deep_link",
+      },
+      {
+        executionTarget: "v2_rid_qr_code",
       },
     ];
-
-    if (isV1ExtensionAvailable()) {
-      supportedTargets.push({
-        executionTarget: "v1_ext",
-      });
-    }
 
     return supportedTargets;
   }
