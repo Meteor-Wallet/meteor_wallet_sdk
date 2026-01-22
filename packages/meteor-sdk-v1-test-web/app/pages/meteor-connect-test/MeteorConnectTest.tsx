@@ -116,7 +116,11 @@ const MeteorConnectTestInitialized = ({ meteorConnect }: { meteorConnect: Meteor
                 },
               });
 
-              await action.execute();
+              renderActionUi({
+                action,
+              });
+
+              await action.waitForExecutionOutput();
 
               await accountQuery.refetch({ cancelRefetch: true });
             }}

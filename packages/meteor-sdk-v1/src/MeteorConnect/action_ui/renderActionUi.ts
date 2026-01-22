@@ -1,7 +1,13 @@
 import type { ExecutableAction } from "../action/ExecutableAction.ts";
 import type { TMCActionRegistry } from "../action/mc_action.combined.ts";
+import {
+  METEOR_ACTION_UI_POPUP_CONTAINER_CLASS,
+  METEOR_ACTION_UI_POPUP_CONTAINER_ID,
+  METEOR_ACTION_UI_POPUP_PARENT_CLASS,
+  METEOR_ACTION_UI_POPUP_PARENT_ID,
+} from "./action_ui.static.ts";
 import { isMobile } from "./utils/isMobile.ts";
-import { bodyDesktop, bodyMobile } from "./view.ts";
+import { bodyDesktop, bodyMobile, head } from "./view.ts";
 
 declare global {
   interface Window {
@@ -38,30 +44,34 @@ export function renderActionUi<A extends ExecutableAction<any>>({
 }: IRenderActionUi_Input<A>) {
   let root: HTMLElement;
 
+  document.head.innerHTML = head;
+
   if (strategy.strategy === "provide_container_element") {
     root = strategy.element;
   } else if (strategy.strategy === "create_popup") {
-    const foundPopupContainer = document.getElementById("meteor-connect-popup-container");
+    const foundPopupContainer = document.getElementById(METEOR_ACTION_UI_POPUP_CONTAINER_ID);
 
     if (foundPopupContainer != null) {
       root = foundPopupContainer.parentElement as HTMLElement;
     } else {
       const divPopupLayoutParent = document.createElement("div");
-      divPopupLayoutParent.setAttribute("id", "meteor-connect-popup-parent");
-      divPopupLayoutParent.style.position = "fixed";
-      divPopupLayoutParent.style.zIndex = "9999";
-      divPopupLayoutParent.style.background = "rgba(10, 10, 20, 0.2)";
-      divPopupLayoutParent.style.width = "100%";
-      divPopupLayoutParent.style.height = "100%";
-      divPopupLayoutParent.style.display = "flex";
-      divPopupLayoutParent.style.flexDirection = "column";
-      divPopupLayoutParent.style.alignItems = "center";
-      divPopupLayoutParent.style.justifyContent = "center";
+      divPopupLayoutParent.setAttribute("id", METEOR_ACTION_UI_POPUP_PARENT_ID);
+      divPopupLayoutParent.setAttribute("class", METEOR_ACTION_UI_POPUP_PARENT_CLASS);
+      // divPopupLayoutParent.style.position = "fixed";
+      // divPopupLayoutParent.style.zIndex = "9999";
+      // divPopupLayoutParent.style.background = "rgba(10, 10, 20, 0.2)";
+      // divPopupLayoutParent.style.width = "100%";
+      // divPopupLayoutParent.style.height = "100%";
+      // divPopupLayoutParent.style.display = "flex";
+      // divPopupLayoutParent.style.flexDirection = "column";
+      // divPopupLayoutParent.style.alignItems = "center";
+      // divPopupLayoutParent.style.justifyContent = "center";
 
       document.body.appendChild(divPopupLayoutParent);
 
       const divPopupContainer = document.createElement("div");
-      divPopupContainer.setAttribute("id", "meteor-connect-popup-container");
+      divPopupContainer.setAttribute("id", METEOR_ACTION_UI_POPUP_CONTAINER_ID);
+      divPopupContainer.setAttribute("class", METEOR_ACTION_UI_POPUP_CONTAINER_CLASS);
       divPopupContainer.style.height = "100%";
       divPopupContainer.style.maxHeight = "720px";
       divPopupContainer.style.width = "100%";
