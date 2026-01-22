@@ -102,7 +102,7 @@ async function promptActionForResponse<R extends ExecutableAction<any>>(
   document.body.appendChild(root);
   document.head.innerHTML = head;
 
-  console.log(`Prompting action [${action.id}] for execution`);
+  console.log(`Meteor NEAR Connect: Prompting action [${action.id}] for execution`);
   window.selector.ui.showIframe();
 
   return await action.promptForExecution({
@@ -152,9 +152,7 @@ class NearWallet implements Omit<NearWalletBase, "manifest"> {
       },
     });
 
-    console.log("METEOR: Sign in");
     const response = await promptActionForResponse(action);
-    console.log("METEOR: Sign in response", response);
 
     const account = meteorConnectToNearConnectAccount(response);
 

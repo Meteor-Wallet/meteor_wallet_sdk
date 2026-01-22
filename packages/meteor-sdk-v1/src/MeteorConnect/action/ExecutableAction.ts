@@ -21,9 +21,8 @@ export class ExecutableAction<R extends TMCActionRequestUnion<TMCActionRegistry>
   private exeucteWithUi_promise?: Promise<TMCActionRegistry[R["id"]]["output"]>;
 
   private waitForExecutionOutput_promise?: Promise<TMCActionRegistry[R["id"]]["output"]>;
-  private waitForExecutionOutput_resolve?: (
-    outputPromise: Promise<TMCActionRegistry[R["id"]]["output"]>,
-  ) => void;
+  private waitForExecutionOutput_resolve?: (output: TMCActionRegistry[R["id"]]["output"]) => void;
+  private waitForExecutionOutput_reject?: (reason?: any) => void;
 
   constructor(
     private readonly request: R,
@@ -132,12 +131,20 @@ Available targets: [${this.connectionTargetConfig.allExecutionTargets.map((c) =>
     executionTarget?: TMeteorConnectionExecutionTarget,
   ): Promise<TMCActionRegistry[R["id"]]["output"]> {
     if (this.execute_promise == null) {
-      this.execute_promise = this._execute(executionTarget);
+      this.execute_promise = this._execute(executionTarget)
+        .then((value) => {
+          this.waitForExecutionOutput_resolve?.(value);
+          return value;
+        })
+        .catch((err) => {
+          this.waitForExecutionOutput_reject?.(err);
+          throw err;
+        });
       this.waitForExecutionOutput_promise = this.execute_promise;
-      this.waitForExecutionOutput_resolve?.(this.execute_promise);
     }
 
     return this.execute_promise;
+    // return this._execute(executionTarget);
   }
 
   private async _promptForExecution(
@@ -154,20 +161,21 @@ Available targets: [${this.connectionTargetConfig.allExecutionTargets.map((c) =>
   ): Promise<TMCActionRegistry[R["id"]]["output"]> {
     if (this.exeucteWithUi_promise == null) {
       this.exeucteWithUi_promise = this._promptForExecution(input);
-      this.waitForExecutionOutput_promise = this.execute_promise;
-      this.waitForExecutionOutput_resolve?.(this.exeucteWithUi_promise);
+      this.waitForExecutionOutput_promise = this.exeucteWithUi_promise;
     }
 
     return this.exeucteWithUi_promise;
+    // return this._promptForExecution(input);
   }
 
   private async _waitForExecutionOutput(): Promise<TMCActionRegistry[R["id"]]["output"]> {
-    return new Promise<TMCActionRegistry[R["id"]]["output"]>((resolve) => {
-      this.waitForExecutionOutput_resolve = resolve;
+    if (this.execute_promise != null) {
+      return this.execute_promise;
+    }
 
-      if (this.execute_promise != null) {
-        this.waitForExecutionOutput_resolve(this.execute_promise);
-      }
+    return new Promise<TMCActionRegistry[R["id"]]["output"]>((resolve, reject) => {
+      this.waitForExecutionOutput_resolve = resolve;
+      this.waitForExecutionOutput_reject = reject;
     });
   }
 
@@ -177,6 +185,7 @@ Available targets: [${this.connectionTargetConfig.allExecutionTargets.map((c) =>
     }
 
     return this.waitForExecutionOutput_promise;
+    // return this._waitForExecutionOutput();
   }
 
   private async makeTargetedActionRequest<

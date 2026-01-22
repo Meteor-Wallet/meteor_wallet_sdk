@@ -24,6 +24,11 @@ export class ActionUi {
   public async prompt<A extends ExecutableAction<any>>(
     input: IRenderActionUi_Input<A>,
   ): Promise<A extends ExecutableAction<infer O> ? O : never> {
+    this.renderAction(input);
+    const response = await input.action.waitForExecutionOutput();
+    console.log("Prompted action finished", response);
+    return response;
+    /*
     return new Promise((resolve, reject) => {
       // 1. Setup the DOM (Same logic as before)
       this.renderAction(input);
@@ -45,7 +50,7 @@ export class ActionUi {
 
       // this.actionUiComponent.addEventListener("sdk-submit", handleSubmit, { once: true });
       this.actionUiComponent.addEventListener("sdk-cancel", handleCancel, { once: true });
-    });
+    });*/
   }
 
   private renderAction(input: IRenderActionUi_Input<any>) {
@@ -60,8 +65,6 @@ export class ActionUi {
       this.container = this.createPopupOverlay();
       document.body.appendChild(this.container);
     }
-
-    console.log("Should be rendering action UI on element", this.container);
 
     this.actionUiComponent = new MeteorActionUiContainer();
     this.actionUiComponent.action = input.action;
