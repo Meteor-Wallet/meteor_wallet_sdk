@@ -1,10 +1,14 @@
 import type { TMCActionOutput, TMCActionRegistry } from "../../action/mc_action.combined.ts";
 import type { TMCActionRequestUnionExpandedInput } from "../../action/mc_action.types.ts";
 import { MeteorConnect } from "../../MeteorConnect.ts";
-import type { TMeteorExecutionTargetConfig } from "../../MeteorConnect.types.ts";
+import type {
+  TMeteorConnectionExecutionTarget,
+  TMeteorExecutionTargetConfig,
+} from "../../MeteorConnect.types.ts";
 
 export abstract class MeteorConnectClientBase {
   abstract readonly clientName: string;
+  abstract readonly executionTargets: TMeteorConnectionExecutionTarget[];
 
   constructor(protected readonly meteorConnect: MeteorConnect) {}
 

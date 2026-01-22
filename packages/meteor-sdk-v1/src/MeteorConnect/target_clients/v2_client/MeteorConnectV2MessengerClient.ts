@@ -1,11 +1,15 @@
 import type { TMCActionOutput, TMCActionRegistry } from "../../action/mc_action.combined.ts";
 import type { TMCActionRequestUnionExpandedInput } from "../../action/mc_action.types.ts";
-import type { TMeteorExecutionTargetConfig } from "../../MeteorConnect.types.ts";
+import type {
+  TMeteorConnectionExecutionTarget,
+  TMeteorExecutionTargetConfig,
+} from "../../MeteorConnect.types.ts";
 import { isV1ExtensionAvailable } from "../../utils/isV1ExtensionAvailable.ts";
 import { MeteorConnectClientBase } from "../base/MeteorConnectClientBase.ts";
 
 export class MeteorConnectV2MessengerClient extends MeteorConnectClientBase {
   clientName = "MeteorConnect V2 Messenger Client";
+  executionTargets: TMeteorConnectionExecutionTarget[] = ["v2_mobile_deep_link"];
 
   async getExecutionTargetConfigs<R extends TMCActionRequestUnionExpandedInput<TMCActionRegistry>>(
     _request: R,

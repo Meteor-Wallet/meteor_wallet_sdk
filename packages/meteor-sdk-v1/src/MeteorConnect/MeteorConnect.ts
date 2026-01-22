@@ -100,6 +100,19 @@ export class MeteorConnect {
     return clients;
   }
 
+  getClientByExecutionTargetId(id: TMeteorConnectionExecutionTarget): MeteorConnectClientBase {
+    const clients = this.getClients();
+    const client = clients.find((c) => c.executionTargets.some((t) => t === id));
+
+    if (client == null) {
+      throw new Error(
+        this.formatMsg(`Couldn't find available client for execution target [${id}]`),
+      );
+    }
+
+    return client;
+  }
+
   async hasAccounts(networkTarget?: IMeteorConnectNetworkTarget): Promise<boolean> {
     const accounts = await this.getAllAccounts(networkTarget);
     return accounts.length > 0;

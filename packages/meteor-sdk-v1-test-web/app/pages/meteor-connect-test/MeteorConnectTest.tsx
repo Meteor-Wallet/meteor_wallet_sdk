@@ -1,8 +1,6 @@
 import { MeteorConnect } from "@meteorwallet/sdk";
-import type {
-  IMeteorConnectAccount,
-  TMeteorConnectionExecutionTarget,
-} from "@meteorwallet/sdk/MeteorConnect/MeteorConnect.types.ts";
+import { renderActionUi } from "@meteorwallet/sdk/MeteorConnect/action_ui/renderActionUi.ts";
+import type { IMeteorConnectAccount } from "@meteorwallet/sdk/MeteorConnect/MeteorConnect.types.ts";
 import { webpage_local_storage } from "@meteorwallet/sdk/ported_common/utils/storage/webpage/webpage_local_storage.ts";
 import { actionCreators } from "@near-js/transactions";
 import { parseNearAmount } from "@near-js/utils";
@@ -89,14 +87,18 @@ const MeteorConnectTestInitialized = ({ meteorConnect }: { meteorConnect: Meteor
               },
             });
 
-            const availableTargets = action.getAllExecutionTargetConfigs();
-            let target: TMeteorConnectionExecutionTarget = "v1_web";
+            // const availableTargets = action.getAllExecutionTargetConfigs();
+            /*let target: TMeteorConnectionExecutionTarget = "v1_web";
 
             if (availableTargets.some((target) => target.executionTarget === "v1_ext")) {
               target = "v1_ext";
-            }
+            }*/
 
-            const response = await action.execute(target);
+            renderActionUi({
+              action,
+            });
+
+            const response = await action.waitForExecutionOutput();
 
             await accountQuery.refetch({ cancelRefetch: true });
           }}

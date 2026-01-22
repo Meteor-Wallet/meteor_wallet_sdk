@@ -23,7 +23,7 @@ export type TRenderStrategy =
 
 export interface IRenderActionUi_Input<A extends ExecutableAction<any>> {
   action: A;
-  strategy: TRenderStrategy;
+  strategy?: TRenderStrategy;
   onExecutionComplete?: (
     output: A extends ExecutableAction<infer O> ? TMCActionRegistry[O["id"]]["output"] : never,
   ) => void;
@@ -32,7 +32,9 @@ export interface IRenderActionUi_Input<A extends ExecutableAction<any>> {
 export function renderActionUi<A extends ExecutableAction<any>>({
   action,
   onExecutionComplete,
-  strategy,
+  strategy = {
+    strategy: "create_popup",
+  },
 }: IRenderActionUi_Input<A>) {
   let root: HTMLElement;
 

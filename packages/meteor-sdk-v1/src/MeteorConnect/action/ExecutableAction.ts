@@ -4,8 +4,6 @@ import type {
   TMeteorConnectionExecutionTarget,
   TMeteorExecutionTargetConfig,
 } from "../MeteorConnect.types.ts";
-import { MeteorConnectTestClient } from "../target_clients/test_client/MeteorConnectTestClient.ts";
-import { MeteorConnectV1Client } from "../target_clients/v1_client/MeteorConnectV1Client.ts";
 import { MCActionRegistryMap, type TMCActionRegistry } from "./mc_action.combined.ts";
 import type {
   IMCActionMeta,
@@ -164,26 +162,10 @@ Available targets: [${this.connectionTargetConfig.allExecutionTargets.map((c) =>
   ): Promise<{ output: TMCActionRegistry[R["id"]]["output"] }> {
     this.log(`Requesting action [${request.id}] for connection [${connection.executionTarget}]`);
 
-    if (connection.executionTarget === "v1_web" || connection.executionTarget === "v1_ext") {
-      return {
-        output: await new MeteorConnectV1Client(this.meteorConnect).makeRequest(
-          request,
-          connection,
-        ),
-      };
-    }
-
-    if (connection.executionTarget === "test") {
-      return {
-        output: await new MeteorConnectTestClient(this.meteorConnect).makeRequest(
-          request,
-          connection,
-        ),
-      };
-    }
-
-    throw new Error(
-      `MeteorConnect Request: Platform [${connection["platformTarget"]}] not implemented`,
-    );
+    return {
+      output: await this.meteorConnect
+        .getClientByExecutionTargetId(connection.executionTarget)
+        .makeRequest(request, connection),
+    };
   }
 }

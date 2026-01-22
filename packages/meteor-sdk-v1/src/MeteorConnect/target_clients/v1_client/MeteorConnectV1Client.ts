@@ -8,6 +8,7 @@ import type { TMCActionOutput, TMCActionRegistry } from "../../action/mc_action.
 import type { TMCActionRequestUnionExpandedInput } from "../../action/mc_action.types.ts";
 import type {
   TMeteorConnectAccountNetwork,
+  TMeteorConnectionExecutionTarget,
   TMeteorExecutionTargetConfig,
 } from "../../MeteorConnect.types.ts";
 import { isV1ExtensionAvailable } from "../../utils/isV1ExtensionAvailable.ts";
@@ -38,6 +39,7 @@ function createKeyForNetworkAndTarget(
 
 export class MeteorConnectV1Client extends MeteorConnectClientBase {
   clientName = "MeteorConnect V1 Client";
+  executionTargets: TMeteorConnectionExecutionTarget[] = ["v1_web", "v1_ext"];
 
   private getSdkForNetworkAndTarget(
     network: TMeteorConnectAccountNetwork,
