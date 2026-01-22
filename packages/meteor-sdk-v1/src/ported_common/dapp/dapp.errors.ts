@@ -6,6 +6,7 @@ export enum EDappActionErrorTag {
   USER_CANCELLED = "USER_CANCELLED",
   POPUP_WINDOW_REFUSED = "POPUP_WINDOW_REFUSED",
   POPUP_WINDOW_OPEN_FAILED = "POPUP_WINDOW_OPEN_FAILED",
+  EXT_DIRECT_RESPONSE_FAILED = "EXT_DIRECT_RESPONSE_FAILED",
 }
 
 const en: { [key in EDappActionErrorTag]: string } = {
@@ -17,6 +18,8 @@ const en: { [key in EDappActionErrorTag]: string } = {
   [EDappActionErrorTag.POPUP_WINDOW_REFUSED]: "User refused to allow the popup window to open",
   [EDappActionErrorTag.USER_CANCELLED]: "User cancelled the action",
   [EDappActionErrorTag.NO_ACCOUNTS]: "No Meteor account found- try again after creating one",
+  [EDappActionErrorTag.EXT_DIRECT_RESPONSE_FAILED]:
+    "Couldn't send and get a direct response from Meteor V1 Extension",
 };
 
 export function getExternalActionErrorMessageForEndTag(tag: string | EDappActionErrorTag): string {

@@ -11,6 +11,7 @@ import { EDappActionErrorTag } from "../ported_common/dapp/dapp.errors.ts";
 import {
   type IMeteorActionResponse_Output,
   type IMeteorComInjectedObject,
+  type IMeteorComInjectedObjectV2,
   type IPostMessageConnection,
   MeteorActionError,
   type TClientPostMessageResponse,
@@ -29,6 +30,7 @@ interface IOConnectAndWaitForResponse_Input {
 declare global {
   interface Window {
     meteorCom?: IMeteorComInjectedObject;
+    meteorComV2?: IMeteorComInjectedObjectV2;
   }
 }
 
@@ -38,6 +40,10 @@ class ComWindow {
   // hasActiveCom: boolean;
   wasOpened: boolean;
   walletOrigin: string;
+  directExtensionState?: {
+    listener: TMeteorComListener<TClientPostMessageResponse>;
+    callPromise?: Promise<any>;
+  };
 
   constructor(
     connection: IPostMessageConnection,
@@ -96,9 +102,17 @@ class ComWindow {
       this.wasOpened = false;
     } else {
       this.comType = EDappActionSource.extension_injected;
+
+      if (connection.forceExecutionTarget === "v1_ext") {
+        this.directExtensionState = {
+          listener,
+        };
+      } else {
+        // console.log("Need to communicate with the extension!");
+        window.meteorCom.addMessageDataListener(listener);
+      }
+
       this.wasOpened = true;
-      // console.log("Need to communicate with the extension!");
-      window.meteorCom.addMessageDataListener(listener);
     }
   }
 
@@ -112,7 +126,35 @@ class ComWindow {
     if (this.comType === EDappActionSource.website_post_message) {
       this.websiteWindow?.postMessage(data, this.walletOrigin);
     } else {
-      window.meteorCom?.sendMessageData(data);
+      if (this.directExtensionState != null) {
+        const callDirect = async (d: any) => {
+          const response = await window.meteorComV2?.sendMessageDataAndRespond(d);
+
+          console.log("Got direct extension response", response);
+
+          if (response == null) {
+            throw new MeteorActionError({
+              endTags: [EDappActionErrorTag.POPUP_WINDOW_OPEN_FAILED],
+              message: "Couldn't send and get a direct response from Meteor V1 Extension",
+            });
+          }
+
+          this.directExtensionState!.listener(response);
+        };
+
+        console.log("Calling direct extension method");
+
+        callDirect(data);
+
+        // if (this.directExtensionState.callPromise == null) {
+        //   // this.directExtensionState.callPromise = callDirect(data).finally(() => {
+        //   //   console.log("Clearing the direct call promise");
+        //   //   this.directExtensionState!.callPromise = undefined;
+        //   // });
+        // }
+      } else {
+        window.meteorCom?.sendMessageData(data);
+      }
     }
   }
 
@@ -161,6 +203,8 @@ class MeteorPostMessenger {
     this.walletOrigin = url.origin;
 
     this.listener = (data) => {
+      console.log("Received data", data);
+
       if (data != null) {
         // const data: TClientPostMessageResponse = event.data;
         // console.log("Meteor Post Messenger received event with data: ", data);

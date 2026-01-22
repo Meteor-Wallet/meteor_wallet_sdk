@@ -12,6 +12,7 @@ import type {
 } from "@meteorwallet/sdk/MeteorConnect/MeteorConnect.types.ts";
 import type {
   IMeteorComInjectedObject,
+  IMeteorComInjectedObjectV2,
   TMeteorComListener,
 } from "@meteorwallet/sdk/ported_common/dapp/dapp.types.ts";
 import { createAction } from "@meteorwallet/sdk/utils/create-action.ts";
@@ -33,14 +34,25 @@ async function createMeteorCom(): Promise<IMeteorComInjectedObject> {
 
   return {
     addMessageDataListener: (listener: TMeteorComListener<any>) => {
-      window.selector.external("meteorCom", "addMessageDataListener", [listener]);
+      window.selector.external("meteorCom", "addMessageDataListener", listener);
     },
     directAction: async (data) => {
-      return await window.selector.external("meteorCom", "directAction", [data]);
+      return await window.selector.external("meteorCom", "directAction", data);
     },
     features,
     sendMessageData: async (data) => {
-      return await window.selector.external("meteorCom", "sendMessageData", [data]);
+      return await window.selector.external("meteorCom", "sendMessageData", data);
+    },
+  };
+}
+
+async function createMeteorComV2(): Promise<IMeteorComInjectedObjectV2> {
+  const version = await window.selector.external("meteorComV2", "version");
+
+  return {
+    version,
+    sendMessageDataAndRespond: async (data: any) => {
+      return await window.selector.external("meteorComV2", "sendMessageDataAndRespond", data);
     },
   };
 }
@@ -62,6 +74,7 @@ async function getMeteorConnect(): Promise<MeteorConnect> {
 
   try {
     window.meteorCom = await createMeteorCom();
+    window.meteorComV2 = await createMeteorComV2();
   } catch (e) {
     console.log(
       `Couldn't find extension, or error was thrown on attempt to create connection to extension [err: ${e.message}]`,

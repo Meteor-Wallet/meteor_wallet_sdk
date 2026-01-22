@@ -11,7 +11,7 @@ import type {
   TMeteorConnectionExecutionTarget,
   TMeteorExecutionTargetConfig,
 } from "../../MeteorConnect.types.ts";
-import { isV1ExtensionAvailable } from "../../utils/isV1ExtensionAvailable.ts";
+import { isV1ExtensionWithDirectAvailable } from "../../utils/isV1ExtensionAvailable.ts";
 import { MeteorConnectClientBase } from "../base/MeteorConnectClientBase.ts";
 import { nearActionToSdkV1Action } from "./utils/nearActionToSdkV1Action.ts";
 
@@ -79,7 +79,7 @@ export class MeteorConnectV1Client extends MeteorConnectClientBase {
       },
     ];
 
-    if (isV1ExtensionAvailable()) {
+    if (isV1ExtensionWithDirectAvailable()) {
       supportedTargets.push({
         executionTarget: "v1_ext",
       });

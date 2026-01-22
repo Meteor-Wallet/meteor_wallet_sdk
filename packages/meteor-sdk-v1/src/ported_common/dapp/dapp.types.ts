@@ -229,6 +229,11 @@ export interface IMeteorComInjectedObject {
   features?: EMeteorInjectedFeature[];
 }
 
+export interface IMeteorComInjectedObjectV2 {
+  version: "v2";
+  sendMessageDataAndRespond: (data: any) => Promise<TClientPostMessageResponse>;
+}
+
 export interface IExternalAction_Base {
   uid: string;
   connectionStatus: EDappActionConnectionStatus;
