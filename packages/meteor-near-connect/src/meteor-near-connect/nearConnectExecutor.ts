@@ -4,7 +4,8 @@ import {
   type SignAndSendTransactionsParams,
   type SignMessageParams,
 } from "@hot-labs/near-connect";
-import { MeteorConnect } from "@meteorwallet/sdk";
+import { ExecutableAction, MeteorConnect } from "@meteorwallet/sdk";
+import type { TMCActionRegistry } from "@meteorwallet/sdk/MeteorConnect/action/mc_action.combined.ts";
 import type {
   IMeteorConnectAccount,
   IMeteorConnectAccountIdentifier,
@@ -20,19 +21,10 @@ import type {
   NearConnectNetwork,
   NearConnectSignedMessage,
 } from "./near-connect.types.ts";
+import { head } from "./view.ts";
 
 const logoImage = new Image();
 logoImage.src = "https://meteorwallet.app/loader.gif";
-
-// const renderUI = () => {
-//   const root = document.createElement("div");
-//   root.style.height = "100%";
-//   document.body.appendChild(root);
-//   document.head.innerHTML = head;
-//
-//   if (isMobile()) root.innerHTML = bodyMobile;
-//   else root.innerHTML = bodyDesktop;
-// };
 
 const meteorConnect = new MeteorConnect();
 
@@ -102,6 +94,25 @@ async function getMeteorData(): Promise<IMeteorStoredData | undefined> {
   }
 }
 
+async function promptActionForResponse<R extends ExecutableAction<any>>(
+  action: R,
+): Promise<TMCActionRegistry[R["id"]]["output"]> {
+  const root = document.createElement("div");
+  root.style.height = "100%";
+  document.body.appendChild(root);
+  document.head.innerHTML = head;
+
+  console.log(`Prompting action [${action.id}] for execution`);
+  window.selector.ui.showIframe();
+
+  return await action.promptForExecution({
+    strategy: {
+      strategy: "target_element",
+      element: root,
+    },
+  });
+}
+
 class NearWallet implements Omit<NearWalletBase, "manifest"> {
   getAccounts = async (data?: {
     network?: NearConnectNetwork;
@@ -121,6 +132,8 @@ class NearWallet implements Omit<NearWalletBase, "manifest"> {
     contractId?: string;
     methodNames?: Array<string>;
   }): Promise<Array<NearConnectAccount>> => {
+    console.log("METEOR: Sign in");
+
     const met = await getMeteorConnect();
     const action = await met.createAction({
       id: "near::sign_in",
@@ -139,7 +152,9 @@ class NearWallet implements Omit<NearWalletBase, "manifest"> {
       },
     });
 
-    const response = await action.execute("v1_web");
+    console.log("METEOR: Sign in");
+    const response = await promptActionForResponse(action);
+    console.log("METEOR: Sign in response", response);
 
     const account = meteorConnectToNearConnectAccount(response);
 

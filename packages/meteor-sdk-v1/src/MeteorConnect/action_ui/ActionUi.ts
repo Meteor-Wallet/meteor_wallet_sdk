@@ -1,7 +1,7 @@
 import type { ExecutableAction } from "../action/ExecutableAction.ts";
 import { METEOR_ACTION_UI_POPUP_PARENT_ID } from "./action_ui.static.ts";
 import type { IRenderActionUi_Input } from "./action_ui.types.ts";
-import { MeteorActionUiContainer } from "./elements/meteor-action-ui-container.ts";
+import { MeteorActionUiContainer } from "./lit_ui/meteor-action-ui-container.ts";
 
 declare global {
   interface Window {
@@ -61,7 +61,10 @@ export class ActionUi {
       document.body.appendChild(this.container);
     }
 
+    console.log("Should be rendering action UI on element", this.container);
+
     this.actionUiComponent = new MeteorActionUiContainer();
+    this.actionUiComponent.action = input.action;
 
     this.container.appendChild(this.actionUiComponent);
 

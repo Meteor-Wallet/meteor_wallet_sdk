@@ -3,6 +3,7 @@
   "compilerOptions": {
     "lib": ["ES2022", "DOM", "ES2022.Error"],
     "experimentalDecorators": true,
+    "useDefineForClassFields": false,
     "target": "ES2022",
     "module": "ES2022",
     "skipLibCheck": true,
