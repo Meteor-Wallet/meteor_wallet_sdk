@@ -177,6 +177,8 @@ class NearWallet implements Omit<NearWalletBase, "manifest"> {
     return [account];
   };
 
+  // comment asd
+
   signOut = async (data?: { network?: NearConnectNetwork }): Promise<void> => {
     const meteorData = await getMeteorData();
 

@@ -188,7 +188,7 @@ export interface IDappAction_Logout_Data {
   contractInfo: IOWalletExternalLinkedContract;
 }
 
-export type TMeteorComListener<D> = (data: D) => void;
+export type TMeteorComListener<D> = (data?: D) => void;
 
 export enum EMeteorExtensionDirectActionType {
   check_sync_status = "check_sync_status",
