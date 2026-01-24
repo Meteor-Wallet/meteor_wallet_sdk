@@ -23,6 +23,9 @@ export default defineConfig({
         assetFileNames: `meteor-near-connect.js`,
         format: "iife",
       },
+      watch: {
+        include: ["src/**", "../meteor-sdk-v1/src/**"],
+      }
     },
   },
 });

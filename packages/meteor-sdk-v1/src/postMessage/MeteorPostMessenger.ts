@@ -48,6 +48,8 @@ class ComWindow {
     connection: IPostMessageConnection,
     listener: TMeteorComListener<TClientPostMessageResponse>,
   ) {
+    console.log("[meteor-sdk:MeteorPostMessenger] Creating ComWindow for connection", connection);
+
     const baseWalletUrl = envConfig.wallet_base_url;
     const url = new URL(baseWalletUrl);
     this.walletOrigin = url.origin;
@@ -129,7 +131,7 @@ class ComWindow {
         const callDirect = async (d: any) => {
           const response = await window.meteorComV2?.sendMessageDataAndRespond(d);
 
-          console.log("[ EXTENSION DIRECT RESPONSE ] Got response", response);
+          // console.log("[meteor-sdk:MeteorPostMessenger] sendMessageDataAndRespond() response", response);
 
           /*if (response == null) {
             throw new MeteorActionError({
@@ -141,9 +143,11 @@ class ComWindow {
           this.directExtensionState!.listener(response);
         };
 
-        console.log("Calling direct extension method", data);
+        // console.log("[meteor-sdk:MeteorPostMessenger] Calling direct extension method", data);
 
         callDirect(data);
+
+        // console.log("[meteor-sdk:MeteorPostMessenger] directExtensionState", this.directExtensionState);
 
         // if (this.directExtensionState.callPromise == null) {
         //   // this.directExtensionState.callPromise = callDirect(data).finally(() => {
@@ -181,7 +185,7 @@ class ComWindow {
   }
 }
 
-const pingInterval = 2000;
+const pingInterval = 100;
 
 class MeteorPostMessenger {
   baseWalletUrl: string;
@@ -202,7 +206,7 @@ class MeteorPostMessenger {
     this.walletOrigin = url.origin;
 
     this.listener = (data) => {
-      console.log("[ METEOR POST MESSENGER !!! MESSAGE ] Received data", data);
+      // console.log("[ METEOR POST MESSENGER !!! MESSAGE ] Received data", data);
 
       if (data != null) {
         // const data: TClientPostMessageResponse = event.data;
