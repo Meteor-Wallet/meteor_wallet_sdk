@@ -13,6 +13,7 @@ import type {
   Transaction,
 } from "@near-wallet-selector/core";
 import { type ConnectConfig, utils } from "near-api-js";
+import { MeteorLogger } from "./MeteorConnect/logging/MeteorLogger.ts";
 import { isV1ExtensionAvailable } from "./MeteorConnect/utils/isV1ExtensionAvailable.ts";
 import { EExternalActionType } from "./ported_common/dapp/dapp.enums.ts";
 import {
@@ -129,6 +130,8 @@ export class MeteorWallet {
   /** @hidden */
   _initializationPromises: Promise<any>[] = [];
 
+  private logger = MeteorLogger.createLogger("MeteorWallet SDK v1");
+
   /**
    * The easiest way to set up the SDK. Returns an instance of MeteorWallet, automatically connected to the Near API.
    *
@@ -184,6 +187,10 @@ export class MeteorWallet {
     this._provider = new JsonRpcProvider({
       url: nodeUrl ?? NEAR_BASE_CONFIG_FOR_NETWORK[networkId].nodeUrl,
     });
+
+    this.logger.log(
+      `Initialized MeteorWallet V1 Client for network [${networkId}] targeting platform [${this._forceTargetPlatform != null ? this._forceTargetPlatform : this._walletBaseUrl}]`,
+    );
   }
 
   isExtensionInstalled(): boolean {
@@ -268,7 +275,10 @@ export class MeteorWallet {
 
     const accessKey: KeyPair = keyPair ?? KeyPair.fromRandom("ed25519");
 
-    console.log(accessKey);
+    // console.log(accessKey);
+    this.logger.log(
+      `Requesting sign-in for account [${this.getAccountId() ?? "<unknown>"}] with access key [${accessKey.getPublicKey().toString()}]`,
+    );
 
     const usingPublicKey = accessKey.getPublicKey().toString();
 
@@ -316,6 +326,8 @@ export class MeteorWallet {
   async signOut() {
     const accountId = this.getAccountId();
 
+    this.logger.log(`Signing out account [${accountId ?? "<unknown>"}]`);
+
     if (this._authData.signedInContract != null && accountId != null) {
       const inputs: IDappAction_Logout_Data = {
         accountId,
@@ -332,6 +344,7 @@ export class MeteorWallet {
 
     this._authData = { allKeys: [] };
     localStorageAdapter.clear(this._authDataKey);
+    this.logger.log(`Signed out account [${accountId ?? "<unknown>"}]`);
   }
 
   /**
@@ -360,6 +373,10 @@ export class MeteorWallet {
   }: IODappAction_SignMessage_Input): Promise<
     IMeteorActionResponse_Output<IODappAction_SignMessage_Output>
   > {
+    this.logger.log(
+      `Requesting sign message for account [${accountId ?? "<unknown>"}] with message [${message}]`,
+    );
+
     const response =
       await getMeteorPostMessenger().connectAndWaitForResponse<IODappAction_SignMessage_Output>({
         actionType: EExternalActionType.sign_message,
@@ -376,6 +393,9 @@ export class MeteorWallet {
       });
     if (response.success) {
       response.payload.state = state;
+      this.logger.log(
+        `Successfully signed message for account [${accountId ?? "<unknown>"}] with message [${message}]`,
+      );
       return response;
     }
 
@@ -426,7 +446,9 @@ export class MeteorWallet {
 
     const transformedTransactions = await this.transformTransactions(transactions);
 
-    console.log("Transformed transactions", transformedTransactions);
+    this.logger.log(
+      `Requesting sign transactions for account [${this.getAccountId() ?? "<unknown>"}] with ${transactions.length} transactions`,
+    );
 
     const response =
       await getMeteorPostMessenger().connectAndWaitForResponse<IODappAction_PostMessage_SignTransactions_Output>(

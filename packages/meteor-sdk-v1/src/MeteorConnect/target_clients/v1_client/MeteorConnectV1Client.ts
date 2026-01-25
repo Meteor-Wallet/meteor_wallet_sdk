@@ -6,6 +6,7 @@ import { EMeteorWalletSignInType } from "../../../ported_common/dapp/dapp.enums.
 import type { TMeteorSdkV1Transaction } from "../../../ported_common/dapp/dapp.types.ts";
 import type { TMCActionOutput, TMCActionRegistry } from "../../action/mc_action.combined.ts";
 import type { TMCActionRequestUnionExpandedInput } from "../../action/mc_action.types.ts";
+import { MeteorLogger } from "../../logging/MeteorLogger.ts";
 import type {
   TMeteorConnectAccountNetwork,
   TMeteorConnectionExecutionTarget,
@@ -40,6 +41,7 @@ function createKeyForNetworkAndTarget(
 export class MeteorConnectV1Client extends MeteorConnectClientBase {
   clientName = "MeteorConnect V1 Client";
   executionTargets: TMeteorConnectionExecutionTarget[] = ["v1_web", "v1_ext"];
+  protected logger = MeteorLogger.createLogger("MeteorConnect:V1Client");
 
   private getSdkForNetworkAndTarget(
     network: TMeteorConnectAccountNetwork,
@@ -48,6 +50,7 @@ export class MeteorConnectV1Client extends MeteorConnectClientBase {
     const key = createKeyForNetworkAndTarget(network, executionTarget);
 
     if (sdkForNetworkAndTarget[key] != null) {
+      this.logger.log(`Using cached SDK for key ${key}`);
       return sdkForNetworkAndTarget[key];
     }
 
@@ -93,10 +96,13 @@ export class MeteorConnectV1Client extends MeteorConnectClientBase {
     connection: TMeteorExecutionTargetConfig,
   ): Promise<TMCActionOutput<R>> {
     const executionTarget = connection.executionTarget;
+    this.logger.log(
+      `Making request for action [${request.id}] using execution target [${executionTarget}]`,
+    );
 
     if (executionTarget !== "v1_web" && executionTarget !== "v1_ext") {
       throw new Error(
-        this.formatMsg(
+        this.logger.formatMsg(
           `Can't target environment [${executionTarget}] using [${this.clientName}] client`,
         ),
       );
@@ -164,7 +170,7 @@ export class MeteorConnectV1Client extends MeteorConnectClientBase {
           state: response.payload.state,
         };
       } else {
-        throw new Error(this.formatMsg(`Sign message failed ${response.message}`));
+        throw new Error(this.logger.formatMsg(`Sign message failed ${response.message}`));
       }
     }
 
@@ -198,7 +204,7 @@ export class MeteorConnectV1Client extends MeteorConnectClientBase {
       if (response.success) {
         return response.payload;
       } else {
-        throw new Error(this.formatMsg(`Verify owner failed ${response.message}`));
+        throw new Error(this.logger.formatMsg(`Verify owner failed ${response.message}`));
       }
     }
 

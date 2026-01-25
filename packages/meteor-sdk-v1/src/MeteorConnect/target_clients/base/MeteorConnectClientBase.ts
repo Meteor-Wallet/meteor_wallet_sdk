@@ -1,5 +1,6 @@
 import type { TMCActionOutput, TMCActionRegistry } from "../../action/mc_action.combined.ts";
 import type { TMCActionRequestUnionExpandedInput } from "../../action/mc_action.types.ts";
+import type { LoggerInstance } from "../../logging/MeteorLogger.ts";
 import { MeteorConnect } from "../../MeteorConnect.ts";
 import type {
   TMeteorConnectionExecutionTarget,
@@ -9,28 +10,9 @@ import type {
 export abstract class MeteorConnectClientBase {
   abstract readonly clientName: string;
   abstract readonly executionTargets: TMeteorConnectionExecutionTarget[];
+  protected abstract logger: LoggerInstance;
 
   constructor(protected readonly meteorConnect: MeteorConnect) {}
-
-  protected log(actionDescription: string, meta?: any) {
-    const level = this.meteorConnect.getLoggingLevel();
-
-    if (level === "none") {
-      return;
-    }
-
-    if (level === "basic") {
-      console.log(this.formatMsg(actionDescription));
-    }
-
-    if (level === "debug") {
-      console.log(this.formatMsg(actionDescription), meta);
-    }
-  }
-
-  protected formatMsg(message: string): string {
-    return `${this.clientName}: ${message}`;
-  }
 
   abstract getExecutionTargetConfigs<
     R extends TMCActionRequestUnionExpandedInput<TMCActionRegistry>,

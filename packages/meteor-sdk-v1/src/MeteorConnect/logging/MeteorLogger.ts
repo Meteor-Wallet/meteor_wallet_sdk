@@ -33,7 +33,7 @@ export class MeteorLogger {
 /**
  * Logger instance with customized prefix
  */
-class LoggerInstance {
+export class LoggerInstance {
   constructor(private readonly prefix: string) {}
 
   /**

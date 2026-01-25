@@ -2,6 +2,7 @@ import type { ExecutableAction } from "../action/ExecutableAction.ts";
 import { METEOR_ACTION_UI_POPUP_PARENT_ID } from "./action_ui.static.ts";
 import type { IRenderActionUi_Input } from "./action_ui.types.ts";
 import { MeteorActionUiContainer } from "./lit_ui/meteor-action-ui-container.ts";
+import { MeteorActionUiOverlay } from "./lit_ui/meteor-action-ui-overlay.ts";
 
 declare global {
   interface Window {
@@ -27,6 +28,7 @@ export class ActionUi {
     this.renderAction(input);
     const response = await input.action.waitForExecutionOutput();
     console.log("Prompted action finished", response);
+    this.cleanup();
     return response;
     /*
     return new Promise((resolve, reject) => {
@@ -62,7 +64,7 @@ export class ActionUi {
     }
 
     if (!this.container) {
-      this.container = this.createPopupOverlay();
+      this.container = this.createPopupOverlay(input.action);
       document.body.appendChild(this.container);
     }
 
@@ -70,15 +72,6 @@ export class ActionUi {
     this.actionUiComponent.action = input.action;
 
     this.container.appendChild(this.actionUiComponent);
-
-    /**
-     * LIT TESTING COMPONENTS
-     */
-    // const something = new LitClockElement();
-    // this.container.appendChild(something);
-    //
-    // const litNames = new LitNamesElement();
-    // this.container.appendChild(litNames);
   }
 
   /**
@@ -98,21 +91,9 @@ export class ActionUi {
     }
   }
 
-  private createPopupOverlay(): HTMLElement {
-    const overlay = document.createElement("div");
-    overlay.id = METEOR_ACTION_UI_POPUP_PARENT_ID;
-    Object.assign(overlay.style, {
-      position: "fixed",
-      top: "0",
-      left: "0",
-      width: "100vw",
-      height: "100vh",
-      backgroundColor: "rgba(0,0,0,0.4)",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      zIndex: "10000",
-    });
-    return overlay;
+  private createPopupOverlay(action: ExecutableAction<any>): HTMLElement {
+    const popupOverlay = new MeteorActionUiOverlay();
+    popupOverlay.action = action;
+    return popupOverlay;
   }
 }

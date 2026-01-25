@@ -3,7 +3,6 @@ import type { IRenderActionUi_Input } from "../action_ui/action_ui.types.ts";
 import { MeteorLogger } from "../logging/MeteorLogger.ts";
 import type { MeteorConnect } from "../MeteorConnect.ts";
 import type {
-  TMCLoggingLevel,
   TMeteorConnectionExecutionTarget,
   TMeteorExecutionTargetConfig,
 } from "../MeteorConnect.types.ts";
@@ -19,11 +18,14 @@ export class ExecutableAction<R extends TMCActionRequestUnion<TMCActionRegistry>
   readonly expandedInput: any;
   private readonly meta: IMCActionMeta;
   private execute_promise?: Promise<TMCActionRegistry[R["id"]]["output"]>;
-  private exeucteWithUi_promise?: Promise<TMCActionRegistry[R["id"]]["output"]>;
-
+  private executeWithUi_promise?: Promise<TMCActionRegistry[R["id"]]["output"]>;
   private waitForExecutionOutput_promise?: Promise<TMCActionRegistry[R["id"]]["output"]>;
-  private waitForExecutionOutput_resolve?: (output: TMCActionRegistry[R["id"]]["output"]) => void;
-  private waitForExecutionOutput_reject?: (reason?: any) => void;
+
+  private actionResolvers: ((output: TMCActionRegistry[R["id"]]["output"]) => void)[] = [];
+  private actionRejecters: ((reason?: any) => void)[] = [];
+
+  // private waitForExecutionOutput_resolve?: (output: TMCActionRegistry[R["id"]]["output"]) => void;
+  // private waitForExecutionOutput_reject?: (reason?: any) => void;
 
   private logger = MeteorLogger.createLogger("MeteorConnect:ExecutableAction");
 
@@ -113,11 +115,11 @@ Available targets: [${this.connectionTargetConfig.allExecutionTargets.map((c) =>
     if (this.execute_promise == null) {
       this.execute_promise = this._execute(executionTarget)
         .then((value) => {
-          this.waitForExecutionOutput_resolve?.(value);
+          this.actionResolvers.forEach((resolver) => resolver(value));
           return value;
         })
         .catch((err) => {
-          this.waitForExecutionOutput_reject?.(err);
+          this.actionRejecters.forEach((rejecter) => rejecter(err));
           throw err;
         });
       this.waitForExecutionOutput_promise = this.execute_promise;
@@ -138,12 +140,11 @@ Available targets: [${this.connectionTargetConfig.allExecutionTargets.map((c) =>
   async promptForExecution(
     input?: Omit<IRenderActionUi_Input<this>, "action">,
   ): Promise<TMCActionRegistry[R["id"]]["output"]> {
-    if (this.exeucteWithUi_promise == null) {
-      this.exeucteWithUi_promise = this._promptForExecution(input);
-      this.waitForExecutionOutput_promise = this.exeucteWithUi_promise;
+    if (this.executeWithUi_promise == null) {
+      this.executeWithUi_promise = this._promptForExecution(input);
     }
 
-    return this.exeucteWithUi_promise;
+    return this.executeWithUi_promise;
     // return this._promptForExecution(input);
   }
 
@@ -153,8 +154,8 @@ Available targets: [${this.connectionTargetConfig.allExecutionTargets.map((c) =>
     }
 
     return new Promise<TMCActionRegistry[R["id"]]["output"]>((resolve, reject) => {
-      this.waitForExecutionOutput_resolve = resolve;
-      this.waitForExecutionOutput_reject = reject;
+      this.actionResolvers.push(resolve);
+      this.actionRejecters.push(reject);
     });
   }
 
@@ -164,7 +165,6 @@ Available targets: [${this.connectionTargetConfig.allExecutionTargets.map((c) =>
     }
 
     return this.waitForExecutionOutput_promise;
-    // return this._waitForExecutionOutput();
   }
 
   private async makeTargetedActionRequest<
@@ -173,14 +173,14 @@ Available targets: [${this.connectionTargetConfig.allExecutionTargets.map((c) =>
     request: R,
     connection: TMeteorExecutionTargetConfig,
   ): Promise<{ output: TMCActionRegistry[R["id"]]["output"] }> {
+    const client = this.meteorConnect.getClientByExecutionTargetId(connection.executionTarget);
+
     this.logger.log(
       `Requesting action [${request.id}] for connection [${connection.executionTarget}]`,
     );
 
     return {
-      output: await this.meteorConnect
-        .getClientByExecutionTargetId(connection.executionTarget)
-        .makeRequest(request, connection),
+      output: await client.makeRequest(request, connection),
     };
   }
 }

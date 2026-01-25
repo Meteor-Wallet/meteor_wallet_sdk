@@ -1,6 +1,7 @@
 import { nanoid } from "nanoid";
 import { stringify } from "query-string";
 import { envConfig } from "../envConfig";
+import { MeteorLogger } from "../MeteorConnect/logging/MeteorLogger.ts";
 import { SIGN_POPUP_HEIGHT, SIGN_POPUP_WIDTH } from "../ported_common/constants_theme.ts";
 import {
   EDappActionConnectionStatus,
@@ -44,11 +45,13 @@ class ComWindow {
     listener: TMeteorComListener<TClientPostMessageResponse>;
   };
 
+  private logger = MeteorLogger.createLogger("MeteorPostMessenger:ComWindow");
+
   constructor(
     connection: IPostMessageConnection,
     listener: TMeteorComListener<TClientPostMessageResponse>,
   ) {
-    console.log("[meteor-sdk:MeteorPostMessenger] Creating ComWindow for connection", connection);
+    this.logger.log("Creating ComWindow for connection", connection);
 
     const baseWalletUrl = envConfig.wallet_base_url;
     const url = new URL(baseWalletUrl);
@@ -58,7 +61,7 @@ class ComWindow {
 
     if (forceWeb || window.meteorCom == null) {
       this.comType = EDappActionSource.website_post_message;
-      console.log(
+      this.logger.log(
         window.meteorCom == null
           ? "No extension found. Need to connect to web popup for Meteor communication"
           : "Extension found but user requested Meteor Web wallet for action",

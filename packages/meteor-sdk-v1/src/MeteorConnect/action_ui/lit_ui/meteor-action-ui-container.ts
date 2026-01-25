@@ -1,4 +1,4 @@
-import { html, LitElement } from "lit";
+import { css, html, LitElement } from "lit";
 import { customElement, property } from "lit/decorators.js";
 import type { ExecutableAction } from "../../action/ExecutableAction.ts";
 import { ActionUiController } from "./ActionUiController.ts";
@@ -6,6 +6,22 @@ import { ActionUiController } from "./ActionUiController.ts";
 @customElement("meteor-action-ui-container")
 export class MeteorActionUiContainer extends LitElement {
   @property({ type: Object }) action!: ExecutableAction<any>;
+
+  static styles = css`
+    /* Add your styles here */
+    .modal {
+      background: black;
+      color: white;
+      padding: 20px;
+      border-radius: 8px;
+      border: 2px solid #444;
+      position: relative;
+      width: 100%;
+      height: 100%;
+      margin: auto;
+      text-align: center;
+    }
+  `;
 
   private actionController!: ActionUiController;
 

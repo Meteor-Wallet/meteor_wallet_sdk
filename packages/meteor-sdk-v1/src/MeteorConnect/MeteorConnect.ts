@@ -242,7 +242,7 @@ export class MeteorConnect {
       `Created action [${request.id}] with possible targets: [${executionConfigs
         .map((c) => c.executionTarget)
         .join(", ")}]`,
-      `\n\n
+      `\n
 ${JSON.stringify({
   targetedAccount,
 })}
