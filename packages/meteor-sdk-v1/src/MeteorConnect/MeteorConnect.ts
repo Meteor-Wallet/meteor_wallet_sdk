@@ -251,6 +251,20 @@ export class MeteorConnect {
       throw new Error(this.formatMsg(`No execution clients found for action [${request.id}]`));
     }
 
+    this.log(
+      `Created action [${request.id}] with possible targets: [${executionConfigs
+        .map((c) => c.executionTarget)
+        .join(", ")}]`,
+      `\n\n
+${JSON.stringify({
+  targetedAccount,
+})}
+      
+${JSON.stringify({
+  selectedExecutionTarget,
+})}`,
+    );
+
     return new ExecutableAction(request, expandedRequest.expandedInput, this, {
       allExecutionTargets: executionConfigs,
       contextualExecutionTarget: selectedExecutionTarget,

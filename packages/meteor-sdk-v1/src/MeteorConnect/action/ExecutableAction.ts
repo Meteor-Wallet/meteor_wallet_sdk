@@ -46,7 +46,7 @@ export class ExecutableAction<R extends TMCActionRequestUnion<TMCActionRegistry>
       return;
     }
 
-    if (this.loggingLevel === "basic") {
+    if (this.loggingLevel === "basic" || meta == null) {
       console.log(this.formatMsg(actionDescription));
     }
 

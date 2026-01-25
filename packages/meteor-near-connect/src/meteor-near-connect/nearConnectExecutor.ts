@@ -29,6 +29,11 @@ logoImage.src = "https://meteorwallet.app/loader.gif";
 
 const meteorConnect = new MeteorConnect();
 
+if (process.env.NODE_ENV === "development") {
+  console.warn("Enabling debug logging for MeteorConnect");
+  meteorConnect.setLoggingLevel("debug");
+}
+
 async function createMeteorCom(): Promise<IMeteorComInjectedObject> {
   const features = await window.selector.external("meteorCom", "features", []);
 
