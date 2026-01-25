@@ -11,6 +11,7 @@ import type {
   TMCActionRequestUnion,
   TMCActionRequestUnionExpandedInput,
 } from "./action/mc_action.types.ts";
+import { MeteorLogger } from "./logging/MeteorLogger.ts";
 import { METEOR_CONNECT_STORAGE_KEY_PREFIX } from "./MeteorConnect.static.ts";
 import type {
   IMeteorConnect_Initialize_Input,
@@ -33,7 +34,7 @@ export class MeteorConnect {
   private _localStorageAdapter = initProp<CEnvironmentStorageAdapter>();
   private _typedStorageHelper = initProp<ITypedStorageHelper<IMeteorConnectTypedStorage>>();
   private isDev: boolean = false;
-  private loggingLevel: TMCLoggingLevel = "basic";
+  private logger = MeteorLogger.createLogger("MeteorConnect");
   private clients: {
     test: MeteorConnectTestClient;
     v1: MeteorConnectV1Client;
@@ -49,29 +50,11 @@ export class MeteorConnect {
   }
 
   setLoggingLevel(level: TMCLoggingLevel): void {
-    this.loggingLevel = level;
+    MeteorLogger.setGlobalLoggingLevel(level);
   }
 
   getLoggingLevel(): TMCLoggingLevel {
-    return this.loggingLevel;
-  }
-
-  private log(actionDescription: string, meta?: any) {
-    if (this.loggingLevel === "none") {
-      return;
-    }
-
-    if (this.loggingLevel === "basic") {
-      console.log(this.formatMsg(actionDescription));
-    }
-
-    if (this.loggingLevel === "debug") {
-      console.log(this.formatMsg(actionDescription), meta);
-    }
-  }
-
-  private formatMsg(message: string): string {
-    return `MeteorConnect: ${message}`;
+    return MeteorLogger.getGlobalLoggingLevel();
   }
 
   async initialize({ storage }: IMeteorConnect_Initialize_Input) {
@@ -86,7 +69,7 @@ export class MeteorConnect {
 
     await typedStorageHelper.setJson("lastInitialized", Date.now());
 
-    this.log("Initialized");
+    this.logger.log("Initialized");
   }
 
   private get storage() {
@@ -109,7 +92,7 @@ export class MeteorConnect {
 
     if (client == null) {
       throw new Error(
-        this.formatMsg(`Couldn't find available client for execution target [${id}]`),
+        this.logger.formatMsg(`Couldn't find available client for execution target [${id}]`),
       );
     }
 
@@ -193,7 +176,9 @@ export class MeteorConnect {
 
     if (account == null) {
       throw new Error(
-        this.formatMsg(`Account at [${accountTargetToText(accountIdentifier)}] does not exist`),
+        this.logger.formatMsg(
+          `Account at [${accountTargetToText(accountIdentifier)}] does not exist`,
+        ),
       );
     }
 
@@ -230,8 +215,8 @@ export class MeteorConnect {
 
     if (executionTargetSource !== "on_execution" && selectedExecutionTarget == null) {
       throw new Error(
-        this.formatMsg(
-          "Couldn't find a required execution target configuration to complete the wallet action",
+        this.logger.formatMsg(
+          `Couldn't determine execution target for action [${request.id}] (executionTargetSource = [${executionTargetSource}])`,
         ),
       );
     }
@@ -248,10 +233,12 @@ export class MeteorConnect {
     ).flat();
 
     if (executionConfigs.length === 0) {
-      throw new Error(this.formatMsg(`No execution clients found for action [${request.id}]`));
+      throw new Error(
+        this.logger.formatMsg(`No execution clients found for action [${request.id}]`),
+      );
     }
 
-    this.log(
+    this.logger.log(
       `Created action [${request.id}] with possible targets: [${executionConfigs
         .map((c) => c.executionTarget)
         .join(", ")}]`,

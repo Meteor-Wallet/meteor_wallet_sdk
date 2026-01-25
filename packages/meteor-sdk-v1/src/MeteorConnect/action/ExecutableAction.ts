@@ -1,5 +1,6 @@
 import { ActionUi } from "../action_ui/ActionUi.ts";
 import type { IRenderActionUi_Input } from "../action_ui/action_ui.types.ts";
+import { MeteorLogger } from "../logging/MeteorLogger.ts";
 import type { MeteorConnect } from "../MeteorConnect.ts";
 import type {
   TMCLoggingLevel,
@@ -24,6 +25,8 @@ export class ExecutableAction<R extends TMCActionRequestUnion<TMCActionRegistry>
   private waitForExecutionOutput_resolve?: (output: TMCActionRegistry[R["id"]]["output"]) => void;
   private waitForExecutionOutput_reject?: (reason?: any) => void;
 
+  private logger = MeteorLogger.createLogger("MeteorConnect:ExecutableAction");
+
   constructor(
     private readonly request: R,
     expandedInput: any,
@@ -36,27 +39,6 @@ export class ExecutableAction<R extends TMCActionRequestUnion<TMCActionRegistry>
     this.id = request.id;
     this.expandedInput = expandedInput;
     this.meta = MCActionRegistryMap[this.id].meta;
-    this.loggingLevel = meteorConnect.getLoggingLevel();
-  }
-
-  private loggingLevel: TMCLoggingLevel = "basic";
-
-  private log(actionDescription: string, meta?: any) {
-    if (this.loggingLevel === "none") {
-      return;
-    }
-
-    if (this.loggingLevel === "basic" || meta == null) {
-      console.log(this.formatMsg(actionDescription));
-    }
-
-    if (this.loggingLevel === "debug") {
-      console.log(this.formatMsg(actionDescription), meta);
-    }
-  }
-
-  private formatMsg(message: string): string {
-    return `MeteorConnect [ExecutableAction]: ${message}`;
   }
 
   getAllExecutionTargetConfigs(): TMeteorExecutionTargetConfig[] {
@@ -81,10 +63,8 @@ export class ExecutableAction<R extends TMCActionRequestUnion<TMCActionRegistry>
 
     if (executionTargetConfig == null) {
       throw new Error(
-        this.formatMsg(
-          `Couldn't execute action (targeted platform / protocol needs to be provided on execution, or otherwise targeted platform doesn't support the action)
-Available targets: [${this.connectionTargetConfig.allExecutionTargets.map((c) => c.executionTarget)}]`,
-        ),
+        this.logger.formatMsg(`Couldn't execute action (targeted platform / protocol needs to be provided on execution, or otherwise targeted platform doesn't support the action)
+Available targets: [${this.connectionTargetConfig.allExecutionTargets.map((c) => c.executionTarget)}]`),
       );
     }
 
@@ -144,7 +124,6 @@ Available targets: [${this.connectionTargetConfig.allExecutionTargets.map((c) =>
     }
 
     return this.execute_promise;
-    // return this._execute(executionTarget);
   }
 
   private async _promptForExecution(
@@ -194,7 +173,9 @@ Available targets: [${this.connectionTargetConfig.allExecutionTargets.map((c) =>
     request: R,
     connection: TMeteorExecutionTargetConfig,
   ): Promise<{ output: TMCActionRegistry[R["id"]]["output"] }> {
-    this.log(`Requesting action [${request.id}] for connection [${connection.executionTarget}]`);
+    this.logger.log(
+      `Requesting action [${request.id}] for connection [${connection.executionTarget}]`,
+    );
 
     return {
       output: await this.meteorConnect
