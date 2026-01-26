@@ -5,7 +5,8 @@ export const SignMessage = ({ wallet }: IPropsWalletAction) => {
     try {
       const nonce = new Uint8Array(window.crypto.getRandomValues(new Uint8Array(32)));
       const result = await wallet.signMessage?.({ message: "Hello", recipient: "Demo app", nonce });
-      console.log(`Is verfiied: ${result?.signature}`);
+      console.log("Signed Message", result);
+      console.log(`Is verfied: ${result?.signature}`);
     } catch (error) {
       console.error(error);
     }

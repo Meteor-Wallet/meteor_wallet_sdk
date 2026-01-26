@@ -7,6 +7,7 @@ import { METEOR_ACTION_UI_POPUP_PARENT_ID } from "../action_ui.static.ts";
 export class MeteorActionUiOverlay extends LitElement {
   private logger = MeteorLogger.createLogger("MeteorConnect:MeteorActionUiOverlay");
   @property({ type: Function }) closeAction: (() => void) | null = null;
+
   private _onHostClick = () => {
     this.logger.log("Host overlay clicked");
     this._handleOverlayClick();

@@ -111,7 +111,7 @@ const MeteorConnectTestInitialized = ({ meteorConnect }: { meteorConnect: Meteor
                 },
               });
 
-              await action.promptForExecution();
+              await action.execute();
 
               await accountQuery.refetch({ cancelRefetch: true });
             }}
@@ -150,7 +150,9 @@ const MeteorConnectWithAccount = ({
         },
       });
 
-      return await action.execute();
+      const signed = await action.execute();
+      console.log("Signed message:", signed);
+      return signed;
     },
   });
 

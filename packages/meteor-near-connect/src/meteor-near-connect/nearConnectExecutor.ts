@@ -242,7 +242,7 @@ class NearWallet implements Omit<NearWalletBase, "manifest"> {
         },
       });
 
-      const response = action.execute();
+      const response = await action.execute();
 
       return response[0];
     }
