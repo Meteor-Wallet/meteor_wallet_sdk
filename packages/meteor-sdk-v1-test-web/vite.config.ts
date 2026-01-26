@@ -7,6 +7,8 @@ import { nodePolyfills } from "vite-plugin-node-polyfills";
 import { watchNodeModules } from "vite-plugin-watch-node-modules";
 import tsconfigPaths from "vite-tsconfig-paths";
 
+console.log(`Running Vite with NODE_ENV=${process.env.NODE_ENV}`);
+
 export default defineConfig({
   server: {
     warmup: {

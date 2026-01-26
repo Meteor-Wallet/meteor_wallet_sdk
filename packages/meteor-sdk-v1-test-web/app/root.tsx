@@ -12,7 +12,12 @@ import {
 
 import type { Route } from "./+types/root";
 import "./app.css";
+import { MeteorLogger } from "@meteorwallet/sdk/MeteorConnect/logging/MeteorLogger";
 import { Button } from "~/ui/Button";
+
+if (process.env.NODE_ENV === "development") {
+  MeteorLogger.setGlobalLoggingLevel("debug");
+}
 
 export const links: Route.LinksFunction = () => [
   { rel: "preconnect", href: "https://fonts.googleapis.com" },

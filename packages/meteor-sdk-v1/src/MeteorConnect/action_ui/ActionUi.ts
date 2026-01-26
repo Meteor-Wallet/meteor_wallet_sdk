@@ -1,4 +1,5 @@
 import type { ExecutableAction } from "../action/ExecutableAction.ts";
+import { MeteorLogger } from "../logging/MeteorLogger.ts";
 import { METEOR_ACTION_UI_POPUP_PARENT_ID } from "./action_ui.static.ts";
 import type { IRenderActionUi_Input } from "./action_ui.types.ts";
 import { MeteorActionUiContainer } from "./lit_ui/meteor-action-ui-container.ts";
@@ -17,6 +18,7 @@ export class ActionUi {
   private container: HTMLElement | null = null;
   private actionUiComponent: MeteorActionUiContainer | null = null;
   static shared: ActionUi = new ActionUi();
+  private logger = MeteorLogger.createLogger("MeteorConnect:ActionUi");
 
   /**
    * Opens the UI and returns a Promise that resolves with the data
@@ -64,7 +66,7 @@ export class ActionUi {
     }
 
     if (!this.container) {
-      this.container = this.createPopupOverlay(input.action);
+      this.container = this.createPopupOverlay();
       document.body.appendChild(this.container);
     }
 
@@ -91,9 +93,10 @@ export class ActionUi {
     }
   }
 
-  private createPopupOverlay(action: ExecutableAction<any>): HTMLElement {
+  private createPopupOverlay(): HTMLElement {
     const popupOverlay = new MeteorActionUiOverlay();
-    popupOverlay.action = action;
+    this.logger.log("Created popup overlay for action UI", popupOverlay);
+    popupOverlay.closeAction = () => this.cleanup();
     return popupOverlay;
   }
 }

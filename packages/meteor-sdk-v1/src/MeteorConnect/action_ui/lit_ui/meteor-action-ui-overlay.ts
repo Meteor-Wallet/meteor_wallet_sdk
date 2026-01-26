@@ -1,12 +1,12 @@
 import { css, html, LitElement } from "lit";
 import { customElement, property } from "lit/decorators.js";
-import type { ExecutableAction } from "../../action/ExecutableAction.ts";
+import { MeteorLogger } from "../../logging/MeteorLogger.ts";
 import { METEOR_ACTION_UI_POPUP_PARENT_ID } from "../action_ui.static.ts";
-import { ActionUiController } from "./ActionUiController.ts";
 
 @customElement("meteor-action-ui-overlay")
 export class MeteorActionUiOverlay extends LitElement {
-  @property({ type: Object }) action!: ExecutableAction<any>;
+  private logger = MeteorLogger.createLogger("MeteorConnect:MeteorActionUiOverlay");
+  @property({ type: Function }) closeAction: (() => void) | null = null;
 
   /* 
   position: "fixed",
@@ -22,8 +22,7 @@ export class MeteorActionUiOverlay extends LitElement {
   */
 
   static styles = css`
-      /* Add your styles here */
-      .meteor-popup-overlay {
+      :host {
         top: 0;
         left: 0;
         width: 100vw;
@@ -34,24 +33,34 @@ export class MeteorActionUiOverlay extends LitElement {
         justify-content: center;
         position: fixed;
         z-index: 10000;
+        pointer-events: auto;
       }
     `;
 
-  private actionController!: ActionUiController;
-
-  connectedCallback() {
-    super.connectedCallback();
-    this.actionController = new ActionUiController(this, this.action);
+  private _handleOverlayClick() {
+    this.logger.log("Overlay clicked, removing overlay");
+    this.remove();
   }
 
+  // connectedCallback() {
+  //   super.connectedCallback();
+  //   // this.actionController = new ActionUiController(this, this.action);
+  // }
+
   render() {
+    this.logger.log("Rendering MeteorActionUiOverlay");
+
     return html`
-      <div @click=${(e: Event) => {
-        if (e.target === e.currentTarget) {
-          this.remove();
-        }
-      }} id="${METEOR_ACTION_UI_POPUP_PARENT_ID}" class="meteor-popup-overlay">
+      <div @click=${() => {
+        this.logger.log("Overlay clicked");
+        this._handleOverlayClick();
+      }} id="${METEOR_ACTION_UI_POPUP_PARENT_ID}">
+        <div class="modal-container" >
+          <slot></slot>
+        </div>
       </div>
     `;
   }
 }
+
+// /* @click=${(e: Event) => e.stopPropagation()} */

@@ -20,6 +20,7 @@ export class MeteorActionUiContainer extends LitElement {
       height: 100%;
       margin: auto;
       text-align: center;
+      z-index: 10001;
     }
   `;
 

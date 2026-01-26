@@ -1,5 +1,6 @@
 import type { TMCActionOutput, TMCActionRegistry } from "../../action/mc_action.combined.ts";
 import type { TMCActionRequestUnionExpandedInput } from "../../action/mc_action.types.ts";
+import { MeteorLogger } from "../../logging/MeteorLogger.ts";
 import type {
   TMeteorConnectionExecutionTarget,
   TMeteorExecutionTargetConfig,
@@ -12,6 +13,7 @@ export class MeteorConnectV2MessengerClient extends MeteorConnectClientBase {
     "v2_rid_mobile_deep_link",
     "v2_rid_qr_code",
   ];
+  protected readonly logger = MeteorLogger.createLogger("MeteorConnect:V2MessengerClient");
 
   async getExecutionTargetConfigs<R extends TMCActionRequestUnionExpandedInput<TMCActionRegistry>>(
     _request: R,
