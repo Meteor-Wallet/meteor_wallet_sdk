@@ -12,7 +12,7 @@ import {
 
 import type { Route } from "./+types/root";
 import "./app.css";
-import { MeteorLogger } from "@meteorwallet/sdk/MeteorConnect/logging/MeteorLogger";
+import { MeteorLogger } from "@meteorwallet/sdk";
 import { Button } from "~/ui/Button";
 
 if (process.env.NODE_ENV === "development") {

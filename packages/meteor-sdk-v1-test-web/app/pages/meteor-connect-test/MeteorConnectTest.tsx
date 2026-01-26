@@ -1,6 +1,5 @@
-import { MeteorConnect } from "@meteorwallet/sdk";
-import type { IMeteorConnectAccount } from "@meteorwallet/sdk/MeteorConnect/MeteorConnect.types.ts";
-import { webpage_local_storage } from "@meteorwallet/sdk/ported_common/utils/storage/webpage/webpage_local_storage.ts";
+import type { IMeteorConnectAccount } from "@meteorwallet/sdk";
+import { MeteorConnect, webpage_local_storage } from "@meteorwallet/sdk";
 import { actionCreators } from "@near-js/transactions";
 import { parseNearAmount } from "@near-js/utils";
 import { QueryClient, QueryClientProvider, useMutation, useQuery } from "@tanstack/react-query";
@@ -231,3 +230,11 @@ const MeteorConnectWithAccount = ({
     </div>
   );
 };
+
+// At the bottom of MeteorConnectTest.tsx
+if (import.meta.hot) {
+  // Accept updates from the SDK specifically
+  import.meta.hot.accept("@meteorwallet/sdk", (newModule) => {
+    console.log("SDK change detected, skipping full reload.");
+  });
+}

@@ -1,7 +1,8 @@
 import { css, html, LitElement } from "lit";
-import { customElement, property } from "lit/decorators.js";
+import { property } from "lit/decorators.js"; // You MUST import this explicitly
 import type { ExecutableAction } from "../../action/ExecutableAction.ts";
 import { ActionUiController } from "./ActionUiController.ts";
+import { customElement } from "./custom-element"; // Your new util
 
 @customElement("meteor-action-ui-container")
 export class MeteorActionUiContainer extends LitElement {
@@ -11,7 +12,7 @@ export class MeteorActionUiContainer extends LitElement {
   static styles = css`
     /* Add your styles here */
     .modal {
-      background: black;
+      background: green;
       color: white;
       padding: 20px;
       border-radius: 8px;

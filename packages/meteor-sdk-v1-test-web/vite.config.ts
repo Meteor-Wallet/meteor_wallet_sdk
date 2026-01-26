@@ -9,20 +9,39 @@ import tsconfigPaths from "vite-tsconfig-paths";
 
 console.log(`Running Vite with NODE_ENV=${process.env.NODE_ENV}`);
 
-export default defineConfig({
+export default defineConfig(({ isSsrBuild }) => ({
   server: {
+    hmr: {
+      overlay: true, // Shows errors in the browser
+    },
     warmup: {
-      clientFiles: ["./app/**/*.{js,ts,jsx,tsx}"],
+      clientFiles: ["./app/**/*.{js,ts,jsx,tsx}", "../meteor-sdk-v1/src/**/*.ts"],
+    },
+    fs: {
+      // Allow Vite to serve files from the monorepo root
+      allow: [".."],
+    },
+    watch: {
+      // Ensure the watcher is actually looking at the physical files
+      // ignored: ["!**/node_modules/@meteorwallet/sdk/**"],
     },
   },
   plugins: [
+    {
+      name: "hmr-debug",
+      handleHotUpdate({ file, server }) {
+        console.log(`[HMR Debug] File changed: ${file}`);
+        // This will print in your terminal so you can see if
+        // Vite is watching the correct physical file.
+      },
+    },
     tailwindcss(),
     reactRouter(),
     tsconfigPaths(),
     devtoolsJson(),
-    watchNodeModules(["@meteorwallet/sdk"], {
-      cwd: path.join(process.cwd(), "../../"),
-    }) as any,
+    // watchNodeModules(["@meteorwallet/sdk"], {
+    //   cwd: path.join(process.cwd(), "../../"),
+    // }) as any,
     nodePolyfills({
       exclude: ["http", "stream"],
       protocolImports: true,
@@ -32,26 +51,17 @@ export default defineConfig({
         process: true,
       },
     }),
-  ],
+  ].filter(Boolean),
+  resolve: {
+    alias: {
+      "@meteorwallet/sdk": path.resolve(__dirname, "../meteor-sdk-v1/src"),
+    },
+  },
+  optimizeDeps: {
+    // Prevent Vite from pre-bundling your SDK
+    exclude: ["@meteorwallet/sdk"],
+  },
   define: {
-    // By default, Vite doesn't include shims for NodeJS/
-    // necessary for segment analytics lib to work
-    // global: {},
-    // "window.global": {},
     "process.env": {},
   },
-  // resolve: {
-  //   preserveSymlinks: true,
-  //   alias: {
-  //     process: "process/browser",
-  //     buffer: "buffer",
-  //     stream: "stream-browserify",
-  //     assert: "assert",
-  //     http: "stream-http",
-  //     https: "https-browserify",
-  //     os: "os-browserify",
-  //     url: "url",
-  //     util: "util",
-  //   },
-  // },
-});
+}));
