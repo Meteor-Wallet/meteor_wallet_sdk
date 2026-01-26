@@ -163,12 +163,16 @@ export class MeteorConnectV1Client extends MeteorConnectClientBase {
       });
 
       if (response.success) {
-        return {
+        const payload = {
           accountId: response.payload.accountId,
           publicKey: PublicKey.fromString(response.payload.publicKey),
           signature: Buffer.from(response.payload.signature, "base64"),
           state: response.payload.state,
         };
+
+        this.logger.log(`Sign message successful for account ${payload.accountId}`, payload);
+
+        return payload;
       } else {
         throw new Error(this.logger.formatMsg(`Sign message failed ${response.message}`));
       }

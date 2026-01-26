@@ -8,11 +8,16 @@ export class ActionUiController implements ReactiveController {
   host: ReactiveControllerHost;
   // This promise is created when the SDK creates the action
   private action: ExecutableAction<any>;
+  private cleanupUi?: () => void;
 
   // The Task handles the async state of the Request ID
   meteorV2RequestIdTask: Task<any, string>;
 
-  constructor(host: ReactiveControllerHost, executableAction: ExecutableAction<any>) {
+  constructor(
+    host: ReactiveControllerHost,
+    executableAction: ExecutableAction<any>,
+    cleanupUi?: () => void,
+  ) {
     (this.host = host).addController(this);
     this.meteorV2RequestIdTask = new Task(this.host, {
       task: async () => {
@@ -24,6 +29,7 @@ export class ActionUiController implements ReactiveController {
       args: () => [],
     });
     this.action = executableAction;
+    this.cleanupUi = cleanupUi;
   }
 
   hostConnected() {
@@ -33,6 +39,10 @@ export class ActionUiController implements ReactiveController {
   async executeAction(target: TMeteorConnectionExecutionTarget) {
     try {
       await this.action.execute(target);
-    } catch (e) {}
+    } catch (e) {
+      // Ensure UI gets cleaned if execution fails
+      this.cleanupUi?.();
+      throw e;
+    }
   }
 }

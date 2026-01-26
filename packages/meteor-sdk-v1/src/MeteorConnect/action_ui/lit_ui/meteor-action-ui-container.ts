@@ -6,6 +6,7 @@ import { ActionUiController } from "./ActionUiController.ts";
 @customElement("meteor-action-ui-container")
 export class MeteorActionUiContainer extends LitElement {
   @property({ type: Object }) action!: ExecutableAction<any>;
+  @property({ attribute: false }) cleanupUi?: () => void;
 
   static styles = css`
     /* Add your styles here */
@@ -28,7 +29,7 @@ export class MeteorActionUiContainer extends LitElement {
 
   connectedCallback() {
     super.connectedCallback();
-    this.actionController = new ActionUiController(this, this.action);
+    this.actionController = new ActionUiController(this, this.action, this.cleanupUi);
   }
 
   render() {

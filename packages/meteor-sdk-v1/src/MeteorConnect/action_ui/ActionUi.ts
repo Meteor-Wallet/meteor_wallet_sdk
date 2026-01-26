@@ -28,10 +28,13 @@ export class ActionUi {
     input: IRenderActionUi_Input<A>,
   ): Promise<A extends ExecutableAction<infer O> ? O : never> {
     this.renderAction(input);
-    const response = await input.action.waitForExecutionOutput();
-    console.log("Prompted action finished", response);
-    this.cleanup();
-    return response;
+    try {
+      const response = await input.action.waitForExecutionOutput();
+      this.logger.log("Prompted action finished", response);
+      return response;
+    } finally {
+      this.cleanup();
+    }
     /*
     return new Promise((resolve, reject) => {
       // 1. Setup the DOM (Same logic as before)
@@ -72,6 +75,7 @@ export class ActionUi {
 
     this.actionUiComponent = new MeteorActionUiContainer();
     this.actionUiComponent.action = input.action;
+    this.actionUiComponent.cleanupUi = () => this.cleanup();
 
     this.container.appendChild(this.actionUiComponent);
   }
