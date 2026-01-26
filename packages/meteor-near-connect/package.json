@@ -16,6 +16,7 @@
     "url": "https://github.com/Meteor-Wallet/meteor_wallet_sdk.git"
   },
   "dependencies": {
+    "@scure/base": "2.0.0",
     "@meteorwallet/sdk": "workspace:*",
     "@near-js/utils": "2.2.5",
     "@hot-labs/near-connect": "0.8.2"

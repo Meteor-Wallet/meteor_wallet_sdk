@@ -6,6 +6,7 @@ import {
 } from "@hot-labs/near-connect";
 import { ExecutableAction, MeteorConnect } from "@meteorwallet/sdk";
 import type { TMCActionRegistry } from "@meteorwallet/sdk/MeteorConnect/action/mc_action.combined.ts";
+import { MeteorLogger } from "@meteorwallet/sdk/MeteorConnect/logging/MeteorLogger.ts";
 import type {
   IMeteorConnectAccount,
   IMeteorConnectAccountIdentifier,
@@ -17,6 +18,7 @@ import type {
 } from "@meteorwallet/sdk/ported_common/dapp/dapp.types.ts";
 import { createAction } from "@meteorwallet/sdk/utils/create-action.ts";
 import type { FinalExecutionOutcome } from "@near-js/types";
+import { base64 } from "@scure/base";
 import type {
   NearConnectAccount,
   NearConnectNetwork,
@@ -120,7 +122,7 @@ async function promptActionForResponse<R extends ExecutableAction<any>>(
   document.body.appendChild(root);
   document.head.innerHTML = head;
 
-  console.log(`Meteor NEAR Connect: Prompting action [${action.id}] for execution`);
+  this.logger.log(`Prompting action [${action.id}] for execution`);
   window.selector.ui.showIframe();
 
   return await action.promptForExecution({
@@ -132,6 +134,8 @@ async function promptActionForResponse<R extends ExecutableAction<any>>(
 }
 
 class NearWallet implements Omit<NearWalletBase, "manifest"> {
+  private logger = MeteorLogger.createLogger("NearConnect:MeteorWallet");
+
   getAccounts = async (data?: {
     network?: NearConnectNetwork;
   }): Promise<Array<NearConnectAccount>> => {
@@ -140,7 +144,7 @@ class NearWallet implements Omit<NearWalletBase, "manifest"> {
       network: data?.network ?? window.selector.network,
     });
 
-    console.log("Found accounts", accounts);
+    this.logger.log("Found accounts", accounts);
 
     return accounts.map(meteorConnectToNearConnectAccount);
   };
@@ -150,7 +154,7 @@ class NearWallet implements Omit<NearWalletBase, "manifest"> {
     contractId?: string;
     methodNames?: Array<string>;
   }): Promise<Array<NearConnectAccount>> => {
-    console.log("METEOR: Sign in");
+    this.logger.log(`Signing in to NEAR on network ${data?.network ?? window.selector.network}`);
 
     const met = await getMeteorConnect();
     const action = await met.createAction({
@@ -214,10 +218,12 @@ class NearWallet implements Omit<NearWalletBase, "manifest"> {
 
       const response = await action.execute();
 
+      this.logger.log(`Sign message executed for account ${response.accountId}`, response);
+
       return {
         accountId: response.accountId,
         publicKey: response.publicKey.toString(),
-        signature: response.signature.toString(),
+        signature: base64.encode(response.signature),
       };
     }
   };

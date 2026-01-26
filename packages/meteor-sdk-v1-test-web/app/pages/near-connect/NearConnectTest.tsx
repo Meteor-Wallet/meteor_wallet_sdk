@@ -10,7 +10,7 @@ export const NearConnectTest = () => {
   const [wallet, setWallet] = useState<NearWalletBase | undefined>();
 
   const logger = {
-    log: (args: any) => console.log(args),
+    log: (args: any) => console.log("[NearConnector]", args),
   };
 
   function setAccount(account: { accountId: string } | undefined) {

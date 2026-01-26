@@ -44,6 +44,8 @@ class ComWindow {
   directExtensionState?: {
     listener: TMeteorComListener<TClientPostMessageResponse>;
   };
+  private lastResponseStatus: EDappActionConnectionStatus | null = null;
+  private lastSendStatus: EDappActionConnectionStatus | null = null;
 
   private logger = MeteorLogger.createLogger("MeteorPostMessenger:ComWindow");
 
@@ -131,33 +133,33 @@ class ComWindow {
       this.websiteWindow?.postMessage(data, this.walletOrigin);
     } else {
       if (this.directExtensionState != null) {
-        const callDirect = async (d: any) => {
+        const callDirect = async (d: TPostMessageSend) => {
           const response = await window.meteorComV2?.sendMessageDataAndRespond(d);
 
-          // console.log("[meteor-sdk:MeteorPostMessenger] sendMessageDataAndRespond() response", response);
+          /* if (
+            this.lastResponseStatus === EDappActionConnectionStatus.closed_fail ||
+            this.lastResponseStatus === EDappActionConnectionStatus.closed_success
+          ) {
+            return;
+          } */
 
-          /*if (response == null) {
-            throw new MeteorActionError({
-              endTags: [EDappActionErrorTag.POPUP_WINDOW_OPEN_FAILED],
-              message: "Couldn't send and get a direct response from Meteor V1 Extension",
-            });
-          }*/
+          if (response?.status !== this.lastResponseStatus) {
+            this.logger.log(
+              `[sendMessageDataAndRespond()]: RESPONSE [status = ${response?.status}]`,
+              response,
+            );
+            this.lastResponseStatus = response?.status ?? null;
+          }
 
           this.directExtensionState!.listener(response);
         };
 
-        // console.log("[meteor-sdk:MeteorPostMessenger] Calling direct extension method", data);
+        if (this.lastSendStatus !== data.status) {
+          this.logger.log(`[sendMessageDataAndRespond()]: SEND [status = ${data.status}]`, data);
+          this.lastSendStatus = data.status;
+        }
 
         callDirect(data);
-
-        // console.log("[meteor-sdk:MeteorPostMessenger] directExtensionState", this.directExtensionState);
-
-        // if (this.directExtensionState.callPromise == null) {
-        //   // this.directExtensionState.callPromise = callDirect(data).finally(() => {
-        //   //   console.log("Clearing the direct call promise");
-        //   //   this.directExtensionState!.callPromise = undefined;
-        //   // });
-        // }
       } else {
         window.meteorCom?.sendMessageData(data);
       }
@@ -240,17 +242,17 @@ class MeteorPostMessenger {
           }
 
           if (data.status === EDappActionConnectionStatus.closed_success) {
-            currentConnection.resolve({
-              success: true,
-              endTags: [],
-              payload: data.payload,
-            });
-
             this.updateConnection(currentConnection.uid, {
               status: EDappActionConnectionStatus.closed_success,
             });
 
             this.sendComs();
+
+            currentConnection.resolve({
+              success: true,
+              endTags: [],
+              payload: data.payload,
+            });
           }
 
           if (data.status === EDappActionConnectionStatus.closed_fail) {
@@ -267,6 +269,7 @@ class MeteorPostMessenger {
             this.updateConnection(currentConnection.uid, {
               status: EDappActionConnectionStatus.closed_window,
             });
+
             currentConnection.reject(
               new MeteorActionError({
                 endTags: data.endTags,

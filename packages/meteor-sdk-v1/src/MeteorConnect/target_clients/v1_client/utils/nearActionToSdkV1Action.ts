@@ -1,8 +1,6 @@
 import type { Action } from "@near-js/transactions";
 import type { Action as SdkV1Action } from "@near-wallet-selector/core";
 
-// import { base58 } from "@scure/base";
-
 const deserializeArgs = (args: Uint8Array) => {
   try {
     return JSON.parse(new TextDecoder().decode(args));
