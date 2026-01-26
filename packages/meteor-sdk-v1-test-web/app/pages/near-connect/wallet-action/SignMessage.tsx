@@ -1,20 +1,24 @@
+import { type NearNep413MessagePayload, serializeMessageNep413 } from "@meteorwallet/sdk";
 import { PublicKey } from "@near-js/crypto";
 import { base64 } from "@scure/base";
 import { type IPropsWalletAction } from "./wallet-action.types.ts";
+// import {} from
 
 export const SignMessage = ({ wallet }: IPropsWalletAction) => {
   const signMessage = async () => {
     try {
       const nonce = new Uint8Array(window.crypto.getRandomValues(new Uint8Array(32)));
-      const result = await wallet.signMessage?.({ message: "Hello", recipient: "Demo app", nonce });
+
+      const message: NearNep413MessagePayload = { message: "Hello", recipient: "Demo app", nonce };
+
+      const result = await wallet.signMessage?.(message);
       console.log("Signed Message", result);
 
       if (result != null) {
+        const messageSerialized = serializeMessageNep413(message);
+
         const publicKey = PublicKey.from(result!.publicKey);
-        const isValid = publicKey.verify(
-          new TextEncoder().encode("Hello"),
-          base64.decode(result!.signature),
-        );
+        const isValid = publicKey.verify(messageSerialized, base64.decode(result!.signature));
 
         console.log(`Is verified: ${isValid}`);
       }

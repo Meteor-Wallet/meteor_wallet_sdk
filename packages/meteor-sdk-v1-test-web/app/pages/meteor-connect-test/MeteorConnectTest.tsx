@@ -64,6 +64,8 @@ const MeteorConnectTestInitialized = ({ meteorConnect }: { meteorConnect: Meteor
 
   const account = accountQuery.data?.account;
 
+  console.log("Current account:", account);
+
   return (
     <div className={"p-5"}>
       <h1>NEAR Connect Test</h1>

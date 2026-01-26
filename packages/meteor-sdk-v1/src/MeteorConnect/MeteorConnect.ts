@@ -129,6 +129,10 @@ export class MeteorConnect {
     accountIdentifier: PartialBy<IMeteorConnectAccountIdentifier, "accountId">,
     networkAccountFallback: boolean = false,
   ): Promise<IMeteorConnectAccount | undefined> {
+    this.logger.log(
+      `Getting account at [${accountTargetToText(accountIdentifier)}], networkAccountFallback = [${networkAccountFallback}]`,
+    );
+
     const allNetworkAccounts = await this.getAllAccounts({
       blockchain: accountIdentifier.blockchain,
       network: accountIdentifier.network,
