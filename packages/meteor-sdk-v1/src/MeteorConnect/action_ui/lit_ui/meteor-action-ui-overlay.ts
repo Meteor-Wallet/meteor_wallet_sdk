@@ -8,24 +8,6 @@ export class MeteorActionUiOverlay extends LitElement {
   private logger = MeteorLogger.createLogger("MeteorConnect:MeteorActionUiOverlay");
   @property({ type: Function }) closeAction: (() => void) | null = null;
 
-  private _onHostClick = () => {
-    this.logger.log("Host overlay clicked");
-    this._handleOverlayClick();
-  };
-
-  /* 
-  position: "fixed",
-      top: "0",
-      left: "0",
-      width: "100vw",
-      height: "100vh",
-      backgroundColor: "rgba(0,0,0,0.4)",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      zIndex: "10000",
-  */
-
   static styles = css`
       :host {
         top: 0;
@@ -61,12 +43,12 @@ export class MeteorActionUiOverlay extends LitElement {
     // Ensure cleanup recognizes this as the popup overlay container
     this.id = METEOR_ACTION_UI_POPUP_PARENT_ID;
     // Register click on the host so backdrop clicks are captured
-    this.addEventListener("click", this._onHostClick);
+    this.addEventListener("click", this._handleOverlayClick);
   }
 
   disconnectedCallback(): void {
     // Clean up the listener to avoid leaks
-    this.removeEventListener("click", this._onHostClick);
+    this.removeEventListener("click", this._handleOverlayClick);
     super.disconnectedCallback();
   }
 

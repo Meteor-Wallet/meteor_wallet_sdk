@@ -31,6 +31,8 @@ export class ActionUiController implements ReactiveController {
   }
 
   async executeAction(target: TMeteorConnectionExecutionTarget) {
-    await this.action.execute(target);
+    try {
+      await this.action.execute(target);
+    } catch (e) {}
   }
 }
