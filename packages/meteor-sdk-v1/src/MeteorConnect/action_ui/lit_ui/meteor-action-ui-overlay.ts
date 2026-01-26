@@ -7,6 +7,10 @@ import { METEOR_ACTION_UI_POPUP_PARENT_ID } from "../action_ui.static.ts";
 export class MeteorActionUiOverlay extends LitElement {
   private logger = MeteorLogger.createLogger("MeteorConnect:MeteorActionUiOverlay");
   @property({ type: Function }) closeAction: (() => void) | null = null;
+  private _onHostClick = () => {
+    this.logger.log("Host overlay clicked");
+    this._handleOverlayClick();
+  };
 
   /* 
   position: "fixed",
@@ -38,24 +42,39 @@ export class MeteorActionUiOverlay extends LitElement {
     `;
 
   private _handleOverlayClick() {
-    this.logger.log("Overlay clicked, removing overlay");
-    this.remove();
+    this.logger.log("Overlay clicked, closing overlay");
+    // Prefer invoking provided cleanup to reset ActionUi state
+    if (this.closeAction) {
+      try {
+        this.closeAction();
+      } catch (e) {
+        this.logger.log("Error during closeAction", e);
+      }
+    } else {
+      this.remove();
+    }
   }
 
-  // connectedCallback() {
-  //   super.connectedCallback();
-  //   // this.actionController = new ActionUiController(this, this.action);
-  // }
+  connectedCallback() {
+    super.connectedCallback();
+    // Ensure cleanup recognizes this as the popup overlay container
+    this.id = METEOR_ACTION_UI_POPUP_PARENT_ID;
+    // Register click on the host so backdrop clicks are captured
+    this.addEventListener("click", this._onHostClick);
+  }
+
+  disconnectedCallback(): void {
+    // Clean up the listener to avoid leaks
+    this.removeEventListener("click", this._onHostClick);
+    super.disconnectedCallback();
+  }
 
   render() {
     this.logger.log("Rendering MeteorActionUiOverlay");
 
     return html`
-      <div @click=${() => {
-        this.logger.log("Overlay clicked");
-        this._handleOverlayClick();
-      }} id="${METEOR_ACTION_UI_POPUP_PARENT_ID}">
-        <div class="modal-container" >
+      <div>
+        <div class="modal-container" @click=${(e: Event) => e.stopPropagation()}>
           <slot></slot>
         </div>
       </div>
