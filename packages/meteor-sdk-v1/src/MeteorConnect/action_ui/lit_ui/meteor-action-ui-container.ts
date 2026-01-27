@@ -6,10 +6,10 @@ import QRCodeStyling from "qr-code-styling";
 import type { ExecutableAction } from "../../action/ExecutableAction.ts";
 import { ActionUiController } from "./ActionUiController.ts";
 import { customElement } from "./custom-element"; // Your new util
-import gilroyBoldWoff2 from "./font/gilroy/Gilroy-Bold.woff2?url";
-// Import Gilroy fonts as base64 data URLs
-import gilroyMediumWoff2 from "./font/gilroy/Gilroy-Medium.woff2?url";
-import gilroySemiboldWoff2 from "./font/gilroy/Gilroy-Semibold.woff2?url";
+import gilroyBoldWoff2 from "./font/gilroy/Gilroy-Bold.woff2?inline";
+// Import Gilroy fonts as inlined data URLs
+import gilroyMediumWoff2 from "./font/gilroy/Gilroy-Medium.woff2?inline";
+import gilroySemiboldWoff2 from "./font/gilroy/Gilroy-Semibold.woff2?inline";
 import animateLogoStyles from "./graphical/animate_meteor_logo.scss?inline";
 import linkGif from "./graphical/link.gif";
 // import meteorLogoSvg from "./graphical/meteor-logo-animate.svg?raw";
@@ -22,34 +22,36 @@ export class MeteorActionUiContainer extends LitElement {
 
   static styles = [
     unsafeCSS(animateLogoStyles),
+    unsafeCSS(`
+/* Gilroy font-face declarations */
+@font-face {
+  font-family: 'Gilroy';
+  src: url(${gilroyMediumWoff2}) format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Gilroy';
+  src: url(${gilroySemiboldWoff2}) format('woff2');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Gilroy';
+  src: url(${gilroyBoldWoff2}) format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+`),
     css`
-      /* Gilroy font-face declarations */
-      @font-face {
-        font-family: 'Gilroy';
-        src: url(${unsafeCSS(gilroyMediumWoff2)}) format('woff2');
-        font-weight: 500;
-        font-style: normal;
-        font-display: swap;
-      }
-
-      @font-face {
-        font-family: 'Gilroy';
-        src: url(${unsafeCSS(gilroySemiboldWoff2)}) format('woff2');
-        font-weight: 600;
-        font-style: normal;
-        font-display: swap;
-      }
-
-      @font-face {
-        font-family: 'Gilroy';
-        src: url(${unsafeCSS(gilroyBoldWoff2)}) format('woff2');
-        font-weight: 700;
-        font-style: normal;
-        font-display: swap;
-      }
-
       /* Add your styles here */
       .modal {
+        font-family: Gilroy, Inter, sans-serif;
         background: linear-gradient(135deg, rgb(66, 44, 255) 0%, rgb(75, 45, 131) 100%);
         color: white;
         box-sizing: border-box;
@@ -76,7 +78,7 @@ export class MeteorActionUiContainer extends LitElement {
         gap: 1rem;
         padding: 0.6rem;
         /* background: rgba(255, 255, 255, 0.3); */
-        background: linear-gradient(130deg, rgba(255, 255, 255, 0.35) 0%, rgba(255, 255, 255, 0.05) 67%, rgba(145, 115, 201, 0.15) 100%);
+        background: linear-gradient(140deg, rgba(255, 255, 255, 0.4) 0%, rgba(255, 255, 255, 0.05) 67%, rgba(145, 115, 201, 0.15) 100%);
         border-bottom: 1px solid rgb(46, 24, 200);
         /* border-radius: 0.75rem; */
         align-items: center;
@@ -86,7 +88,7 @@ export class MeteorActionUiContainer extends LitElement {
       .meteor-logo {
         width: 3.5rem;
         height: 3.5rem;
-        margin: 0 0 0.7em 0.7rem;
+        margin: 0em 0.2em 0.7em 0.7rem;
       }
 
       .title-text-box {
@@ -94,7 +96,6 @@ export class MeteorActionUiContainer extends LitElement {
         flex-direction: column;
         justify-content: center;
         align-items: flex-start;
-        font-family: 'Gilroy', sans-serif;
       }
 
       .title-text-box .title {
@@ -103,6 +104,7 @@ export class MeteorActionUiContainer extends LitElement {
         font-weight: 700;
         line-height: 1.5rem;
         color: rgba(255, 255, 255, 0.9);
+        filter: drop-shadow(0 0.05rem 0.07rem rgba(0, 0, 0, 0.3));
       }
 
       .title-text-box .subtitle {
@@ -115,9 +117,17 @@ export class MeteorActionUiContainer extends LitElement {
         line-height: 1.8rem;
       }
 
+      .connect-link-gif-box {
+        flex-grow: 1;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+      }
+
       .link-gif {
-        width: 5rem;
-        height: 1rem;
+        max-width: 10rem;
+        object-fit: contain;
+        opacity: 0.35;
       }
 
       .meteor-logo svg {
@@ -251,8 +261,10 @@ export class MeteorActionUiContainer extends LitElement {
           </div>
           <div class="title-text-box">
             <span class="title">Meteor</span>
-            <!-- <img class="link-gif" src="${linkGif}"/> -->
             <span class="subtitle">Connect</span>
+          </div>
+          <div class="connect-link-gif-box">
+            <!-- <img class="link-gif" src="${linkGif}"/> -->
           </div>
         </div>
         <h2>Choose a Platform</h2>
