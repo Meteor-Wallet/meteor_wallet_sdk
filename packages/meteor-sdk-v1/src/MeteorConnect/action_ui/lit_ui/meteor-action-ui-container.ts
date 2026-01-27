@@ -7,7 +7,9 @@ import type { ExecutableAction } from "../../action/ExecutableAction.ts";
 import { ActionUiController } from "./ActionUiController.ts";
 import { customElement } from "./custom-element"; // Your new util
 import animateLogoStyles from "./graphical/animate_meteor_logo.scss?inline";
-import meteorLogoSvg from "./graphical/meteor-logo-animate.svg?raw";
+import linkGif from "./graphical/link.gif";
+// import meteorLogoSvg from "./graphical/meteor-logo-animate.svg?raw";
+import meteorLogoSvgOther from "./graphical/logo_svg_animate_grouped.svg?raw";
 
 @customElement("meteor-action-ui-container")
 export class MeteorActionUiContainer extends LitElement {
@@ -22,7 +24,6 @@ export class MeteorActionUiContainer extends LitElement {
         background: linear-gradient(135deg, rgb(66, 44, 255) 0%, rgb(75, 45, 131) 100%);
         color: white;
         box-sizing: border-box;
-        padding: 1.5em;
         position: relative;
         overflow: hidden;
         width: 100%;
@@ -40,10 +41,54 @@ export class MeteorActionUiContainer extends LitElement {
         margin: 0;
       }
 
+      .meteor-connect-title-box {
+        display: flex;
+        flex-direction: row;
+        gap: 1rem;
+        padding: 0.6rem;
+        /* background: rgba(255, 255, 255, 0.3); */
+        background: linear-gradient(to bottom, rgba(255, 255, 255, 0.35) 0%, rgba(255, 255, 255, 0.05) 100%);
+        border-bottom: 1px solid rgb(46, 24, 200);
+        /* border-radius: 0.75rem; */
+        align-items: center;
+        justify-content: start
+      }
+
+      .title-text-box {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: flex-start;
+        font-family: Gilroy, sans-serif;
+      }
+
+      .title-text-box .title {
+        margin: 0;
+        font-size: 1.65rem;
+        font-weight: 700;
+        line-height: 1.5rem;
+        color: rgba(255, 255, 255, 0.9);
+      }
+
+      .title-text-box .subtitle {
+        margin: 0;
+        font-size: 0.8rem;
+        font-weight: 500;
+        letter-spacing: 0.25rem;
+        text-transform: uppercase;
+        color: rgba(255, 255, 255, 0.5);
+        line-height: 1.8rem;
+      }
+
+      .link-gif {
+        width: 5rem;
+        height: 1rem;
+      }
+
       .meteor-logo {
-        width: 100px;
-        height: 100px;
-        margin: 0 auto 1rem;
+        width: 3.5rem;
+        height: 3.5rem;
+        margin: 0 0 0.7em 0.7rem;
       }
 
       .meteor-logo svg {
@@ -171,8 +216,15 @@ export class MeteorActionUiContainer extends LitElement {
     this.registerHmrBoundary();
     return html`
       <div class="modal">
-        <div class="meteor-logo">
-          ${unsafeSVG(meteorLogoSvg)}
+        <div class="meteor-connect-title-box">
+          <div class="meteor-logo">
+            ${unsafeSVG(meteorLogoSvgOther)}
+          </div>
+          <div class="title-text-box">
+            <span class="title">Meteor</span>
+            <!-- <img class="link-gif" src="${linkGif}"/> -->
+            <span class="subtitle">Connect</span>
+          </div>
         </div>
         <h2>Choose a Platform</h2>
         
