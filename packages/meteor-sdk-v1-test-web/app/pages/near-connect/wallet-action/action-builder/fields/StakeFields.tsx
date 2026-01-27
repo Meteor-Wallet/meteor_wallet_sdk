@@ -1,4 +1,4 @@
-import type { StakeForm } from "../types.ts";
+import type { StakeForm } from "../types";
 
 export function StakeFields(props: { value: StakeForm; onChange: (next: StakeForm) => void }) {
   const { value, onChange } = props;

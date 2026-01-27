@@ -1,18 +1,18 @@
-import type { PartialBy } from "../ported_common/utils/special_typescript_types.ts";
-import { CEnvironmentStorageAdapter } from "../ported_common/utils/storage/EnvironmentStorageAdapter.ts";
+import type { PartialBy } from "../ported_common/utils/special_typescript_types";
+import { CEnvironmentStorageAdapter } from "../ported_common/utils/storage/EnvironmentStorageAdapter";
 import {
   createTypedStorageHelper,
   type ITypedStorageHelper,
-} from "../ported_common/utils/storage/TypedStorageHelper.ts";
-import { ExecutableAction } from "./action/ExecutableAction.ts";
-import { MCActionRegistryMap, type TMCActionRegistry } from "./action/mc_action.combined.ts";
+} from "../ported_common/utils/storage/TypedStorageHelper";
+import { ExecutableAction } from "./action/ExecutableAction";
+import { MCActionRegistryMap, type TMCActionRegistry } from "./action/mc_action.combined";
 import type {
   IMCActionMeta,
   TMCActionRequestUnion,
   TMCActionRequestUnionExpandedInput,
-} from "./action/mc_action.types.ts";
-import { MeteorLogger } from "./logging/MeteorLogger.ts";
-import { METEOR_CONNECT_STORAGE_KEY_PREFIX } from "./MeteorConnect.static.ts";
+} from "./action/mc_action.types";
+import { MeteorLogger } from "./logging/MeteorLogger";
+import { METEOR_CONNECT_STORAGE_KEY_PREFIX } from "./MeteorConnect.static";
 import type {
   IMeteorConnect_Initialize_Input,
   IMeteorConnectAccount,
@@ -22,13 +22,13 @@ import type {
   TMCLoggingLevel,
   TMeteorConnectionExecutionTarget,
 } from "./MeteorConnect.types.ts";
-import type { MeteorConnectClientBase } from "./target_clients/base/MeteorConnectClientBase.ts";
-import { MeteorConnectTestClient } from "./target_clients/test_client/MeteorConnectTestClient.ts";
-import { MeteorConnectV1Client } from "./target_clients/v1_client/MeteorConnectV1Client.ts";
-import { MeteorConnectV2MessengerClient } from "./target_clients/v2_client/MeteorConnectV2MessengerClient.ts";
-import { accountTargetToText } from "./utils/accountTargetToText.ts";
-import { initProp } from "./utils/initProp.ts";
-import { isEqual } from "./utils/isEqual.ts";
+import type { MeteorConnectClientBase } from "./target_clients/base/MeteorConnectClientBase";
+import { MeteorConnectTestClient } from "./target_clients/test_client/MeteorConnectTestClient";
+import { MeteorConnectV1Client } from "./target_clients/v1_client/MeteorConnectV1Client";
+import { MeteorConnectV2MessengerClient } from "./target_clients/v2_client/MeteorConnectV2MessengerClient";
+import { accountTargetToText } from "./utils/accountTargetToText";
+import { initProp } from "./utils/initProp";
+import { isEqual } from "./utils/isEqual";
 
 export class MeteorConnect {
   private _localStorageAdapter = initProp<CEnvironmentStorageAdapter>();

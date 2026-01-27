@@ -1,4 +1,4 @@
-import { meteorPopupStyles } from "./meteorPopupStyles.ts";
+import { meteorPopupStyles } from "./meteorPopupStyles";
 
 export const head = /* html */ `
     <meta charset="UTF-8" />

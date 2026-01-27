@@ -1,19 +1,19 @@
 import { describe, expect, it } from "bun:test";
-import { create_bun_test_local_storage } from "../../ported_common/utils/storage/bun_test/create_bun_test_local_storage.ts";
-import { MeteorConnect } from "../MeteorConnect.ts";
+import { create_bun_test_local_storage } from "../../ported_common/utils/storage/bun_test/create_bun_test_local_storage";
+import { MeteorConnect } from "../MeteorConnect";
 import type {
   IMeteorConnectAccount,
   TMeteorConnectAccountNetwork,
 } from "../MeteorConnect.types.ts";
-import { GUESTBOOK_CONTRACT_ID } from "./MeteorConnect.test.static.ts";
-import { test_createSimpleNonce } from "./test_utils/createSimpleNonce.ts";
+import { GUESTBOOK_CONTRACT_ID } from "./MeteorConnect.test.static";
+import { test_createSimpleNonce } from "./test_utils/createSimpleNonce";
 // import type {
 //   IMeteorConnectAccount,
 //   TMeteorConnectAccountNetwork,
 // } from "../MeteorConnect.types.ts";
-// import { GUESTBOOK_CONTRACT_ID } from "./MeteorConnect.test.static.ts";
-// import { test_createSimpleNonce } from "./test_utils/createSimpleNonce.ts";
-import { initializeMeteorConnectTest } from "./test_utils/InitializeMeteorConnectTest.ts";
+// import { GUESTBOOK_CONTRACT_ID } from "./MeteorConnect.test.static";
+// import { test_createSimpleNonce } from "./test_utils/createSimpleNonce";
+import { initializeMeteorConnectTest } from "./test_utils/InitializeMeteorConnectTest";
 
 describe("MeteorConnect", () => {
   it("should be able to initialize", async () => {

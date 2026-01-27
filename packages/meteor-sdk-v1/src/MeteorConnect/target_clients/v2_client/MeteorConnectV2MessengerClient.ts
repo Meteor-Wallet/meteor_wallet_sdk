@@ -1,11 +1,11 @@
-import type { TMCActionOutput, TMCActionRegistry } from "../../action/mc_action.combined.ts";
-import type { TMCActionRequestUnionExpandedInput } from "../../action/mc_action.types.ts";
-import { MeteorLogger } from "../../logging/MeteorLogger.ts";
+import type { TMCActionOutput, TMCActionRegistry } from "../../action/mc_action.combined";
+import type { TMCActionRequestUnionExpandedInput } from "../../action/mc_action.types";
+import { MeteorLogger } from "../../logging/MeteorLogger";
 import type {
   TMeteorConnectionExecutionTarget,
   TMeteorExecutionTargetConfig,
 } from "../../MeteorConnect.types.ts";
-import { MeteorConnectClientBase } from "../base/MeteorConnectClientBase.ts";
+import { MeteorConnectClientBase } from "../base/MeteorConnectClientBase";
 
 export class MeteorConnectV2MessengerClient extends MeteorConnectClientBase {
   clientName = "MeteorConnect V2 Messenger Client";

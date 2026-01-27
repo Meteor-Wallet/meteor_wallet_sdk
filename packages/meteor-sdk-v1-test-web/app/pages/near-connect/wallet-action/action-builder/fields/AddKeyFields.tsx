@@ -1,4 +1,4 @@
-import type { AddKeyForm } from "../types.ts";
+import type { AddKeyForm } from "../types";
 
 export function AddKeyFields(props: { value: AddKeyForm; onChange: (next: AddKeyForm) => void }) {
   const { value, onChange } = props;

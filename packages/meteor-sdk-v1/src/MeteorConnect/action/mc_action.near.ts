@@ -1,7 +1,7 @@
 import type { SignedMessage } from "@near-js/signers";
 import type { Action } from "@near-js/transactions";
 import type { FinalExecutionOutcome } from "@near-js/types";
-import type { IODappAction_VerifyOwner_Output } from "../../ported_common/dapp/dapp.types.ts";
+import type { IODappAction_VerifyOwner_Output } from "../../ported_common/dapp/dapp.types";
 import type {
   IMeteorConnectAccount,
   IMeteorConnectAccountIdentifier,

@@ -1,12 +1,12 @@
-import { ActionUi } from "../action_ui/ActionUi.ts";
-import type { IRenderActionUi_Input } from "../action_ui/action_ui.types.ts";
-import { MeteorLogger } from "../logging/MeteorLogger.ts";
-import type { MeteorConnect } from "../MeteorConnect.ts";
+import { ActionUi } from "../action_ui/ActionUi";
+import type { IRenderActionUi_Input } from "../action_ui/action_ui.types";
+import { MeteorLogger } from "../logging/MeteorLogger";
+import type { MeteorConnect } from "../MeteorConnect";
 import type {
   TMeteorConnectionExecutionTarget,
   TMeteorExecutionTargetConfig,
 } from "../MeteorConnect.types.ts";
-import { MCActionRegistryMap, type TMCActionRegistry } from "./mc_action.combined.ts";
+import { MCActionRegistryMap, type TMCActionRegistry } from "./mc_action.combined";
 import type {
   IMCActionMeta,
   TMCActionRequestUnion,

@@ -1,14 +1,14 @@
 /*
-import type { ExecutableAction } from "../action/ExecutableAction.ts";
+import type { ExecutableAction } from "../action/ExecutableAction";
 import {
   METEOR_ACTION_UI_POPUP_CONTAINER_CLASS,
   METEOR_ACTION_UI_POPUP_CONTAINER_ID,
   METEOR_ACTION_UI_POPUP_PARENT_CLASS,
   METEOR_ACTION_UI_POPUP_PARENT_ID,
 } from "./action_ui.static.ts";
-import type { IRenderActionUi_Input } from "./MeteorConnectActionUi.ts";
-import { isMobile } from "./utils/isMobile.ts";
-import { bodyDesktop, bodyMobile, head } from "./view.ts";
+import type { IRenderActionUi_Input } from "./MeteorConnectActionUi";
+import { isMobile } from "./utils/isMobile";
+import { bodyDesktop, bodyMobile, head } from "./view";
 
 export function renderActionUi<A extends ExecutableAction<any>>({
   action,

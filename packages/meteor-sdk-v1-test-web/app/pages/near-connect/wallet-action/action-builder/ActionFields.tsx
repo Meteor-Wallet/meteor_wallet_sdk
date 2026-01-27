@@ -1,14 +1,14 @@
-import type { ActionForm } from "./types.ts";
-import { AddKeyFields } from "./fields/AddKeyFields.tsx";
-import { CreateAccountFields } from "./fields/CreateAccountFields.tsx";
-import { DeleteAccountFields } from "./fields/DeleteAccountFields.tsx";
-import { DeleteKeyFields } from "./fields/DeleteKeyFields.tsx";
-import { DeployContractFields } from "./fields/DeployContractFields.tsx";
-import { DeployGlobalContractFields } from "./fields/DeployGlobalContractFields.tsx";
-import { FunctionCallFields } from "./fields/FunctionCallFields.tsx";
-import { StakeFields } from "./fields/StakeFields.tsx";
-import { TransferFields } from "./fields/TransferFields.tsx";
-import { UseGlobalContractFields } from "./fields/UseGlobalContractFields.tsx";
+import { AddKeyFields } from "./fields/AddKeyFields";
+import { CreateAccountFields } from "./fields/CreateAccountFields";
+import { DeleteAccountFields } from "./fields/DeleteAccountFields";
+import { DeleteKeyFields } from "./fields/DeleteKeyFields";
+import { DeployContractFields } from "./fields/DeployContractFields";
+import { DeployGlobalContractFields } from "./fields/DeployGlobalContractFields";
+import { FunctionCallFields } from "./fields/FunctionCallFields";
+import { StakeFields } from "./fields/StakeFields";
+import { TransferFields } from "./fields/TransferFields";
+import { UseGlobalContractFields } from "./fields/UseGlobalContractFields";
+import type { ActionForm } from "./types";
 
 export function ActionFields(props: { value: ActionForm; onChange: (next: ActionForm) => void }) {
   const { value, onChange } = props;

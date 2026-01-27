@@ -1,4 +1,4 @@
-import type { IMeteorConnectNetworkTarget, TNetworkTargetKey } from "../MeteorConnect.types.ts";
+import type { IMeteorConnectNetworkTarget, TNetworkTargetKey } from "../MeteorConnect.types";
 
 export function createNetworkTargetKey(
   networkTarget: IMeteorConnectNetworkTarget,

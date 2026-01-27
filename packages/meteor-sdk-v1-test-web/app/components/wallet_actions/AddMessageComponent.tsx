@@ -1,5 +1,5 @@
 import { useImmer } from "use-immer";
-import { Button } from "~/ui/Button.tsx";
+import { Button } from "~/ui/Button";
 
 export interface IAddMessageParams {
   message: string;

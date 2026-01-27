@@ -1,7 +1,7 @@
 import { html, LitElement } from "lit";
 import { customElement } from "lit/decorators.js";
-import { NamesController } from "./NamesController.ts";
-import type { TLibNamesKind, TLibNamesResult } from "./names_api.ts";
+import { NamesController } from "./NamesController";
+import type { TLibNamesKind, TLibNamesResult } from "./names_api";
 
 @customElement("lit-names-element")
 export class LitNamesElement extends LitElement {

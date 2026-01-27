@@ -1,4 +1,4 @@
-import { MeteorConnectTest } from "~/pages/meteor-connect-test/MeteorConnectTest.tsx";
+import { MeteorConnectTest } from "~/pages/meteor-connect-test/MeteorConnectTest";
 import type { Route } from "../../.react-router/types/app/routes/+types/home";
 
 export function meta({}: Route.MetaArgs) {

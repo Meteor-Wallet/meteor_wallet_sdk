@@ -1,7 +1,7 @@
 import { MeteorWallet } from "@meteorwallet/sdk";
 import type { Network } from "@near-wallet-selector/core";
 import * as nearAPI from "near-api-js";
-import type { MeteorWalletParams_Injected } from "~/core/meteor-wallet/meteor-wallet-types.ts";
+import type { MeteorWalletParams_Injected } from "~/core/meteor-wallet/meteor-wallet-types";
 
 export async function setupMeteorWalletState(
   params: MeteorWalletParams_Injected,

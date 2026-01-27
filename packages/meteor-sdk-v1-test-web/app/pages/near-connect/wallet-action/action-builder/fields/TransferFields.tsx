@@ -1,4 +1,4 @@
-import type { TransferForm } from "../types.ts";
+import type { TransferForm } from "../types";
 
 export function TransferFields(props: { value: TransferForm; onChange: (next: TransferForm) => void }) {
   const { value, onChange } = props;

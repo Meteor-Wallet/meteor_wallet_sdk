@@ -1,4 +1,4 @@
-import type { ILocalStorageInterface } from "../ported_common/utils/storage/storage.types.ts";
+import type { ILocalStorageInterface } from "../ported_common/utils/storage/storage.types";
 
 export type TMCLoggingLevel = "none" | "basic" | "debug";
 

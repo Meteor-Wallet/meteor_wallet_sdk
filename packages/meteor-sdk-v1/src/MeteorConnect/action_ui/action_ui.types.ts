@@ -1,4 +1,4 @@
-import type { ExecutableAction } from "../action/ExecutableAction.ts";
+import type { ExecutableAction } from "../action/ExecutableAction";
 
 export type TRenderStrategy =
   | {

@@ -1,4 +1,4 @@
-import type { FunctionCallForm } from "../types.ts";
+import type { FunctionCallForm } from "../types";
 
 export function FunctionCallFields(props: { value: FunctionCallForm; onChange: (next: FunctionCallForm) => void }) {
   const { value, onChange } = props;

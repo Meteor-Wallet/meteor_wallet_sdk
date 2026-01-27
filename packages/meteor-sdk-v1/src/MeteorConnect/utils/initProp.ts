@@ -1,4 +1,4 @@
-import { notNullEmpty } from "../../ported_common/utils/nullEmptyString.ts";
+import { notNullEmpty } from "../../ported_common/utils/nullEmptyString";
 
 interface IInitPropInput {
   propName?: string;

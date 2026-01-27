@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
-import type { ActionForm, ActionType } from "./types.ts";
-import { ACTION_TYPES } from "./types.ts";
+import type { ActionForm, ActionType } from "./types";
+import { ACTION_TYPES } from "./types";
 
 export function ActionCard(props: {
   index: number;

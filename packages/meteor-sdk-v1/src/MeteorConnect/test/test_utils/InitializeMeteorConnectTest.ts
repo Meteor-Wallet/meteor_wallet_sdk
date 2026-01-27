@@ -1,12 +1,12 @@
-import { create_bun_test_local_storage_with_adapter } from "../../../ported_common/utils/storage/bun_test/create_bun_test_local_storage.ts";
-import type { CEnvironmentStorageAdapter } from "../../../ported_common/utils/storage/EnvironmentStorageAdapter.ts";
-import type { ILocalStorageInterface } from "../../../ported_common/utils/storage/storage.types.ts";
+import { create_bun_test_local_storage_with_adapter } from "../../../ported_common/utils/storage/bun_test/create_bun_test_local_storage";
+import type { CEnvironmentStorageAdapter } from "../../../ported_common/utils/storage/EnvironmentStorageAdapter";
+import type { ILocalStorageInterface } from "../../../ported_common/utils/storage/storage.types";
 import {
   createTypedStorageHelper,
   type ITypedStorageHelper,
-} from "../../../ported_common/utils/storage/TypedStorageHelper.ts";
-import { METEOR_CONNECT_STORAGE_KEY_PREFIX } from "../../MeteorConnect.static.ts";
-import { MeteorConnect } from "../../MeteorConnect.ts";
+} from "../../../ported_common/utils/storage/TypedStorageHelper";
+import { MeteorConnect } from "../../MeteorConnect";
+import { METEOR_CONNECT_STORAGE_KEY_PREFIX } from "../../MeteorConnect.static";
 import type {
   IMeteorConnectAccount,
   IMeteorConnectNetworkTarget,

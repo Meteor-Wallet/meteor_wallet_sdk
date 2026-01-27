@@ -1,7 +1,7 @@
-import type { TMCActionOutput, TMCActionRegistry } from "../../action/mc_action.combined.ts";
-import type { TMCActionRequestUnionExpandedInput } from "../../action/mc_action.types.ts";
-import type { LoggerInstance } from "../../logging/MeteorLogger.ts";
-import { MeteorConnect } from "../../MeteorConnect.ts";
+import type { TMCActionOutput, TMCActionRegistry } from "../../action/mc_action.combined";
+import type { TMCActionRequestUnionExpandedInput } from "../../action/mc_action.types";
+import type { LoggerInstance } from "../../logging/MeteorLogger";
+import { MeteorConnect } from "../../MeteorConnect";
 import type {
   TMeteorConnectionExecutionTarget,
   TMeteorExecutionTargetConfig,

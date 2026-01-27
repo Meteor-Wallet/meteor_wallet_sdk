@@ -6,6 +6,7 @@ export * from "./MeteorConnect/MeteorConnect";
 export * from "./MeteorConnect/MeteorConnect.types";
 export * from "./MeteorWallet";
 export * from "./MeteorWalletConstants";
+export * from "./near_utils/convertSelectorActionToNearAction";
 export * from "./near_utils/serializeMessageNep413";
 export { EMeteorWalletSignInType } from "./ported_common/dapp/dapp.enums";
 export * from "./ported_common/dapp/dapp.types";

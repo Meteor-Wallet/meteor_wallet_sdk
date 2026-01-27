@@ -1,10 +1,10 @@
-import type { ExecutableAction } from "../action/ExecutableAction.ts";
-import { MeteorLogger } from "../logging/MeteorLogger.ts";
-import { METEOR_ACTION_UI_POPUP_PARENT_ID } from "./action_ui.static.ts";
-import type { IRenderActionUi_Input } from "./action_ui.types.ts";
-import { GILROY_FONT_FAMILY_DATA_URL_STYLESHEET } from "./lit_ui/font/gilroy-font-kit/gilroy_font.static.ts";
-import { MeteorActionUiContainer } from "./lit_ui/meteor-action-ui-container.ts";
-import { MeteorActionUiOverlay } from "./lit_ui/meteor-action-ui-overlay.ts";
+import type { ExecutableAction } from "../action/ExecutableAction";
+import { MeteorLogger } from "../logging/MeteorLogger";
+import { METEOR_ACTION_UI_POPUP_PARENT_ID } from "./action_ui.static";
+import type { IRenderActionUi_Input } from "./action_ui.types";
+import { GILROY_FONT_FAMILY_DATA_URL_STYLESHEET } from "./lit_ui/font/gilroy-font-kit/gilroy_font.static";
+import { MeteorActionUiContainer } from "./lit_ui/meteor-action-ui-container";
+import { MeteorActionUiOverlay } from "./lit_ui/meteor-action-ui-overlay";
 
 declare global {
   interface Window {

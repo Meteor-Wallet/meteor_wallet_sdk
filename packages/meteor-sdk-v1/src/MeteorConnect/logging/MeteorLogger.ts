@@ -1,4 +1,4 @@
-import type { TMCLoggingLevel } from "../MeteorConnect.types.ts";
+import type { TMCLoggingLevel } from "../MeteorConnect.types";
 
 /**
  * Centralized logging utility for MeteorConnect

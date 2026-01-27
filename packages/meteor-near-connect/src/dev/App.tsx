@@ -1,7 +1,7 @@
 import { useState } from "react";
 import "./App.css";
-import { bodyDesktop } from "../meteor-near-connect/view.ts";
-import { setupNearConnectStyles } from "./near-connect-layout/setupNearConnect.ts";
+import { bodyDesktop } from "../meteor-near-connect/view";
+import { setupNearConnectStyles } from "./near-connect-layout/setupNearConnect";
 
 setupNearConnectStyles();
 

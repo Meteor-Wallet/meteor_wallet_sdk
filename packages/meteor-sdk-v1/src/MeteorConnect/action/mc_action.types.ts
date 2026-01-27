@@ -1,4 +1,4 @@
-import type { PartialBy } from "../../ported_common/utils/special_typescript_types.ts";
+import type { PartialBy } from "../../ported_common/utils/special_typescript_types";
 import type {
   IMeteorConnectAccount,
   IMeteorConnectAccountIdentifier,

@@ -5,7 +5,7 @@ import {
   lib_names_kinds,
   type TLibNamesKind,
   type TLibNamesResult,
-} from "./names_api.ts";
+} from "./names_api";
 
 export class NamesController {
   host: ReactiveControllerHost;

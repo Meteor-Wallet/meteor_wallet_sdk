@@ -3,8 +3,8 @@ import { css, html, LitElement, unsafeCSS } from "lit";
 import { property, query } from "lit/decorators.js"; // You MUST import this explicitly
 import { unsafeSVG } from "lit/directives/unsafe-svg.js";
 import QRCodeStyling from "qr-code-styling";
-import type { ExecutableAction } from "../../action/ExecutableAction.ts";
-import { ActionUiController } from "./ActionUiController.ts";
+import type { ExecutableAction } from "../../action/ExecutableAction";
+import { ActionUiController } from "./ActionUiController";
 import { customElement } from "./custom-element"; // Your new util
 // import {
 // GILROY_BOLD_WOFF2,

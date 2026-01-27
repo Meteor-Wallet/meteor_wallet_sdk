@@ -1,14 +1,21 @@
-import type { DeployContractForm } from "../types.ts";
-import { base64FromBytes } from "../helpers.ts";
+import { base64FromBytes } from "../helpers";
+import type { DeployContractForm } from "../types";
 
-export function DeployContractFields(props: { value: DeployContractForm; onChange: (next: DeployContractForm) => void }) {
+export function DeployContractFields(props: {
+  value: DeployContractForm;
+  onChange: (next: DeployContractForm) => void;
+}) {
   const { value, onChange } = props;
 
   return (
     <div className={"flex flex-col gap-2"}>
       <div className={"input-group"}>
         <p className={"input-label"}>WASM code (base64)</p>
-        <textarea className={"input-text mono min-h-[6rem]"} value={value.codeBase64} onChange={(e) => onChange({ ...value, codeBase64: e.target.value })} />
+        <textarea
+          className={"input-text mono min-h-[6rem]"}
+          value={value.codeBase64}
+          onChange={(e) => onChange({ ...value, codeBase64: e.target.value })}
+        />
       </div>
       <div className={"input-group"}>
         <p className={"input-label"}>Load .wasm file</p>

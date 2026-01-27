@@ -1,5 +1,5 @@
-import { meteorPopupStyles } from "../../meteor-near-connect/meteorPopupStyles.ts";
-import { css } from "./styles.ts";
+import { meteorPopupStyles } from "../../meteor-near-connect/meteorPopupStyles";
+import { css } from "./styles";
 
 export function setupNearConnectStyles() {
   const style = document.createElement("style");

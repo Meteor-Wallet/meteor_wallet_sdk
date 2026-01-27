@@ -13,10 +13,10 @@ import type {
   Transaction,
 } from "@near-wallet-selector/core";
 import { type ConnectConfig, utils } from "near-api-js";
-import { MeteorLogger } from "./MeteorConnect/logging/MeteorLogger.ts";
-import { isV1ExtensionAvailable } from "./MeteorConnect/utils/isV1ExtensionAvailable.ts";
-import { convertSelectorActionToNearAction } from "./near_utils/convertSelectorActionToNearAction.ts";
-import { EExternalActionType } from "./ported_common/dapp/dapp.enums.ts";
+import { MeteorLogger } from "./MeteorConnect/logging/MeteorLogger";
+import { isV1ExtensionAvailable } from "./MeteorConnect/utils/isV1ExtensionAvailable";
+import { convertSelectorActionToNearAction } from "./near_utils/convertSelectorActionToNearAction";
+import { EExternalActionType } from "./ported_common/dapp/dapp.enums";
 import {
   type IDappAction_Logout_Data,
   type IMeteorActionResponse_Output,
@@ -33,13 +33,13 @@ import {
   type IORequestSignTransactions_Inputs,
   type IOWalletExternalLinkedContract,
   MeteorActionError,
-} from "./ported_common/dapp/dapp.types.ts";
-import { ENearNetwork } from "./ported_common/near/near_basic_types.ts";
-import { NEAR_BASE_CONFIG_FOR_NETWORK } from "./ported_common/near/near_static_data.ts";
-import { notNullEmpty } from "./ported_common/utils/nullEmptyString.ts";
-import { CEnvironmentStorageAdapter_Sync } from "./ported_common/utils/storage/EnvironmentStorageAdapter_Sync.ts";
+} from "./ported_common/dapp/dapp.types";
+import { ENearNetwork } from "./ported_common/near/near_basic_types";
+import { NEAR_BASE_CONFIG_FOR_NETWORK } from "./ported_common/near/near_static_data";
+import { notNullEmpty } from "./ported_common/utils/nullEmptyString";
+import { CEnvironmentStorageAdapter_Sync } from "./ported_common/utils/storage/EnvironmentStorageAdapter_Sync";
 import { getMeteorPostMessenger } from "./postMessage/MeteorPostMessenger";
-import { resolveWalletUrl } from "./utils/MeteorSdkUtils.ts";
+import { resolveWalletUrl } from "./utils/MeteorSdkUtils";
 
 const LOGIN_WALLET_URL_SUFFIX = "/login/";
 const SIGN_WALLET_URL_SUFFIX = "/sign/";

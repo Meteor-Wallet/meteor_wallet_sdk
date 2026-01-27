@@ -1,9 +1,12 @@
-import { parseNearAmount } from "@near-js/utils";
 import type { ConnectorAction } from "@hot-labs/near-connect";
-import { ACTION_TYPES } from "./types.ts";
-import type { ActionForm, ActionType, Network } from "./types.ts";
+import { parseNearAmount } from "@near-js/utils";
+import type { ActionForm, ActionType, Network } from "./types";
+import { ACTION_TYPES } from "./types";
 
-export const makeId = () => (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`);
+export const makeId = () =>
+  typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random()}`;
 
 export const toYocto = (near: string) => parseNearAmount(near)?.toString() ?? "0";
 
@@ -32,7 +35,11 @@ export const parseJsonObject = (json: string): object => {
   return value as object;
 };
 
-export const defaultActionForm = (type: ActionType, id = makeId(), network: Network = "testnet"): ActionForm => {
+export const defaultActionForm = (
+  type: ActionType,
+  id = makeId(),
+  network: Network = "testnet",
+): ActionForm => {
   switch (type) {
     case "CreateAccount":
       return { id, type, collapsed: false };
@@ -71,7 +78,14 @@ export const defaultActionForm = (type: ActionType, id = makeId(), network: Netw
     case "DeleteAccount":
       return { id, type, collapsed: false, beneficiaryId: `demo.${network}` };
     case "UseGlobalContract":
-      return { id, type, collapsed: false, identifierType: "AccountId", accountId: `demo.${network}`, codeHash: "" };
+      return {
+        id,
+        type,
+        collapsed: false,
+        identifierType: "AccountId",
+        accountId: `demo.${network}`,
+        codeHash: "",
+      };
     case "DeployGlobalContract":
       return { id, type, collapsed: false, codeBase64: "", deployMode: "AccountId" };
   }
@@ -101,18 +115,26 @@ export const buildConnectorAction = (a: ActionForm): ConnectorAction => {
     case "Stake":
       return {
         type: "Stake",
-        params: { stake: a.stakeYocto.trim() ? a.stakeYocto.trim() : toYocto(a.stakeNear), publicKey: a.publicKey },
+        params: {
+          stake: a.stakeYocto.trim() ? a.stakeYocto.trim() : toYocto(a.stakeNear),
+          publicKey: a.publicKey,
+        },
       };
     case "AddKey": {
       const nonce = a.nonce.trim() ? Number(a.nonce.trim()) : undefined;
       if (a.permissionType === "FullAccess") {
-        return { type: "AddKey", params: { publicKey: a.publicKey, accessKey: { nonce, permission: "FullAccess" } } };
+        return {
+          type: "AddKey",
+          params: { publicKey: a.publicKey, accessKey: { nonce, permission: "FullAccess" } },
+        };
       }
       const methodNames = a.methodNamesCsv
         .split(",")
         .map((s) => s.trim())
         .filter(Boolean);
-      const allowance = a.allowanceYocto.trim() ? a.allowanceYocto.trim() : toYocto(a.allowanceNear);
+      const allowance = a.allowanceYocto.trim()
+        ? a.allowanceYocto.trim()
+        : toYocto(a.allowanceNear);
       return {
         type: "AddKey",
         params: {
@@ -136,7 +158,10 @@ export const buildConnectorAction = (a: ActionForm): ConnectorAction => {
       return {
         type: "UseGlobalContract",
         params: {
-          contractIdentifier: a.identifierType === "AccountId" ? { accountId: a.accountId.trim() } : { codeHash: a.codeHash.trim() },
+          contractIdentifier:
+            a.identifierType === "AccountId"
+              ? { accountId: a.accountId.trim() }
+              : { codeHash: a.codeHash.trim() },
         },
       };
     case "DeployGlobalContract":
@@ -149,8 +174,10 @@ export const buildConnectorAction = (a: ActionForm): ConnectorAction => {
 
 export const previewActions = (forms: ActionForm[]) => {
   return forms.map((a) => {
-    if (a.type === "DeployContract") return { ...a, codeBase64: a.codeBase64 ? `<base64 ${a.codeBase64.length} chars>` : "" };
-    if (a.type === "DeployGlobalContract") return { ...a, codeBase64: a.codeBase64 ? `<base64 ${a.codeBase64.length} chars>` : "" };
+    if (a.type === "DeployContract")
+      return { ...a, codeBase64: a.codeBase64 ? `<base64 ${a.codeBase64.length} chars>` : "" };
+    if (a.type === "DeployGlobalContract")
+      return { ...a, codeBase64: a.codeBase64 ? `<base64 ${a.codeBase64.length} chars>` : "" };
     return a;
   });
 };
@@ -170,7 +197,11 @@ export const previewConnectorActions = (actions: ConnectorAction[]) => {
 const isActionForm = (value: unknown): value is ActionForm => {
   if (value == null || typeof value !== "object") return false;
   const anyV = value as any;
-  return typeof anyV.id === "string" && typeof anyV.type === "string" && (ACTION_TYPES as string[]).includes(anyV.type);
+  return (
+    typeof anyV.id === "string" &&
+    typeof anyV.type === "string" &&
+    (ACTION_TYPES as string[]).includes(anyV.type)
+  );
 };
 
 export const coerceActionForms = (value: unknown, network: Network): ActionForm[] => {

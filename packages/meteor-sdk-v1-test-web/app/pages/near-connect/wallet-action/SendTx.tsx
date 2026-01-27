@@ -1,18 +1,18 @@
 import { type FinalExecutionOutcome } from "@near-js/types";
 import { useLocalStorage } from "usehooks-ts";
-import { ActionCard } from "./action-builder/ActionCard.tsx";
-import { ActionFields } from "./action-builder/ActionFields.tsx";
+import { ActionCard } from "./action-builder/ActionCard";
+import { ActionFields } from "./action-builder/ActionFields";
 import {
   buildConnectorAction,
   coerceActionForms,
   defaultActionForm,
   makeId,
   previewConnectorActions,
-} from "./action-builder/helpers.ts";
-import type { ActionForm, ActionType } from "./action-builder/types.ts";
-import { ACTION_TYPES } from "./action-builder/types.ts";
-import { FinalOutcome } from "./FinalOutcome.tsx";
-import { type IPropsWalletAction } from "./wallet-action.types.ts";
+} from "./action-builder/helpers";
+import type { ActionForm, ActionType } from "./action-builder/types";
+import { ACTION_TYPES } from "./action-builder/types";
+import { FinalOutcome } from "./FinalOutcome";
+import { type IPropsWalletAction } from "./wallet-action.types";
 
 export const SendTx = ({ wallet, network }: IPropsWalletAction) => {
   const [receiverId, setReceiverId] = useLocalStorage(

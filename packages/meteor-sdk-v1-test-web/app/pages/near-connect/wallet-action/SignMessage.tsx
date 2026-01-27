@@ -1,7 +1,7 @@
 import { type NearNep413MessagePayload, serializeMessageNep413 } from "@meteorwallet/sdk";
 import { PublicKey } from "@near-js/crypto";
 import { base64 } from "@scure/base";
-import { type IPropsWalletAction } from "./wallet-action.types.ts";
+import { type IPropsWalletAction } from "./wallet-action.types";
 // import {} from
 
 export const SignMessage = ({ wallet }: IPropsWalletAction) => {

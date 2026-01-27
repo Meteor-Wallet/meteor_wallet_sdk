@@ -1,5 +1,5 @@
-import { MCNearActions } from "./mc_action.near.ts";
-import type { TMCActionRequestUnionExpandedInput } from "./mc_action.types.ts";
+import { MCNearActions } from "./mc_action.near";
+import type { TMCActionRequestUnionExpandedInput } from "./mc_action.types";
 
 export const MCActionRegistryMap = {
   ...MCNearActions,

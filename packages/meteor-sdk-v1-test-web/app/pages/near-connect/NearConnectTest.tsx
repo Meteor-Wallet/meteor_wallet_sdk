@@ -1,8 +1,8 @@
 import { NearConnector, type NearWalletBase } from "@hot-labs/near-connect";
 import { useMemo, useState } from "react";
-import { NetworkSelector } from "~/pages/near-connect/NetworkSelector.tsx";
-import { WalletActions } from "~/pages/near-connect/WalletActions.tsx";
-import { Button } from "~/ui/Button.tsx";
+import { NetworkSelector } from "~/pages/near-connect/NetworkSelector";
+import { WalletActions } from "~/pages/near-connect/WalletActions";
+import { Button } from "~/ui/Button";
 
 export const NearConnectTest = () => {
   const [network, setNetwork] = useState<"testnet" | "mainnet">("testnet");

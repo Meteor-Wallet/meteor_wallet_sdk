@@ -1,4 +1,4 @@
-import type { DeleteKeyForm } from "../types.ts";
+import type { DeleteKeyForm } from "../types";
 
 export function DeleteKeyFields(props: { value: DeleteKeyForm; onChange: (next: DeleteKeyForm) => void }) {
   const { value, onChange } = props;

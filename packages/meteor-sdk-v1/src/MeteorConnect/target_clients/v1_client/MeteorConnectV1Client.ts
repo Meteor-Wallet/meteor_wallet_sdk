@@ -1,20 +1,20 @@
 import { PublicKey } from "@near-js/crypto";
 import type { BrowserLocalStorageKeyStore } from "@near-js/keystores-browser";
 import * as nearAPI from "near-api-js";
-import { MeteorWallet } from "../../../MeteorWallet.ts";
-import { EMeteorWalletSignInType } from "../../../ported_common/dapp/dapp.enums.ts";
-import type { TMeteorSdkV1Transaction } from "../../../ported_common/dapp/dapp.types.ts";
-import type { TMCActionOutput, TMCActionRegistry } from "../../action/mc_action.combined.ts";
-import type { TMCActionRequestUnionExpandedInput } from "../../action/mc_action.types.ts";
-import { MeteorLogger } from "../../logging/MeteorLogger.ts";
+import { MeteorWallet } from "../../../MeteorWallet";
+import { EMeteorWalletSignInType } from "../../../ported_common/dapp/dapp.enums";
+import type { TMeteorSdkV1Transaction } from "../../../ported_common/dapp/dapp.types";
+import type { TMCActionOutput, TMCActionRegistry } from "../../action/mc_action.combined";
+import type { TMCActionRequestUnionExpandedInput } from "../../action/mc_action.types";
+import { MeteorLogger } from "../../logging/MeteorLogger";
 import type {
   TMeteorConnectAccountNetwork,
   TMeteorConnectionExecutionTarget,
   TMeteorExecutionTargetConfig,
 } from "../../MeteorConnect.types.ts";
-import { isV1ExtensionWithDirectAvailable } from "../../utils/isV1ExtensionAvailable.ts";
-import { MeteorConnectClientBase } from "../base/MeteorConnectClientBase.ts";
-import { nearActionToSdkV1Action } from "./utils/nearActionToSdkV1Action.ts";
+import { isV1ExtensionWithDirectAvailable } from "../../utils/isV1ExtensionAvailable";
+import { MeteorConnectClientBase } from "../base/MeteorConnectClientBase";
+import { nearActionToSdkV1Action } from "./utils/nearActionToSdkV1Action";
 
 interface IMeteorWalletV1AndKeyStore {
   wallet: MeteorWallet;

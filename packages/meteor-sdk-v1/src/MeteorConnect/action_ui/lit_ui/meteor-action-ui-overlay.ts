@@ -1,7 +1,7 @@
 import { css, html, LitElement } from "lit";
 import { property } from "lit/decorators.js"; // You MUST import this explicitly
-import { MeteorLogger } from "../../logging/MeteorLogger.ts";
-import { METEOR_ACTION_UI_POPUP_PARENT_ID } from "../action_ui.static.ts";
+import { MeteorLogger } from "../../logging/MeteorLogger";
+import { METEOR_ACTION_UI_POPUP_PARENT_ID } from "../action_ui.static";
 import { customElement } from "./custom-element"; // Your new util
 
 @customElement("meteor-action-ui-overlay")

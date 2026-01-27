@@ -1,14 +1,14 @@
 import { KeyPairEd25519 } from "@near-js/crypto";
 import { KeyPairSigner } from "@near-js/signers";
-import type { TMCActionOutput, TMCActionRegistry } from "../../action/mc_action.combined.ts";
-import type { TMCActionRequestUnionExpandedInput } from "../../action/mc_action.types.ts";
-import { type LoggerInstance, MeteorLogger } from "../../logging/MeteorLogger.ts";
+import type { TMCActionOutput, TMCActionRegistry } from "../../action/mc_action.combined";
+import type { TMCActionRequestUnionExpandedInput } from "../../action/mc_action.types";
+import { type LoggerInstance, MeteorLogger } from "../../logging/MeteorLogger";
 import type {
   TMeteorConnectionExecutionTarget,
   TMeteorExecutionTargetConfig,
 } from "../../MeteorConnect.types.ts";
-import { MeteorConnectClientBase } from "../base/MeteorConnectClientBase.ts";
-import { createFakeAccount } from "./utils/testClientFakeData.ts";
+import { MeteorConnectClientBase } from "../base/MeteorConnectClientBase";
+import { createFakeAccount } from "./utils/testClientFakeData";
 
 export class MeteorConnectTestClient extends MeteorConnectClientBase {
   protected logger: LoggerInstance = MeteorLogger.createLogger("MeteorConnect:TestClient");

@@ -12,14 +12,19 @@ import type {
   TMCActionRegistry,
   TMeteorComListener,
 } from "@meteorwallet/sdk";
-import { ExecutableAction, MeteorConnect, MeteorLogger } from "@meteorwallet/sdk";
+import {
+  convertSelectorActionToNearAction,
+  ExecutableAction,
+  MeteorConnect,
+  MeteorLogger,
+} from "@meteorwallet/sdk";
 import type { FinalExecutionOutcome } from "@near-js/types";
 import { base64 } from "@scure/base";
 import type {
   NearConnectAccount,
   NearConnectNetwork,
   NearConnectSignedMessage,
-} from "./near-connect.types.ts";
+} from "./near-connect.types";
 import { head } from "./view";
 
 const logoImage = new Image();
@@ -239,7 +244,7 @@ class NearWallet implements Omit<NearWalletBase, "manifest"> {
           target: meteorData.identifier,
           transactions: [
             {
-              actions: payload.actions.map(createAction),
+              actions: payload.actions.map(convertSelectorActionToNearAction),
               receiverId: payload.receiverId,
             },
           ],
@@ -265,7 +270,7 @@ class NearWallet implements Omit<NearWalletBase, "manifest"> {
           target: meteorData.identifier,
           transactions: payload.transactions.map((transaction) => {
             return {
-              actions: transaction.actions.map(createAction),
+              actions: transaction.actions.map(convertSelectorActionToNearAction),
               receiverId: transaction.receiverId,
             };
           }),

@@ -1,4 +1,4 @@
-import type { UseGlobalContractForm } from "../types.ts";
+import type { UseGlobalContractForm } from "../types";
 
 const isBase58 = (s: string) => /^[1-9A-HJ-NP-Za-km-z]+$/.test(s);
 

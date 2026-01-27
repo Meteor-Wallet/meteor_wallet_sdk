@@ -1,14 +1,14 @@
 import { nanoid } from "nanoid";
 import { stringify } from "query-string";
 import { envConfig } from "../envConfig";
-import { MeteorLogger } from "../MeteorConnect/logging/MeteorLogger.ts";
-import { SIGN_POPUP_HEIGHT, SIGN_POPUP_WIDTH } from "../ported_common/constants_theme.ts";
+import { MeteorLogger } from "../MeteorConnect/logging/MeteorLogger";
+import { SIGN_POPUP_HEIGHT, SIGN_POPUP_WIDTH } from "../ported_common/constants_theme";
 import {
   EDappActionConnectionStatus,
   EDappActionSource,
   EExternalActionType,
-} from "../ported_common/dapp/dapp.enums.ts";
-import { EDappActionErrorTag } from "../ported_common/dapp/dapp.errors.ts";
+} from "../ported_common/dapp/dapp.enums";
+import { EDappActionErrorTag } from "../ported_common/dapp/dapp.errors";
 import {
   type IMeteorActionResponse_Output,
   type IMeteorComInjectedObject,
@@ -18,8 +18,8 @@ import {
   type TClientPostMessageResponse,
   type TMeteorComListener,
   type TPostMessageSend,
-} from "../ported_common/dapp/dapp.types.ts";
-import { ENearNetwork } from "../ported_common/near/near_basic_types.ts";
+} from "../ported_common/dapp/dapp.types";
+import { ENearNetwork } from "../ported_common/near/near_basic_types";
 
 interface IOConnectAndWaitForResponse_Input {
   network: ENearNetwork;

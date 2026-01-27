@@ -1,8 +1,8 @@
 import { Task } from "@lit/task";
 import { wait_utils } from "@meteorwallet/utils/javascript_helpers/wait.utils";
 import type { ReactiveController, ReactiveControllerHost } from "lit";
-import type { ExecutableAction } from "../../action/ExecutableAction.ts";
-import type { TMeteorConnectionExecutionTarget } from "../../MeteorConnect.types.ts";
+import type { ExecutableAction } from "../../action/ExecutableAction";
+import type { TMeteorConnectionExecutionTarget } from "../../MeteorConnect.types";
 
 export class ActionUiController implements ReactiveController {
   host: ReactiveControllerHost;

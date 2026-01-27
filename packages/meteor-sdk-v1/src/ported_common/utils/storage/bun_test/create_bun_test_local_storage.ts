@@ -1,5 +1,5 @@
-import { CEnvironmentStorageAdapter } from "../EnvironmentStorageAdapter.ts";
-import type { ILocalStorageInterface } from "../storage.types.ts";
+import { CEnvironmentStorageAdapter } from "../EnvironmentStorageAdapter";
+import type { ILocalStorageInterface } from "../storage.types";
 
 export const create_bun_test_local_storage: (
   initial?: Record<string, string | undefined>,

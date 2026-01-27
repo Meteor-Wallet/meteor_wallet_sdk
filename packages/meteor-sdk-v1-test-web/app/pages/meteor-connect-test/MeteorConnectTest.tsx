@@ -8,9 +8,9 @@ import {
   AddMessageComponent,
   type IAddMessageParams,
 } from "~/components/wallet_actions/AddMessageComponent.tsx";
-import { createSimpleNonce, GUESTBOOK_CONTRACT_ID } from "~/pages/meteor-sdk-test/guestbook.ts";
-import { NetworkSelector } from "~/pages/near-connect/NetworkSelector.tsx";
-import { Button } from "~/ui/Button.tsx";
+import { createSimpleNonce, GUESTBOOK_CONTRACT_ID } from "~/pages/meteor-sdk-test/guestbook";
+import { NetworkSelector } from "~/pages/near-connect/NetworkSelector";
+import { Button } from "~/ui/Button";
 
 const meteorConnectClient = new MeteorConnect();
 

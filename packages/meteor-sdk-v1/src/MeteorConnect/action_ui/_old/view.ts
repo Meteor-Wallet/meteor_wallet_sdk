@@ -1,6 +1,6 @@
 /*
-import { METEOR_ACTION_UI_CONTAINER_CLASS } from "./action_ui.static.ts";
-import { meteorPopupStyles } from "./meteorPopupStyles.ts";
+import { METEOR_ACTION_UI_CONTAINER_CLASS } from "./action_ui.static";
+import { meteorPopupStyles } from "./meteorPopupStyles";
 
 export const head = /!* html *!/ `
     <meta charset="UTF-8" />

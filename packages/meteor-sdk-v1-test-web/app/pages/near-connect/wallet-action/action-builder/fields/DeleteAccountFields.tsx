@@ -1,4 +1,4 @@
-import type { DeleteAccountForm } from "../types.ts";
+import type { DeleteAccountForm } from "../types";
 
 export function DeleteAccountFields(props: { value: DeleteAccountForm; onChange: (next: DeleteAccountForm) => void }) {
   const { value, onChange } = props;

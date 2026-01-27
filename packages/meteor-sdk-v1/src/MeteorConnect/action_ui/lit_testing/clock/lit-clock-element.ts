@@ -1,6 +1,6 @@
 import { html, LitElement } from "lit";
 import { customElement } from "lit/decorators.js";
-import { ClockController } from "./ClockController.ts";
+import { ClockController } from "./ClockController";
 
 @customElement("lit-clock-element")
 export class LitClockElement extends LitElement {

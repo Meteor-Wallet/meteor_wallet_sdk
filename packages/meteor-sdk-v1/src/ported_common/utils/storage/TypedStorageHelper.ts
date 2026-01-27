@@ -1,5 +1,5 @@
-import type { StringKeys } from "../special_typescript_types.ts";
-import type { CEnvironmentStorageAdapter } from "./EnvironmentStorageAdapter.ts";
+import type { StringKeys } from "../special_typescript_types";
+import type { CEnvironmentStorageAdapter } from "./EnvironmentStorageAdapter";
 
 export interface ITypedStorageHelper<T extends Record<string, any>> {
   getJson<K extends StringKeys<T>>(key: K): Promise<T[K] | undefined>;
