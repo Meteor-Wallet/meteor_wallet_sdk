@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { EMeteorWalletSignInType } from "./dapp.enums.ts";
+import { EMeteorWalletSignInType } from "./dapp.enums";
 
 export const ZO_DappSignInAction_Base = z.object({
   contract_id: z.string(),

@@ -1,6 +1,10 @@
 {
   "compilerOptions": {
-    "lib": ["ES2022", "DOM", "ES2022.Error"],
+    "lib": [
+      "ES2022",
+      "DOM",
+      "ES2022.Error"
+    ],
     "target": "ES2020",
     "experimentalDecorators": true,
     "skipLibCheck": true,
@@ -13,16 +17,24 @@
     "isolatedModules": false,
     "moduleResolution": "bundler",
     "verbatimModuleSyntax": true,
-    "allowImportingTsExtensions": true,
+    "allowImportingTsExtensions": false,
     "module": "ES2022",
     "noImplicitAny": false,
     "jsx": "react-jsx",
     "baseUrl": ".",
     "paths": {
-      "@meteorwallet/sdk": ["../meteor-sdk-v1/src"],
-      "@meteorwallet/sdk/*": ["../meteor-sdk-v1/src/*"]
+      "@meteorwallet/sdk": [
+        "../meteor-sdk-v1/src"
+      ]
     }
   },
-  "include": ["vite-env.d.ts", "src"],
-  "exclude": ["dist", "node_modules", "../../node_modules"]
+  "include": [
+    "vite-env.d.ts",
+    "src"
+  ],
+  "exclude": [
+    "dist",
+    "node_modules",
+    "../../node_modules"
+  ]
 }

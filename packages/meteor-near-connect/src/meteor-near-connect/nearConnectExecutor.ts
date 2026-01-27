@@ -4,18 +4,15 @@ import {
   type SignAndSendTransactionsParams,
   type SignMessageParams,
 } from "@hot-labs/near-connect";
-import { ExecutableAction, MeteorConnect, MeteorLogger } from "@meteorwallet/sdk";
-import type { TMCActionRegistry } from "@meteorwallet/sdk/MeteorConnect/action/mc_action.combined.ts";
-import type {
-  IMeteorConnectAccount,
-  IMeteorConnectAccountIdentifier,
-} from "@meteorwallet/sdk/MeteorConnect/MeteorConnect.types.ts";
 import type {
   IMeteorComInjectedObject,
   IMeteorComInjectedObjectV2,
+  IMeteorConnectAccount,
+  IMeteorConnectAccountIdentifier,
+  TMCActionRegistry,
   TMeteorComListener,
-} from "@meteorwallet/sdk/ported_common/dapp/dapp.types.ts";
-import { createAction } from "@meteorwallet/sdk/utils/create-action.ts";
+} from "@meteorwallet/sdk";
+import { ExecutableAction, MeteorConnect, MeteorLogger } from "@meteorwallet/sdk";
 import type { FinalExecutionOutcome } from "@near-js/types";
 import { base64 } from "@scure/base";
 import type {
@@ -23,7 +20,7 @@ import type {
   NearConnectNetwork,
   NearConnectSignedMessage,
 } from "./near-connect.types.ts";
-import { head } from "./view.ts";
+import { head } from "./view";
 
 const logoImage = new Image();
 logoImage.src = "https://meteorwallet.app/loader.gif";

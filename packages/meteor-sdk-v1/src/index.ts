@@ -1,5 +1,6 @@
 export { setEnvConfig } from "./envConfig";
 export * from "./MeteorConnect/action/ExecutableAction";
+export * from "./MeteorConnect/action/mc_action.combined";
 export * from "./MeteorConnect/logging/MeteorLogger";
 export * from "./MeteorConnect/MeteorConnect";
 export * from "./MeteorConnect/MeteorConnect.types";
@@ -7,6 +8,7 @@ export * from "./MeteorWallet";
 export * from "./MeteorWalletConstants";
 export * from "./near_utils/serializeMessageNep413";
 export { EMeteorWalletSignInType } from "./ported_common/dapp/dapp.enums";
+export * from "./ported_common/dapp/dapp.types";
 export * from "./ported_common/utils/storage/webpage/webpage_local_storage";
 export * from "./utils/MeteorSdkUtils";
 

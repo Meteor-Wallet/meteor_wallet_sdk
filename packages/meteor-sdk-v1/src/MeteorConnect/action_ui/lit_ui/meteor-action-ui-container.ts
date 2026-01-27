@@ -143,15 +143,40 @@ export class MeteorActionUiContainer extends LitElement {
       }
 
       .options {
+        padding: 1rem;
         display: flex;
         flex-direction: column;
         gap: 1rem;
         align-items: center;
       }
 
-      .options button {
+      .meteor-connect-content {
+        padding: 1rem;
+      }
+
+      .section-action-title {
+        font-size: 0.85rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        color: rgba(255, 255, 255, 0.6);
+        letter-spacing: 0.08rem;
+        margin-bottom: 0.5rem;
+        filter: drop-shadow(0 0.05rem 0.07rem rgba(0, 0, 0, 0.3));
+      }
+
+      .option-buttons-row {
+        display: flex;
+        flex-direction: row;
         width: 100%;
-        max-width: 260px;
+        justify-content: center;
+        align-items: center;
+        gap: 1rem;
+      }
+
+      .option-buttons-row button {
+        /* width: 100%;
+        max-width: 260px; */
+        display: flex;
         padding: 0.75rem 1rem;
         border-radius: 0.75rem;
         border: none;
@@ -162,9 +187,22 @@ export class MeteorActionUiContainer extends LitElement {
         transition: transform 120ms ease, background 120ms ease;
       }
 
-      .options button:hover {
+      .option-buttons-row button:hover {
         background: rgba(255, 255, 255, 0.16);
         transform: translateY(-1px);
+      }
+
+      .divider {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0.5rem 0;
+      }
+
+      .divider .divider-line {
+        width: 80%;
+        height: 1px;
+        background: rgba(255, 255, 255, 0.2);
       }
 
       .qr-section {
@@ -187,8 +225,8 @@ export class MeteorActionUiContainer extends LitElement {
       }
 
       .qr-code-target {
-        width: 170px;
-        height: 170px;
+        width: 150px;
+        height: 150px;
         display: grid;
         place-items: center;
         background: white;
@@ -237,8 +275,8 @@ export class MeteorActionUiContainer extends LitElement {
 
     if (!this.qrCode) {
       this.qrCode = new QRCodeStyling({
-        width: 150,
-        height: 150,
+        width: 130,
+        height: 130,
         type: "svg",
         data: value,
         dotsOptions: {
@@ -274,31 +312,44 @@ export class MeteorActionUiContainer extends LitElement {
             <!-- <img class="link-gif" src="${linkGif}"/> -->
           </div>
         </div>
-        <h2>Choose a Platform</h2>
-        
-        <div class="options">
-          <button @click=${() => this.actionController.executeAction("v1_ext")}>
-              Continue with Browser Extension
-          </button>
-          <button @click=${() => this.actionController.executeAction("v1_web")}>
-            Continue with Web App
-          </button>
-
-          <div class="qr-section">
-            ${this.actionController.meteorV2RequestIdTask.render({
-              initial: () => html`<p>Initializing...</p>`,
-              pending: () => html`<div class="spinner">Generating QR Code...</div>`,
-              complete: (id) => {
-                this.queueQrRender(id);
-                return html`
-                  <div class="qr-container">
-                    <div id="qr-code-target" class="qr-code-target" role="img" aria-label="Meteor Wallet QR code"></div>
-                    <p class="qr-helper">Scan with your mobile device</p>
-                  </div>
-                `;
-              },
-              error: (e) => html`<p class="error">Failed to load QR: ${e}</p>`,
-            })}
+        <div class="meteor-connect-content">
+          <span class="section-action-title">Choose your wallet</span>
+          <div class="options">
+            <div class="option-buttons-row">
+              <button @click=${() => this.actionController.executeAction("v1_ext")}>
+                Browser Extension
+              </button>
+              <button @click=${() => this.actionController.executeAction("v1_web")}>
+                Web App
+              </button>
+            </div>
+            <div class="qr-section">
+              ${this.actionController.meteorV2RequestIdTask.render({
+                initial: () => html`<p>Initializing...</p>`,
+                pending: () => html`<div class="spinner">Generating QR Code...</div>`,
+                complete: (id) => {
+                  this.queueQrRender(id);
+                  return html`
+                    <div class="qr-container">
+                      <div id="qr-code-target" class="qr-code-target" role="img" aria-label="Meteor Wallet QR code"></div>
+                      <p class="qr-helper">Scan with your mobile device</p>
+                    </div>
+                  `;
+                },
+                error: (e) => html`<p class="error">Failed to load QR: ${e}</p>`,
+              })}
+            </div>
+          </div>
+          <div class="divider">
+            <span class="divider-line"></span>
+          </div>
+          <span class="section-action-title">Don't have a wallet?</span>
+          <div class="options">
+            <div class="option-buttons-row">
+              <button @click=${() => this.actionController.executeAction("v1_web")}>
+                Continue with Web App
+              </button>
+            </div>
           </div>
         </div>
       </div>

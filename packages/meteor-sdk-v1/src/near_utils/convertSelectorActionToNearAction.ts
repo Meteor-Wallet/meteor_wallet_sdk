@@ -18,7 +18,7 @@ export const parseArgs = (data: Object | string) => {
   return data;
 };
 
-export const createAction = (action: Action) => {
+export const convertSelectorActionToNearAction = (action: Action) => {
   switch (action.type) {
     case "CreateAccount":
       return actionCreators.createAccount();

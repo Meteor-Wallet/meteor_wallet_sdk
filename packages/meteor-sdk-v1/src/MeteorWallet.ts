@@ -15,6 +15,7 @@ import type {
 import { type ConnectConfig, utils } from "near-api-js";
 import { MeteorLogger } from "./MeteorConnect/logging/MeteorLogger.ts";
 import { isV1ExtensionAvailable } from "./MeteorConnect/utils/isV1ExtensionAvailable.ts";
+import { convertSelectorActionToNearAction } from "./near_utils/convertSelectorActionToNearAction.ts";
 import { EExternalActionType } from "./ported_common/dapp/dapp.enums.ts";
 import {
   type IDappAction_Logout_Data,
@@ -38,7 +39,6 @@ import { NEAR_BASE_CONFIG_FOR_NETWORK } from "./ported_common/near/near_static_d
 import { notNullEmpty } from "./ported_common/utils/nullEmptyString.ts";
 import { CEnvironmentStorageAdapter_Sync } from "./ported_common/utils/storage/EnvironmentStorageAdapter_Sync.ts";
 import { getMeteorPostMessenger } from "./postMessage/MeteorPostMessenger";
-import { createAction } from "./utils/create-action";
 import { resolveWalletUrl } from "./utils/MeteorSdkUtils.ts";
 
 const LOGIN_WALLET_URL_SUFFIX = "/login/";
@@ -523,7 +523,9 @@ export class MeteorWallet {
           );
         }
 
-        const transformedActions = transaction.actions.map((action) => createAction(action));
+        const transformedActions = transaction.actions.map((action) =>
+          convertSelectorActionToNearAction(action),
+        );
 
         const block = await provider.viewBlock({ finality: "final" });
 
@@ -629,7 +631,7 @@ export class ConnectedMeteorWalletAccount extends Account {
           return {
             executionOutcome: await super.signAndSendTransaction({
               receiverId,
-              actions: actions.map((action) => createAction(action)),
+              actions: actions.map((action) => convertSelectorActionToNearAction(action)),
             }),
             sent: true,
           };
