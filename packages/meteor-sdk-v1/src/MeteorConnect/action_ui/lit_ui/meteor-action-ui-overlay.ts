@@ -54,6 +54,9 @@ export class MeteorActionUiOverlay extends LitElement {
   }
 
   render() {
+    if (import.meta.hot) {
+      import.meta.hot.accept();
+    }
     this.logger.log("Rendering MeteorActionUiOverlay");
 
     return html`

@@ -12,7 +12,7 @@ export class MeteorActionUiContainer extends LitElement {
   static styles = css`
     /* Add your styles here */
     .modal {
-      background: green;
+      background: red;
       color: white;
       padding: 20px;
       border-radius: 8px;
@@ -33,7 +33,15 @@ export class MeteorActionUiContainer extends LitElement {
     this.actionController = new ActionUiController(this, this.action, this.cleanupUi);
   }
 
+  // Opt into Vite HMR so edits to this file do not force a full page reload.
+  private registerHmrBoundary() {
+    if (import.meta.hot) {
+      import.meta.hot.accept();
+    }
+  }
+
   render() {
+    this.registerHmrBoundary();
     return html`
       <div class="modal">
         <h2>Choose a Platform</h2>

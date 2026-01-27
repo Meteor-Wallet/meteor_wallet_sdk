@@ -46,3 +46,8 @@ export class ActionUiController implements ReactiveController {
     }
   }
 }
+
+// Mark this module as hot-reloadable to prevent bubbling reloads up to the app.
+if (import.meta.hot) {
+  import.meta.hot.accept();
+}

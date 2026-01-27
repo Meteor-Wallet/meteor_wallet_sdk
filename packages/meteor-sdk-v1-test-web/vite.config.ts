@@ -4,7 +4,8 @@ import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "vite";
 import devtoolsJson from "vite-plugin-devtools-json";
 import { nodePolyfills } from "vite-plugin-node-polyfills";
-import { watchNodeModules } from "vite-plugin-watch-node-modules";
+import { hmrPlugin } from "vite-plugin-web-components-hmr";
+// import { watchNodeModules } from "vite-plugin-watch-node-modules";
 import tsconfigPaths from "vite-tsconfig-paths";
 
 console.log(`Running Vite with NODE_ENV=${process.env.NODE_ENV}`);
@@ -36,6 +37,15 @@ export default defineConfig(({ isSsrBuild }) => ({
       },
     },
     tailwindcss(),
+    // HMR for custom elements authored in the SDK (lit components)
+    hmrPlugin({
+      include: [
+        path.resolve(__dirname, "../meteor-sdk-v1/src/**/*.ts"),
+        path.resolve(__dirname, "../meteor-sdk-v1/src/**/*.tsx"),
+      ],
+      // quiet: false,
+      // force: true,
+    }),
     reactRouter(),
     tsconfigPaths(),
     devtoolsJson(),
@@ -56,6 +66,8 @@ export default defineConfig(({ isSsrBuild }) => ({
     alias: {
       "@meteorwallet/sdk": path.resolve(__dirname, "../meteor-sdk-v1/src"),
     },
+    // Keep module identity stable when linked from workspace
+    preserveSymlinks: true,
   },
   optimizeDeps: {
     // Prevent Vite from pre-bundling your SDK
