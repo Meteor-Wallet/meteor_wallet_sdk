@@ -6,6 +6,10 @@ import QRCodeStyling from "qr-code-styling";
 import type { ExecutableAction } from "../../action/ExecutableAction.ts";
 import { ActionUiController } from "./ActionUiController.ts";
 import { customElement } from "./custom-element"; // Your new util
+import gilroyBoldWoff2 from "./font/gilroy/Gilroy-Bold.woff2?url";
+// Import Gilroy fonts as base64 data URLs
+import gilroyMediumWoff2 from "./font/gilroy/Gilroy-Medium.woff2?url";
+import gilroySemiboldWoff2 from "./font/gilroy/Gilroy-Semibold.woff2?url";
 import animateLogoStyles from "./graphical/animate_meteor_logo.scss?inline";
 import linkGif from "./graphical/link.gif";
 // import meteorLogoSvg from "./graphical/meteor-logo-animate.svg?raw";
@@ -19,6 +23,31 @@ export class MeteorActionUiContainer extends LitElement {
   static styles = [
     unsafeCSS(animateLogoStyles),
     css`
+      /* Gilroy font-face declarations */
+      @font-face {
+        font-family: 'Gilroy';
+        src: url(${unsafeCSS(gilroyMediumWoff2)}) format('woff2');
+        font-weight: 500;
+        font-style: normal;
+        font-display: swap;
+      }
+
+      @font-face {
+        font-family: 'Gilroy';
+        src: url(${unsafeCSS(gilroySemiboldWoff2)}) format('woff2');
+        font-weight: 600;
+        font-style: normal;
+        font-display: swap;
+      }
+
+      @font-face {
+        font-family: 'Gilroy';
+        src: url(${unsafeCSS(gilroyBoldWoff2)}) format('woff2');
+        font-weight: 700;
+        font-style: normal;
+        font-display: swap;
+      }
+
       /* Add your styles here */
       .modal {
         background: linear-gradient(135deg, rgb(66, 44, 255) 0%, rgb(75, 45, 131) 100%);
@@ -47,11 +76,17 @@ export class MeteorActionUiContainer extends LitElement {
         gap: 1rem;
         padding: 0.6rem;
         /* background: rgba(255, 255, 255, 0.3); */
-        background: linear-gradient(to bottom, rgba(255, 255, 255, 0.35) 0%, rgba(255, 255, 255, 0.05) 100%);
+        background: linear-gradient(130deg, rgba(255, 255, 255, 0.35) 0%, rgba(255, 255, 255, 0.05) 67%, rgba(145, 115, 201, 0.15) 100%);
         border-bottom: 1px solid rgb(46, 24, 200);
         /* border-radius: 0.75rem; */
         align-items: center;
         justify-content: start
+      }
+
+      .meteor-logo {
+        width: 3.5rem;
+        height: 3.5rem;
+        margin: 0 0 0.7em 0.7rem;
       }
 
       .title-text-box {
@@ -59,7 +94,7 @@ export class MeteorActionUiContainer extends LitElement {
         flex-direction: column;
         justify-content: center;
         align-items: flex-start;
-        font-family: Gilroy, sans-serif;
+        font-family: 'Gilroy', sans-serif;
       }
 
       .title-text-box .title {
@@ -83,12 +118,6 @@ export class MeteorActionUiContainer extends LitElement {
       .link-gif {
         width: 5rem;
         height: 1rem;
-      }
-
-      .meteor-logo {
-        width: 3.5rem;
-        height: 3.5rem;
-        margin: 0 0 0.7em 0.7rem;
       }
 
       .meteor-logo svg {
