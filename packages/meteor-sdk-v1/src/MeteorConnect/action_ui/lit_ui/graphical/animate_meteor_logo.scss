@@ -56,7 +56,7 @@
 }
 
 .meteor-logo {
-  //background: red;
+  // background: red;
   .meteor-logo-circle {
     animation: 2s ease-in-out 0.25s infinite alternate logo-shake-less;
   }
@@ -65,24 +65,19 @@
     fill: url(#circle-gradient) rgba(50, 60, 150, 0.15);
   }
 
+  // #circle-gradient {
+  //   --color-stop: rgba(50, 60, 200, 0.3);
+  //   --color-bot: rgba(50, 60, 200, 0.15);
+  // }
   #circle-gradient {
-    --color-stop: rgba(50, 60, 200, 0.3);
-    --color-bot: rgba(50, 60, 200, 0.15);
+    --color-stop: rgba(224, 234, 250, 0.3);
+    --color-bot: rgba(200, 205, 253, 0.15);
   }
 }
 
-.mode-dark {
-  .meteor-logo {
-    #circle-gradient {
-      --color-stop: rgba(224, 234, 250, 0.3);
-      --color-bot: rgba(200, 205, 253, 0.15);
-    }
-  }
-
-  #meteor_svg_logo {
-    filter: drop-shadow(0 0.2em rgba(0, 30, 50, 0.5));
-    //filter: drop-shadow(0 -0.2em rgba(255, 255, 255, 0.5));
-  }
+#meteor_svg_logo {
+  filter: drop-shadow(0 0.2em rgba(0, 30, 50, 0.5));
+  //filter: drop-shadow(0 -0.2em rgba(255, 255, 255, 0.5));
 }
 
 @keyframes logo-shake {

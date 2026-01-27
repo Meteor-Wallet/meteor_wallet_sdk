@@ -32,6 +32,14 @@ export class MeteorActionUiContainer extends LitElement {
         z-index: 10001;
       }
 
+      h2 {
+        font-size: 1rem;
+      }
+
+      p {
+        margin: 0;
+      }
+
       .meteor-logo {
         width: 100px;
         height: 100px;
@@ -69,9 +77,11 @@ export class MeteorActionUiContainer extends LitElement {
       }
 
       .qr-section {
-        width: 100%;
-        max-width: 320px;
-        margin-top: 1.5rem;
+        // width: 100%;
+        display: flex;
+        align-items: center;
+        // flex-gap: 1rem;
+        justify-content: center;
         padding: 1rem;
         border-radius: 1rem;
         background: rgba(0, 0, 0, 0.18);
@@ -80,7 +90,7 @@ export class MeteorActionUiContainer extends LitElement {
       .qr-container {
         display: flex;
         flex-direction: column;
-        gap: 0.5rem;
+        gap: 1rem;
         align-items: center;
         justify-content: center;
       }
@@ -97,8 +107,9 @@ export class MeteorActionUiContainer extends LitElement {
       }
 
       .qr-helper {
-        font-size: 0.95rem;
-        color: rgba(255, 255, 255, 0.9);
+        font-size: 0.8rem;
+        font-weight: 500;
+        color: rgba(255, 255, 255, 0.65);
       }
     `,
   ];

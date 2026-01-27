@@ -31,7 +31,6 @@ export class MeteorActionUiOverlay extends LitElement {
         border: 1px solid #2b2d38;
         overflow: hidden;
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-        background-color: #12122b;
       }
     `;
 
