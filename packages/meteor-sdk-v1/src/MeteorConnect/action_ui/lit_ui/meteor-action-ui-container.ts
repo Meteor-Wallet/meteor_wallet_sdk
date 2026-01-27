@@ -69,8 +69,8 @@ export class MeteorActionUiContainer extends LitElement {
     }
 
     .qr-code-target {
-      width: 260px;
-      height: 260px;
+      width: 170px;
+      height: 170px;
       display: grid;
       place-items: center;
       background: white;
@@ -117,8 +117,8 @@ export class MeteorActionUiContainer extends LitElement {
 
     if (!this.qrCode) {
       this.qrCode = new QRCodeStyling({
-        width: 240,
-        height: 240,
+        width: 150,
+        height: 150,
         type: "svg",
         data: value,
         dotsOptions: {
@@ -142,6 +142,9 @@ export class MeteorActionUiContainer extends LitElement {
     this.registerHmrBoundary();
     return html`
       <div class="modal">
+        <div class="meteor-logo-animated">
+          
+        </div>
         <h2>Choose a Platform</h2>
         
         <div class="options">

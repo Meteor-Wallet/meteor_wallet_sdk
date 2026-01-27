@@ -23,8 +23,8 @@ export class ActionUiController implements ReactiveController {
       task: async () => {
         // const id = await this.requestIdPromise;
         // return id;
-        await wait_utils.waitSeconds(2);
-        return "test-id";
+        await wait_utils.waitSeconds(0.2);
+        return "meteorwallet://wallet";
       },
       args: () => [],
     });
