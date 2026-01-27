@@ -23,6 +23,16 @@ export class MeteorActionUiOverlay extends LitElement {
         z-index: 10000;
         pointer-events: auto;
       }
+
+      .modal-container {
+        height: 556px;
+        width: 415px;
+        border-radius: 1.2em;
+        border: 1px solid #2b2d38;
+        overflow: hidden;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        background-color: #12122b;
+      }
     `;
 
   private _handleOverlayClick() {
