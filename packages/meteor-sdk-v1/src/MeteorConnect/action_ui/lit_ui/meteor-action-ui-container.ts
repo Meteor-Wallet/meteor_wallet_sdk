@@ -1,89 +1,107 @@
-import { css, html, LitElement } from "lit";
+import { css, html, LitElement, unsafeCSS } from "lit";
+// import {  } from "lit/directive.js";
 import { property, query } from "lit/decorators.js"; // You MUST import this explicitly
+import { unsafeSVG } from "lit/directives/unsafe-svg.js";
 import QRCodeStyling from "qr-code-styling";
 import type { ExecutableAction } from "../../action/ExecutableAction.ts";
 import { ActionUiController } from "./ActionUiController.ts";
 import { customElement } from "./custom-element"; // Your new util
+import animateLogoStyles from "./graphical/animate_meteor_logo.scss?inline";
+import meteorLogoSvg from "./graphical/meteor-logo-animate.svg?raw";
 
 @customElement("meteor-action-ui-container")
 export class MeteorActionUiContainer extends LitElement {
   @property({ type: Object }) action!: ExecutableAction<any>;
   @property({ attribute: false }) cleanupUi?: () => void;
 
-  static styles = css`
-    /* Add your styles here */
-    .modal {
-      background: linear-gradient(135deg, rgb(66, 44, 255) 0%, rgb(75, 45, 131) 100%);
-      color: white;
-      box-sizing: border-box;
-      padding: 1.5em;
-      position: relative;
-      overflow: hidden;
-      width: 100%;
-      height: 100%;
-      margin: auto;
-      text-align: center;
-      z-index: 10001;
-    }
+  static styles = [
+    unsafeCSS(animateLogoStyles),
+    css`
+      /* Add your styles here */
+      .modal {
+        background: linear-gradient(135deg, rgb(66, 44, 255) 0%, rgb(75, 45, 131) 100%);
+        color: white;
+        box-sizing: border-box;
+        padding: 1.5em;
+        position: relative;
+        overflow: hidden;
+        width: 100%;
+        height: 100%;
+        margin: auto;
+        text-align: center;
+        z-index: 10001;
+      }
 
-    .options {
-      display: flex;
-      flex-direction: column;
-      gap: 1rem;
-      align-items: center;
-    }
+      .meteor-logo {
+        width: 100px;
+        height: 100px;
+        margin: 0 auto 1rem;
+      }
 
-    .options button {
-      width: 100%;
-      max-width: 260px;
-      padding: 0.75rem 1rem;
-      border-radius: 0.75rem;
-      border: none;
-      background: rgba(255, 255, 255, 0.12);
-      color: white;
-      font-weight: 600;
-      cursor: pointer;
-      transition: transform 120ms ease, background 120ms ease;
-    }
+      .meteor-logo svg {
+        width: 100%;
+        height: 100%;
+      }
 
-    .options button:hover {
-      background: rgba(255, 255, 255, 0.16);
-      transform: translateY(-1px);
-    }
+      .options {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+        align-items: center;
+      }
 
-    .qr-section {
-      width: 100%;
-      max-width: 320px;
-      margin-top: 1.5rem;
-      padding: 1rem;
-      border-radius: 1rem;
-      background: rgba(0, 0, 0, 0.18);
-    }
+      .options button {
+        width: 100%;
+        max-width: 260px;
+        padding: 0.75rem 1rem;
+        border-radius: 0.75rem;
+        border: none;
+        background: rgba(255, 255, 255, 0.12);
+        color: white;
+        font-weight: 600;
+        cursor: pointer;
+        transition: transform 120ms ease, background 120ms ease;
+      }
 
-    .qr-container {
-      display: flex;
-      flex-direction: column;
-      gap: 0.5rem;
-      align-items: center;
-      justify-content: center;
-    }
+      .options button:hover {
+        background: rgba(255, 255, 255, 0.16);
+        transform: translateY(-1px);
+      }
 
-    .qr-code-target {
-      width: 170px;
-      height: 170px;
-      display: grid;
-      place-items: center;
-      background: white;
-      border-radius: 0.75rem;
-      padding: 0.5rem;
-      box-sizing: border-box;
-    }
+      .qr-section {
+        width: 100%;
+        max-width: 320px;
+        margin-top: 1.5rem;
+        padding: 1rem;
+        border-radius: 1rem;
+        background: rgba(0, 0, 0, 0.18);
+      }
 
-    .qr-helper {
-      font-size: 0.95rem;
-      color: rgba(255, 255, 255, 0.9);
-    }
-  `;
+      .qr-container {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .qr-code-target {
+        width: 170px;
+        height: 170px;
+        display: grid;
+        place-items: center;
+        background: white;
+        border-radius: 0.75rem;
+        padding: 0.5rem;
+        box-sizing: border-box;
+      }
+
+      .qr-helper {
+        font-size: 0.95rem;
+        color: rgba(255, 255, 255, 0.9);
+      }
+    `,
+  ];
 
   private actionController!: ActionUiController;
   @query("#qr-code-target") private qrCodeTarget?: HTMLDivElement;
@@ -142,8 +160,8 @@ export class MeteorActionUiContainer extends LitElement {
     this.registerHmrBoundary();
     return html`
       <div class="modal">
-        <div class="meteor-logo-animated">
-          
+        <div class="meteor-logo">
+          ${unsafeSVG(meteorLogoSvg)}
         </div>
         <h2>Choose a Platform</h2>
         
