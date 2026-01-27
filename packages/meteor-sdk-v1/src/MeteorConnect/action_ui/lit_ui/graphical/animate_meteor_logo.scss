@@ -75,11 +75,6 @@
   }
 }
 
-#meteor_svg_logo {
-  filter: drop-shadow(-0.15rem 0.15rem 0.15em rgba(10, 40, 120, 0.2));
-  //filter: drop-shadow(0 -0.2em rgba(255, 255, 255, 0.5));
-}
-
 @keyframes logo-shake {
   0% {
     transform: translate(0.25em, -0.25em);

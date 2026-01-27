@@ -2,6 +2,7 @@ import type { ExecutableAction } from "../action/ExecutableAction.ts";
 import { MeteorLogger } from "../logging/MeteorLogger.ts";
 import { METEOR_ACTION_UI_POPUP_PARENT_ID } from "./action_ui.static.ts";
 import type { IRenderActionUi_Input } from "./action_ui.types.ts";
+import { GILROY_FONT_FAMILY_DATA_URL_STYLESHEET } from "./lit_ui/font/gilroy-font-kit/gilroy_font.static.ts";
 import { MeteorActionUiContainer } from "./lit_ui/meteor-action-ui-container.ts";
 import { MeteorActionUiOverlay } from "./lit_ui/meteor-action-ui-overlay.ts";
 
@@ -17,6 +18,7 @@ declare global {
 export class ActionUi {
   private container: HTMLElement | null = null;
   private actionUiComponent: MeteorActionUiContainer | null = null;
+  private styleElement: HTMLStyleElement | null = null;
   static shared: ActionUi = new ActionUi();
   private logger = MeteorLogger.createLogger("MeteorConnect:ActionUi");
 
@@ -71,6 +73,12 @@ export class ActionUi {
     if (!this.container) {
       this.container = this.createPopupOverlay();
       document.body.appendChild(this.container);
+    }
+
+    if (this.styleElement == null) {
+      this.styleElement = document.createElement("style");
+      this.styleElement.textContent = GILROY_FONT_FAMILY_DATA_URL_STYLESHEET;
+      document.head.appendChild(this.styleElement);
     }
 
     this.actionUiComponent = new MeteorActionUiContainer();
