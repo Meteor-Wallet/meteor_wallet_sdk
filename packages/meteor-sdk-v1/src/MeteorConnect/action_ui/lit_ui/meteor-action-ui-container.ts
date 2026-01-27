@@ -7,6 +7,11 @@ import { ActionUiController } from "./ActionUiController";
 import { customElement } from "./custom-element"; // Your new util
 import animateLogoStyles from "./graphical/animate_meteor_logo.scss?inline";
 import meteorLogoSvgOther from "./graphical/logo_svg_animate_grouped.svg?raw";
+import "./meteor-action-button";
+import iconExtension from "./graphical/icon-extension.svg?raw";
+import iconIos from "./graphical/icon-ios.svg?raw";
+import iconWeb from "./graphical/icon-web.svg?raw";
+import iconAndroid from "./graphical/svg_icons/icon_android.svg?raw";
 
 // color on tip of meteor
 // rgb(77, 134, 232)
@@ -22,12 +27,21 @@ export class MeteorActionUiContainer extends LitElement {
   static styles = [
     unsafeCSS(animateLogoStyles),
     css`
+      :host {
+        --meteor-brand-blue-lightest: 87, 144, 242;
+
+        --meteor-brand-blue-dark: 45, 34, 100;
+        --meteor-brand-blue-darkest: 28, 28, 69;
+
+        --modal-accent-darkish: 66, 44, 150;
+      }
+
       /* Add your styles here */
       .modal {
         font-family: 'Gilroy';
         font-weight: 500;
         font-style: normal;
-        background: linear-gradient(135deg, rgb(28, 28, 69) 0%, rgb(45, 34, 100) 60%, rgb(66, 44, 150) 100%);
+        background: linear-gradient(135deg, rgb(var(--meteor-brand-blue-darkest)) 0%, rgb(var(--meteor-brand-blue-dark)) 60%, rgb(var(--modal-accent-darkish)) 100%);
         color: white;
         box-sizing: border-box;
         position: relative;
@@ -53,7 +67,7 @@ export class MeteorActionUiContainer extends LitElement {
         gap: 0.7rem;
         padding: 0.7rem;
         /* background: rgba(255, 255, 255, 0.3); */
-        background: linear-gradient(140deg, rgba(87, 144, 242, 0.7) 0%, rgba(136, 114, 255, 0.5) 47%, rgba(145, 115, 201, 0.15) 100%);
+        background: linear-gradient(140deg, rgba(var(--meteor-brand-blue-lightest), 1) 0%, rgba(136, 114, 255, 0.5) 47%, rgba(145, 115, 201, 0.15) 100%);
         border-bottom: 1px solid rgb(25, 25, 60);
         /* border-radius: 0.75rem; */
         align-items: center;
@@ -66,8 +80,9 @@ export class MeteorActionUiContainer extends LitElement {
       }
 
       .meteor-logo {
-        width: 3.8em;
-        height: 3.8em;
+        width: 3.6em;
+        height: 3.6em;
+        margin: -0.2em;
         /* padding: 0em 0.2em 0.7em 0.7rem; */
         border-radius: 100%;
         /* background: rgba(255, 255, 255, 0.5); */
@@ -104,7 +119,7 @@ export class MeteorActionUiContainer extends LitElement {
         font-size: 0.8rem;
         font-weight: 700;
         line-height: 0.9em;
-        letter-spacing: 0.27rem;
+        letter-spacing: 0.28rem;
         text-transform: uppercase;
         color: rgba(160, 160, 255, 1);
         /* filter: drop-shadow(0 0.05rem 0.07rem rgba(25, 25, 75, 0.3)); */
@@ -126,11 +141,13 @@ export class MeteorActionUiContainer extends LitElement {
       }
 
       .options {
+        flex-grow: 1;
         padding: 1rem;
         display: flex;
         flex-direction: column;
-        gap: 1rem;
+        gap: 0.8rem;
         align-items: center;
+        /* justify-content: space-evenly */
       }
 
       .meteor-connect-content {
@@ -153,6 +170,7 @@ export class MeteorActionUiContainer extends LitElement {
         width: 100%;
         justify-content: center;
         align-items: center;
+        flex-wrap: wrap;
         gap: 1rem;
       }
 
@@ -180,7 +198,7 @@ export class MeteorActionUiContainer extends LitElement {
         display: flex;
         align-items: center;
         justify-content: center;
-        margin: 0.5rem 0;
+        /* margin: 0.5rem 0; */
       }
 
       .divider .section-action-title {
@@ -208,26 +226,27 @@ export class MeteorActionUiContainer extends LitElement {
       .qr-container {
         display: flex;
         flex-direction: column;
-        gap: 1rem;
+        gap: 0.8rem;
         align-items: center;
         justify-content: center;
       }
 
       .qr-code-target {
-        width: 150px;
-        height: 150px;
+        width: 130px;
+        height: 130px;
         display: grid;
         place-items: center;
         background: white;
         border-radius: 0.75rem;
-        padding: 0.5rem;
+        padding: 0.25rem;
         box-sizing: border-box;
       }
 
       .qr-helper {
         font-size: 0.8rem;
+        line-height: 1rem;
         font-weight: 500;
-        color: rgba(255, 255, 255, 0.65);
+        color: rgba(160, 160, 255, 0.8);
       }
     `,
   ];
@@ -264,8 +283,8 @@ export class MeteorActionUiContainer extends LitElement {
 
     if (!this.qrCode) {
       this.qrCode = new QRCodeStyling({
-        width: 130,
-        height: 130,
+        width: 120,
+        height: 120,
         type: "svg",
         data: value,
         dotsOptions: {
@@ -302,12 +321,16 @@ export class MeteorActionUiContainer extends LitElement {
           <span class="section-action-title">Choose your wallet</span>
           <div class="options">
             <div class="option-buttons-row">
-              <button @click=${() => this.actionController.executeAction("v1_ext")}>
-                Browser Extension
-              </button>
-              <button @click=${() => this.actionController.executeAction("v1_web")}>
-                Web App
-              </button>
+              <meteor-action-button
+                label="Browser Extension"
+                .icon=${iconExtension}
+                @meteor-button-click=${() => this.actionController.executeAction("v1_ext")}
+              ></meteor-action-button>
+              <meteor-action-button
+                label="Web App"
+                .icon=${iconWeb}
+                @meteor-button-click=${() => this.actionController.executeAction("v1_web")}
+              ></meteor-action-button>
             </div>
             <div class="qr-section">
               ${this.actionController.meteorV2RequestIdTask.render({
@@ -333,18 +356,26 @@ export class MeteorActionUiContainer extends LitElement {
           </div>
           <div class="options">
             <div class="option-buttons-row">
-              <button @click=${() => this.actionController.executeAction("v1_web")}>
-                Android
-              </button>
-              <button @click=${() => this.actionController.executeAction("v1_web")}>
-                iOS
-              </button>
-              <button @click=${() => this.actionController.executeAction("v1_web")}>
-                Extension
-              </button>
-              <button @click=${() => this.actionController.executeAction("v1_web")}>
-                Web
-              </button>
+              <meteor-action-button
+                label="Android"
+                .icon=${iconAndroid}
+                @meteor-button-click=${() => this.actionController.executeAction("v1_web")}
+              ></meteor-action-button>
+              <meteor-action-button
+                label="iOS"
+                .icon=${iconIos}
+                @meteor-button-click=${() => this.actionController.executeAction("v1_web")}
+              ></meteor-action-button>
+              <meteor-action-button
+                label="Extension"
+                .icon=${iconExtension}
+                @meteor-button-click=${() => this.actionController.executeAction("v1_web")}
+              ></meteor-action-button>
+              <meteor-action-button
+                label="Web"
+                .icon=${iconWeb}
+                @meteor-button-click=${() => this.actionController.executeAction("v1_web")}
+              ></meteor-action-button>
             </div>
           </div>
         </div>
