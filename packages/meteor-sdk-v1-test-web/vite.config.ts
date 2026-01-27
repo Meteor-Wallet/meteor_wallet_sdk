@@ -1,6 +1,7 @@
 import * as path from "node:path";
 import { reactRouter } from "@react-router/dev/vite";
 import tailwindcss from "@tailwindcss/vite";
+import os from "os";
 import { defineConfig } from "vite";
 import devtoolsJson from "vite-plugin-devtools-json";
 import { nodePolyfills } from "vite-plugin-node-polyfills";
@@ -10,10 +11,18 @@ import tsconfigPaths from "vite-tsconfig-paths";
 
 console.log(`Running Vite with NODE_ENV=${process.env.NODE_ENV}`);
 
+// Helper to get local IPv4
+const networkInterfaces = os.networkInterfaces();
+const localIp = Object.values(networkInterfaces)
+  .flat()
+  .find((i) => i?.family === "IPv4" && !i.internal)?.address;
+
 export default defineConfig(({ isSsrBuild }) => ({
   server: {
+    host: true,
     hmr: {
-      overlay: true, // Shows errors in the browser
+      overlay: true, // Shows errors in the browser,
+      host: localIp || "localhost",
     },
     warmup: {
       clientFiles: ["./app/**/*.{js,ts,jsx,tsx}", "../meteor-sdk-v1/src/**/*.ts"],
@@ -74,6 +83,9 @@ export default defineConfig(({ isSsrBuild }) => ({
     exclude: ["@meteorwallet/sdk"],
   },
   define: {
-    "process.env": {},
+    "process.env": {
+      NODE_ENV: JSON.stringify(process.env.NODE_ENV),
+      LOCAL_IP: localIp || "localhost",
+    },
   },
 }));

@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { NetworkSelector } from "~/pages/near-connect/NetworkSelector";
 import { WalletActions } from "~/pages/near-connect/WalletActions";
 import { Button } from "~/ui/Button";
+import { devManifest } from "./dev-manifest";
 
 export const NearConnectTest = () => {
   const [network, setNetwork] = useState<"testnet" | "mainnet">("testnet");
@@ -24,7 +25,7 @@ export const NearConnectTest = () => {
 
   const [connector] = useState<NearConnector>(() => {
     const connector = new NearConnector({
-      manifest: process.env.NODE_ENV === "production" ? undefined : "/manifest.json",
+      manifest: process.env.NODE_ENV === "production" ? undefined : devManifest,
       providers: { mainnet: ["https://relmn.aurora.dev"] },
       network,
       logger,

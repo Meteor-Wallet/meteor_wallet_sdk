@@ -27,6 +27,8 @@ import type {
 } from "./near-connect.types";
 import { head } from "./view";
 
+// import { head } from "./view";
+
 const logoImage = new Image();
 logoImage.src = "https://meteorwallet.app/loader.gif";
 
