@@ -1,6 +1,5 @@
 import { useState } from "react";
 import "./App.css";
-import { bodyDesktop } from "../meteor-near-connect/view";
 import { setupNearConnectStyles } from "./near-connect-layout/setupNearConnect";
 
 setupNearConnectStyles();
@@ -24,7 +23,7 @@ function App() {
       <div className={"popup-test-area"}>
         {emulateNearConnectPopup ? (
           <div className="test hot-connector popup">
-            <div className="modal-container">
+            {/* <div className="modal-container">
               <div className="modal-content">
                 <div className="modal-body" style={{ padding: 0, overflow: "auto" }}>
                   <div
@@ -45,11 +44,11 @@ function App() {
                   <p className="get-wallet-link">Don't have a wallet?</p>
                 </div>
               </div>
-            </div>
+            </div> */}
           </div>
         ) : (
           <div className={"popup-test-container"}>
-            <div
+            {/* <div
               className={"popup-test-wallet-area"}
               style={{
                 position: "relative",
@@ -61,7 +60,7 @@ function App() {
             />
             <div className="footer">
               <p>HOT Connector</p>
-            </div>
+            </div> */}
           </div>
         )}
       </div>
