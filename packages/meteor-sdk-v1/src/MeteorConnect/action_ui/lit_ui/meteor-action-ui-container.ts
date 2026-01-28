@@ -31,12 +31,30 @@ export class MeteorActionUiContainer extends LitElement {
     unsafeCSS(animateLogoStyles),
     css`
       :host {
-        --meteor-brand-blue-lightest: 87, 144, 242;
+        --meteor-brand-blue-standard: 61, 39, 246;
+        --meteor-brand-blue-darker: 65, 30, 223;
 
+        /* --meteor-topbar-blue-lightest: 87, 144, 242; */
+        --meteor-topbar-blue-lightest: 110, 78, 255;
+        --meteor-topbar-blue-standard: 88, 46, 253;
+        /* --meteor-topbar-blue-darker: 88, 46, 253; */
+
+        --meteor-brand-accent: 101, 31, 239;
+        /* --meteor-brand-blue-lightest: 87, 144, 242;
         --meteor-brand-blue-dark: 45, 34, 100;
-        --meteor-brand-blue-darkest: 28, 28, 69;
+        --meteor-brand-blue-darkest: 28, 28, 69; */
 
-        --modal-accent-darkish: 66, 44, 150;
+        --meteor-button-blue-light: 60, 18, 230;
+        --meteor-button-accent-light: 88, 46, 253;
+        --meteor-button-text-color: 255, 255, 255;
+
+        --meteor-dark-gray-lightest: 37, 37, 50;
+        --meteor-dark-gray-standard: 27, 27, 38;
+        --meteor-dark-gray-darkest: 18, 18, 29;
+
+        --meteor-text-on-dark-light: 220, 220, 255;
+        --meteor-text-on-dark-standard: 180, 180, 220;
+        --meteor-text-on-dark-dark: 110, 110, 150;
       }
 
       /* Add your styles here */
@@ -44,8 +62,8 @@ export class MeteorActionUiContainer extends LitElement {
         font-family: 'Gilroy';
         font-weight: 500;
         font-style: normal;
-        background: linear-gradient(135deg, rgb(var(--meteor-brand-blue-darkest)) 0%, rgb(var(--meteor-brand-blue-dark)) 60%, rgb(var(--modal-accent-darkish)) 100%);
-        color: white;
+        background: linear-gradient(135deg, rgb(var(--meteor-dark-gray-darkest)) 0%, rgb(var(--meteor-dark-gray-standard)) 100%);
+        color: rgb(var(--meteor-text-on-dark-light));
         box-sizing: border-box;
         position: relative;
         overflow: hidden;
@@ -70,11 +88,17 @@ export class MeteorActionUiContainer extends LitElement {
         gap: 0.7rem;
         padding: 0.7rem;
         /* background: rgba(255, 255, 255, 0.3); */
-        background: linear-gradient(140deg, rgba(var(--meteor-brand-blue-lightest), 1) 0%, rgba(136, 114, 255, 0.5) 47%, rgba(145, 115, 201, 0.15) 100%);
-        border-bottom: 1px solid rgb(25, 25, 60);
+        background: linear-gradient(140deg, rgba(var(--meteor-topbar-blue-lightest), 0.8) 0%, rgba(var(--meteor-topbar-blue-standard), 0.5) 100%);
+        border-bottom: 1px solid rgb(var(--meteor-dark-gray-darkest));
         /* border-radius: 0.75rem; */
         align-items: center;
         justify-content: space-between
+      }
+
+      .meteor-logo-and-title {
+        display: flex;
+        flex-direction: row;
+        gap: 0.85rem;
       }
 
       #meteor_svg_logo {
@@ -89,7 +113,7 @@ export class MeteorActionUiContainer extends LitElement {
         /* padding: 0em 0.2em 0.7em 0.7rem; */
         border-radius: 100%;
         /* background: rgba(255, 255, 255, 0.5); */
-        background: linear-gradient(45deg, rgba(23, 31, 85, 0.85) 0%, rgba(43, 51, 123, 0.65) 15%, rgba(77, 134, 232, 0.05));
+        background: linear-gradient(45deg, rgba(var(--meteor-topbar-blue-standard), 0.85) 0%, rgba(43, 51, 123, 0.65) 15%, rgba(var(--meteor-topbar-blue-lightest), 0.05));
       }
 
       .meteor-logo svg {
@@ -105,18 +129,19 @@ export class MeteorActionUiContainer extends LitElement {
         margin: -0.2em;
         display: flex;
         flex-direction: column;
-        align-items: center;
+        align-items: center;  
         justify-content: center;
         /* padding: 0em 0.2em 0.7em 0.7rem; */
         border-radius: 100%;
         /* background: rgba(255, 255, 255, 0.5); */
-        background: rgba(0, 0, 0, 0.02);
+        background: rgba(var(--meteor-topbar-blue-lightest), 0.3);
+        filter: drop-shadow(0 0.05rem 0.07rem rgba(0, 0, 0, 0.5));
       }
 
       .close-circle svg {
         width: 35%;
         height: 35%;
-        color: rgba(255, 255, 255, 0.2);
+        color: rgba(var(--meteor-text-on-dark-light), 0.3);
         filter: drop-shadow(0 0.05rem 0.07rem rgba(0, 0, 0, 0.3));
       }
 
@@ -182,7 +207,7 @@ export class MeteorActionUiContainer extends LitElement {
         font-size: 0.8rem;
         font-weight: 700;
         text-transform: uppercase;
-        color: rgba(170, 160, 255, 0.8);
+        color: rgba(var(--meteor-text-on-dark-dark), 1);
         letter-spacing: 0.08rem;
         margin-bottom: 0.5rem;
         filter: drop-shadow(0 0.05rem 0.07rem rgba(0, 0, 0, 0.4));
@@ -244,8 +269,8 @@ export class MeteorActionUiContainer extends LitElement {
         justify-content: center;
         padding: 1rem;
         border-radius: 1rem;
-        background: rgba(0, 0, 0, 0.18);
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        background: rgba(var(--meteor-dark-gray-darkest), 1);
+        box-shadow: inset 0 4px 20px rgba(0, 0, 0, 0.3);
       }
 
       .qr-container {
@@ -271,7 +296,7 @@ export class MeteorActionUiContainer extends LitElement {
         font-size: 0.8rem;
         line-height: 1rem;
         font-weight: 500;
-        color: rgba(160, 160, 255, 0.8);
+        color: rgba(var(--meteor-text-on-dark-dark), 1);
       }
     `,
   ];
@@ -334,6 +359,7 @@ export class MeteorActionUiContainer extends LitElement {
     return html`
       <div class="modal">
         <div class="meteor-connect-title-box">
+        <div class="meteor-logo-and-title">
           <div class="meteor-logo">
             ${unsafeSVG(meteorLogoSvgOther)}
           </div>
@@ -341,6 +367,7 @@ export class MeteorActionUiContainer extends LitElement {
             <span class="title">Meteor</span>
             <span class="subtitle">Connect</span>
           </div>
+        </div>
           <div class="close-circle">
             ${unsafeSVG(iconClose)}
           </div>

@@ -15,17 +15,18 @@ export class MeteorActionButton extends LitElement {
 
   static styles = css`
     :host {
-      --meteor-brand-blue-lightest: 77, 144, 232;
-      --meteor-brand-blue-light: 57, 124, 212;
-      --button-dark-part: 35, 69, 105;
-      --background-primary: 27, 84, 182;
-      /* --background-primary-hover: rgba(255, 255, 255, 0.16); */
-      /* --background-primary-active: rgba(255, 255, 255, 0.2); */
-      --text-color: white;
-      --transition: transform 120ms ease, background 120ms ease;
       --border-radius: 0.75rem;
       --padding: 0.55rem 0.8rem;
       --gap: 0.4rem;
+      --transition: transform 120ms ease, background 120ms ease;
+/*       --meteor-brand-blue-lightest: 77, 144, 232;
+      --meteor-brand-blue-light: 57, 124, 212;
+      --button-dark-part: 35, 69, 105;
+      --background-primary: 27, 84, 182;
+      --background-primary-hover: rgba(255, 255, 255, 0.16);
+      --background-primary-active: rgba(255, 255, 255, 0.2);
+      --text-color: white;
+      --transition: transform 120ms ease, background 120ms ease; */
     }
 
     button {
@@ -36,11 +37,11 @@ export class MeteorActionButton extends LitElement {
       padding: var(--padding);
       /* border: none; */
       border-radius: var(--border-radius);
-      border: 1px solid rgba(var(--meteor-brand-blue-light), 0.5);
+      border: 1px solid rgba(var(--meteor-button-blue-light), 0.5);
       box-sizing: content-box;
-      background: linear-gradient(135deg, rgba(var(--meteor-brand-blue-light), 1) 0%, rgba(var(--background-primary), 0.7) 100%);
+      background: linear-gradient(135deg, rgba(var(--meteor-button-blue-light), 0.8) 0%, rgba(var(--meteor-button-accent-light), 0.7) 100%);
       filter: drop-shadow(0 3px 10px rgba(0, 0, 0, 0.2));
-      color: var(--text-color);
+      color: rgba(var(--meteor-text-on-dark-light), 1);
       font-weight: 700;
       letter-spacing: 0.035rem;
       line-height: 1em;
@@ -52,12 +53,12 @@ export class MeteorActionButton extends LitElement {
     }
 
     button:hover:not(:disabled) {
-      background: linear-gradient(135deg, rgba(var(--meteor-brand-blue-lightest), 1) 0%, rgba(var(--meteor-brand-blue-light), 0.7) 100%);
+      background: linear-gradient(135deg, rgba(var(--meteor-button-blue-light), 1) 0%, rgba(var(--meteor-button-accent-light), 1) 100%);
       transform: translateY(-1px);
     }
 
     button:active:not(:disabled) {
-      background: linear-gradient(135deg, rgba(var(--meteor-brand-blue-lightest), 1) 0%, rgba(var(--meteor-brand-blue-light), 0.7) 100%);
+      background: linear-gradient(135deg, rgba(var(--meteor-button-blue-light), 1) 0%, rgba(var(--meteor-button-accent-light), 1) 100%);
       transform: translateY(0);
     }
 
