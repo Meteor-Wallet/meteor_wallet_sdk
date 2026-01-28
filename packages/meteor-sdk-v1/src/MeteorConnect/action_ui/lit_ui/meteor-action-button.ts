@@ -15,14 +15,17 @@ export class MeteorActionButton extends LitElement {
 
   static styles = css`
     :host {
-      --background-primary: 87, 144, 242;
+      --meteor-brand-blue-lightest: 77, 144, 232;
+      --meteor-brand-blue-light: 57, 124, 212;
+      --button-dark-part: 35, 69, 105;
+      --background-primary: 27, 84, 182;
       /* --background-primary-hover: rgba(255, 255, 255, 0.16); */
       /* --background-primary-active: rgba(255, 255, 255, 0.2); */
       --text-color: white;
       --transition: transform 120ms ease, background 120ms ease;
       --border-radius: 0.75rem;
       --padding: 0.55rem 0.8rem;
-      --gap: 0.5rem;
+      --gap: 0.4rem;
     }
 
     button {
@@ -31,13 +34,16 @@ export class MeteorActionButton extends LitElement {
       justify-content: center;
       gap: var(--gap);
       padding: var(--padding);
+      /* border: none; */
       border-radius: var(--border-radius);
-      border: none;
-      background: linear-gradient(135deg, rgba(var(--background-primary), 0.35) 0%, rgba(var(--background-primary), 0.2) 100%);
-      filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.3));
+      border: 1px solid rgba(var(--meteor-brand-blue-light), 0.5);
+      box-sizing: content-box;
+      background: linear-gradient(135deg, rgba(var(--meteor-brand-blue-light), 1) 0%, rgba(var(--background-primary), 0.7) 100%);
+      filter: drop-shadow(0 3px 10px rgba(0, 0, 0, 0.2));
       color: var(--text-color);
       font-weight: 700;
       letter-spacing: 0.035rem;
+      line-height: 1em;
       font-family: inherit;
       font-size: 0.9rem;
       cursor: pointer;
@@ -46,12 +52,12 @@ export class MeteorActionButton extends LitElement {
     }
 
     button:hover:not(:disabled) {
-      background: linear-gradient(135deg, rgba(var(--background-primary), 0.6) 0%, rgba(var(--background-primary), 0.4) 100%);
+      background: linear-gradient(135deg, rgba(var(--meteor-brand-blue-lightest), 1) 0%, rgba(var(--meteor-brand-blue-light), 0.7) 100%);
       transform: translateY(-1px);
     }
 
     button:active:not(:disabled) {
-      background: linear-gradient(135deg, rgba(var(--background-primary), 0.6) 0%, rgba(var(--background-primary), 0.4) 100%);
+      background: linear-gradient(135deg, rgba(var(--meteor-brand-blue-lightest), 1) 0%, rgba(var(--meteor-brand-blue-light), 0.7) 100%);
       transform: translateY(0);
     }
 
@@ -64,8 +70,8 @@ export class MeteorActionButton extends LitElement {
       display: flex;
       align-items: center;
       justify-content: center;
-      width: 1.2em;
-      height: 1.2em;
+      width: 1.3em;
+      height: 1.3em;
       flex-shrink: 0;
     }
 

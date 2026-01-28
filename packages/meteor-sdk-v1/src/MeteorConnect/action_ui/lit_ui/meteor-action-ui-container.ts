@@ -8,10 +8,13 @@ import { customElement } from "./custom-element"; // Your new util
 import animateLogoStyles from "./graphical/animate_meteor_logo.scss?inline";
 import meteorLogoSvgOther from "./graphical/logo_svg_animate_grouped.svg?raw";
 import "./meteor-action-button";
-import iconExtension from "./graphical/icon-extension.svg?raw";
-import iconIos from "./graphical/icon-ios.svg?raw";
-import iconWeb from "./graphical/icon-web.svg?raw";
 import iconAndroid from "./graphical/svg_icons/icon_android.svg?raw";
+import iconClose from "./graphical/svg_icons/icon_close_x.svg?raw";
+import iconExtension from "./graphical/svg_icons/icon_extension_puzzle.svg?raw";
+// import iconExtension from "./graphical/icon-extension.svg?raw";
+// import iconIos from "./graphical/icon-ios.svg?raw";
+import iconIos from "./graphical/svg_icons/icon_ios_apple.svg?raw";
+import iconWeb from "./graphical/svg_icons/icon_web_globe.svg?raw";
 
 // color on tip of meteor
 // rgb(77, 134, 232)
@@ -71,7 +74,7 @@ export class MeteorActionUiContainer extends LitElement {
         border-bottom: 1px solid rgb(25, 25, 60);
         /* border-radius: 0.75rem; */
         align-items: center;
-        justify-content: start;
+        justify-content: space-between
       }
 
       #meteor_svg_logo {
@@ -94,6 +97,27 @@ export class MeteorActionUiContainer extends LitElement {
         height: 85%;
         margin-top: 0rem;
         margin-left: 0.5rem;
+      }
+
+      .close-circle {
+        width: 3.6em;
+        height: 3.6em;
+        margin: -0.2em;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        /* padding: 0em 0.2em 0.7em 0.7rem; */
+        border-radius: 100%;
+        /* background: rgba(255, 255, 255, 0.5); */
+        background: rgba(0, 0, 0, 0.02);
+      }
+
+      .close-circle svg {
+        width: 35%;
+        height: 35%;
+        color: rgba(255, 255, 255, 0.2);
+        filter: drop-shadow(0 0.05rem 0.07rem rgba(0, 0, 0, 0.3));
       }
 
       .title-text-box {
@@ -145,7 +169,7 @@ export class MeteorActionUiContainer extends LitElement {
         padding: 1rem;
         display: flex;
         flex-direction: column;
-        gap: 0.8rem;
+        gap: 1.3rem;
         align-items: center;
         /* justify-content: space-evenly */
       }
@@ -221,6 +245,7 @@ export class MeteorActionUiContainer extends LitElement {
         padding: 1rem;
         border-radius: 1rem;
         background: rgba(0, 0, 0, 0.18);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
       }
 
       .qr-container {
@@ -315,6 +340,9 @@ export class MeteorActionUiContainer extends LitElement {
           <div class="title-text-box">
             <span class="title">Meteor</span>
             <span class="subtitle">Connect</span>
+          </div>
+          <div class="close-circle">
+            ${unsafeSVG(iconClose)}
           </div>
         </div>
         <div class="meteor-connect-content">

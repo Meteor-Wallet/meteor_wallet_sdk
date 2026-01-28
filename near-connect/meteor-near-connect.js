@@ -758,6 +758,7 @@ ${new this._window.XMLSerializer().serializeToString(E)}`;return typeof Blob>"u"
       </button>
     `}_handleClick(){this.dispatchEvent(new CustomEvent("meteor-button-click",{bubbles:!0,composed:!0,detail:{label:this.label}}))}};MeteorActionButton.styles=css`
     :host {
+      --meteor-brand-blue-lightest: 87, 144, 242;
       --background-primary: 87, 144, 242;
       /* --background-primary-hover: rgba(255, 255, 255, 0.16); */
       /* --background-primary-active: rgba(255, 255, 255, 0.2); */
@@ -775,9 +776,10 @@ ${new this._window.XMLSerializer().serializeToString(E)}`;return typeof Blob>"u"
       gap: var(--gap);
       padding: var(--padding);
       border-radius: var(--border-radius);
-      border: none;
+      border: 2px solid rgba(var(--meteor-brand-blue-lightest), 0.2);
+      /* box-sizing: border-box; */
       background: linear-gradient(135deg, rgba(var(--background-primary), 0.35) 0%, rgba(var(--background-primary), 0.2) 100%);
-      filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.3));
+      filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.3)) drop-shadow(0 10px 0 rgba(0, 0, 0, 1));
       color: var(--text-color);
       font-weight: 700;
       letter-spacing: 0.035rem;
@@ -831,19 +833,7 @@ ${new this._window.XMLSerializer().serializeToString(E)}`;return typeof Blob>"u"
     :host([variant="primary"]) button:active:not(:disabled) {
       background: linear-gradient(135deg, rgba(57, 114, 212, 1) 0%, rgba(116, 94, 245, 0.85) 100%);
     }
-  `,__decorateClass$2([property({type:String})],MeteorActionButton.prototype,"label",2),__decorateClass$2([property({type:String})],MeteorActionButton.prototype,"icon",2),__decorateClass$2([property({type:String})],MeteorActionButton.prototype,"variant",2),__decorateClass$2([property({type:Boolean})],MeteorActionButton.prototype,"disabled",2),MeteorActionButton=__decorateClass$2([customElement("meteor-action-button")],MeteorActionButton);const iconExtension=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">\r
-  <rect x="2" y="3" width="20" height="17" rx="2" ry="2" stroke="currentColor" stroke-width="1.5" fill="none"/>\r
-  <path d="M2 8h20"/>\r
-  <circle cx="6" cy="5.5" r="0.5" fill="currentColor"/>\r
-  <circle cx="10" cy="5.5" r="0.5" fill="currentColor"/>\r
-  <circle cx="14" cy="5.5" r="0.5" fill="currentColor"/>\r
-  <path d="M16 11v4c0 1-1 2-2 2h-4c-1 0-2-1-2-2v-1.5c-0.5 0-1-0.5-1-1s0.5-1 1-1V11c0-1 1-2 2-2h4c1 0 2 1 2 2z" fill="currentColor"/>\r
-</svg>`,iconIos=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">\r
-  <rect x="6" y="2" width="12" height="20" rx="2" ry="2" stroke="currentColor" stroke-width="1.5" fill="none"/>\r
-  <rect x="9" y="2" width="6" height="2.5" rx="0.8" fill="currentColor"/>\r
-  <rect x="6.5" y="5" width="11" height="15" rx="1" fill="none" stroke="currentColor" stroke-width="1" opacity="0.3"/>\r
-  <circle cx="12" cy="19.5" r="0.8" fill="currentColor" opacity="0.6"/>\r
-</svg>`,iconWeb=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">\r
+  `,__decorateClass$2([property({type:String})],MeteorActionButton.prototype,"label",2),__decorateClass$2([property({type:String})],MeteorActionButton.prototype,"icon",2),__decorateClass$2([property({type:String})],MeteorActionButton.prototype,"variant",2),__decorateClass$2([property({type:Boolean})],MeteorActionButton.prototype,"disabled",2),MeteorActionButton=__decorateClass$2([customElement("meteor-action-button")],MeteorActionButton);const iconWeb=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">\r
   <circle cx="12" cy="12" r="10"/>\r
   <path d="M2 12h20"/>\r
   <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>\r
@@ -851,6 +841,10 @@ ${new this._window.XMLSerializer().serializeToString(E)}`;return typeof Blob>"u"
     <path d="M28 45.868v5.131c0 1.65-1.35 3-3 3s-3-1.35-3-3v-5.131zM38 45.868v5.131c0 1.65-1.35 3-3 3s-3-1.35-3-3v-5.131z"/>\r
     <path d="M43 26.999v16c0 2.21-1.79 4-4 4H21c-2.21 0-4-1.79-4-4v-16c0-2.21 1.79-4 4-4h18c2.21 0 4 1.79 4 4M39.83 7.549l-2.658 4q-.855-.54-1.8-.9l2.798-4.2c.3-.46.92-.59 1.38-.28.46.3.59.92.28 1.38M24.626 10.73q-.945.36-1.8.9L20.17 7.549a.99.99 0 0 1 .28-1.38.99.99 0 0 1 1.38.28zM51 28.999v8c0 1.65-1.35 3-3 3s-3-1.35-3-3v-8c0-1.65 1.35-3 3-3s3 1.35 3 3M15 28.999v8c0 1.65-1.35 3-3 3s-3-1.35-3-3v-8c0-1.65 1.35-3 3-3s3 1.35 3 3"/>\r
     <path d="M37.79 10.649q-.855-.54-1.8-.9c-1.23-.49-2.58-.75-3.99-.75h-4c-1.41 0-2.76.26-3.99.75q-.945.36-1.8.9a10.98 10.98 0 0 0-5.21 9.35c0 .55.45 1 1 1h24c.55 0 1-.45 1-1 0-3.95-2.08-7.41-5.21-9.35M27 15.999h-1c-.55 0-1-.45-1-1s.45-1 1-1h1c.55 0 1 .45 1 1s-.45 1-1 1m7 0h-1c-.55 0-1-.45-1-1s.45-1 1-1h1c.55 0 1 .45 1 1s-.45 1-1 1"/>\r
+</svg>`,iconExtension=`<svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" xml:space="preserve" fill-rule="evenodd" stroke-linejoin="round" stroke-miterlimit="2" clip-rule="evenodd" viewBox="5 5 90 90">\r
+    <path d="M36.842 18.75H25.015a9.375 9.375 0 0 0-9.375 9.375v12.5c0 1.173.647 2.195 1.603 2.73a3.12 3.12 0 0 0 1.929.667h4.62a6.117 6.117 0 0 1 6.114 6.114 6.117 6.117 0 0 1-6.114 6.114h-5.027a3.126 3.126 0 0 0-3.125 3.125v13.859a9.375 9.375 0 0 0 9.375 9.375h11.891c.68 6.486 6.172 11.549 12.837 11.549S61.9 89.095 62.58 82.609H75a9.375 9.375 0 0 0 9.375-9.375V59.375c0-1.537-1.792-3.125-3.329-3.125h-4.619a6.12 6.12 0 0 1-6.115-6.114 6.117 6.117 0 0 1 6.115-6.114h4.619a3.13 3.13 0 0 0 2.6-1.391 3.1 3.1 0 0 0 .729-2.006V28.053a9.38 9.38 0 0 0-9.419-9.375l-12.312.057C62.421 11.807 56.726 6.25 49.743 6.25c-6.988 0-12.686 5.565-12.901 12.5m22.253 6.252c-1.362.08-2.694-1.144-2.694-2.509v-3.335a6.66 6.66 0 0 0-6.658-6.658 6.66 6.66 0 0 0-6.658 6.658v2.717c0 1.725-1.4 3.125-3.125 3.125H25.015a3.125 3.125 0 0 0-3.125 3.125v9.647h1.902c6.824 0 12.364 5.54 12.364 12.364S30.616 62.5 23.792 62.5H21.89v10.734a3.125 3.125 0 0 0 3.125 3.125H39.96c1.725 0 3.125 1.4 3.125 3.125v1.766a6.66 6.66 0 0 0 6.658 6.658 6.66 6.66 0 0 0 6.658-6.658v-1.766c0-1.725 1.249-3.125 2.974-3.125H75a3.125 3.125 0 0 0 3.125-3.125V62.5h-1.698c-6.824 0-12.365-5.54-12.365-12.364s5.541-12.364 12.365-12.364h1.698v-9.719a3.124 3.124 0 0 0-3.14-3.125z"/>\r
+</svg>`,iconIos=`<svg fill="currentColor" width="800px" height="800px" viewBox="1 1 22 22" xmlns="http://www.w3.org/2000/svg">\r
+    <path d="M18.71 19.5C17.88 20.74 17 21.95 15.66 21.97C14.32 22 13.89 21.18 12.37 21.18C10.84 21.18 10.37 21.95 9.09997 22C7.78997 22.05 6.79997 20.68 5.95997 19.47C4.24997 17 2.93997 12.45 4.69997 9.39C5.56997 7.87 7.12997 6.91 8.81997 6.88C10.1 6.86 11.32 7.75 12.11 7.75C12.89 7.75 14.37 6.68 15.92 6.84C16.57 6.87 18.39 7.1 19.56 8.82C19.47 8.88 17.39 10.1 17.41 12.63C17.44 15.65 20.06 16.66 20.09 16.67C20.06 16.74 19.67 18.11 18.71 19.5ZM13 3.5C13.73 2.67 14.94 2.04 15.94 2C16.07 3.17 15.6 4.35 14.9 5.19C14.21 6.04 13.07 6.7 11.95 6.61C11.8 5.46 12.36 4.26 13 3.5Z"/>\r
 </svg>`;var __defProp$1=Object.defineProperty,__getOwnPropDesc$1=Object.getOwnPropertyDescriptor,__decorateClass$1=(t,e,r,n)=>{for(var u=n>1?void 0:n?__getOwnPropDesc$1(e,r):e,o=t.length-1,g;o>=0;o--)(g=t[o])&&(u=(n?g(e,r,u):g(u))||u);return n&&u&&__defProp$1(e,r,u),u};let MeteorActionUiContainer=class extends LitElement{connectedCallback(){super.connectedCallback(),this.actionController=new ActionUiController(this,this.action,this.cleanupUi)}disconnectedCallback(){this.qrCode=void 0,this.lastQrValue=void 0,super.disconnectedCallback()}registerHmrBoundary(){}queueQrRender(t){this.updateComplete.then(()=>this.drawQrCode(t))}drawQrCode(t){this.qrCodeTarget&&(this.qrCode?this.lastQrValue!==t&&this.qrCode.update({data:t}):this.qrCode=new QRCodeStyling({width:120,height:120,type:"svg",data:t,dotsOptions:{color:"#22105f",type:"rounded"},backgroundOptions:{color:"#ffffff"}}),this.lastQrValue=t,this.qrCodeTarget.innerHTML="",this.qrCode.append(this.qrCodeTarget))}render(){return this.registerHmrBoundary(),html`
       <div class="modal">
         <div class="meteor-connect-title-box">
