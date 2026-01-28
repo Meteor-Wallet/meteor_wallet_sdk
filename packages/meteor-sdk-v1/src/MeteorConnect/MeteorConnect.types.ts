@@ -101,4 +101,5 @@ export interface IMeteorConnectTypedStorage {
 
 export interface IMeteorConnect_Initialize_Input {
   storage: ILocalStorageInterface;
+  // onCancelAction?: () => void;
 }

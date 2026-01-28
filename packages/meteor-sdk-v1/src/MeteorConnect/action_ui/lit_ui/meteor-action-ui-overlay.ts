@@ -6,7 +6,7 @@ import { customElement } from "./custom-element"; // Your new util
 
 @customElement("meteor-action-ui-overlay")
 export class MeteorActionUiOverlay extends LitElement {
-  private logger = MeteorLogger.createLogger("MeteorConnect:MeteorActionUiOverlay");
+  private logger = MeteorLogger.createLogger("MeteorConnect:<meteor-action-ui-overlay>");
   @property({ type: Function }) closeAction: (() => void) | null = null;
 
   static styles = css`

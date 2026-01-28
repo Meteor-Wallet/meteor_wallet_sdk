@@ -24,6 +24,8 @@ export class ExecutableAction<R extends TMCActionRequestUnion<TMCActionRegistry>
   private actionResolvers: ((output: TMCActionRegistry[R["id"]]["output"]) => void)[] = [];
   private actionRejecters: ((reason?: any) => void)[] = [];
 
+  // private onCancelAction?: () => void;
+
   // private waitForExecutionOutput_resolve?: (output: TMCActionRegistry[R["id"]]["output"]) => void;
   // private waitForExecutionOutput_reject?: (reason?: any) => void;
 
@@ -41,6 +43,7 @@ export class ExecutableAction<R extends TMCActionRequestUnion<TMCActionRegistry>
     this.id = request.id;
     this.expandedInput = expandedInput;
     this.meta = MCActionRegistryMap[this.id].meta;
+    // this.onCancelAction = onCancelAction;
   }
 
   getAllExecutionTargetConfigs(): TMeteorExecutionTargetConfig[] {
@@ -165,6 +168,12 @@ Available targets: [${this.connectionTargetConfig.allExecutionTargets.map((c) =>
     }
 
     return this.waitForExecutionOutput_promise;
+  }
+
+  async cancelAction(): Promise<void> {
+    for (const rejecter of this.actionRejecters) {
+      rejecter(new Error("Action was cancelled"));
+    }
   }
 
   private async makeTargetedActionRequest<

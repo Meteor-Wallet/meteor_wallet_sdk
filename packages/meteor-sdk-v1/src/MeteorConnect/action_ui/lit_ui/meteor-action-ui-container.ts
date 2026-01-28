@@ -3,18 +3,15 @@ import { property, query } from "lit/decorators.js"; // You MUST import this exp
 import { unsafeSVG } from "lit/directives/unsafe-svg.js";
 import QRCodeStyling from "qr-code-styling";
 import type { ExecutableAction } from "../../action/ExecutableAction";
+import { MeteorLogger } from "../../logging/MeteorLogger";
 import { ActionUiController } from "./ActionUiController";
 import { customElement } from "./custom-element"; // Your new util
-import animateLogoStyles from "./graphical/animate_meteor_logo.scss?inline";
-import meteorLogoSvgOther from "./graphical/logo_svg_animate_grouped.svg?raw";
+import { animate_meteor_logo_css } from "./graphical/styles/animate_meteor_logo_css";
+import { svg_icons_text } from "./graphical/svg_icons/svg_icons_text";
+import { svg_meteor_logo_text } from "./graphical/svg_meteor_logo_text";
 import "./meteor-action-button";
-import iconAndroid from "./graphical/svg_icons/icon_android.svg?raw";
-import iconClose from "./graphical/svg_icons/icon_close_x.svg?raw";
-import iconExtension from "./graphical/svg_icons/icon_extension_puzzle.svg?raw";
-// import iconExtension from "./graphical/icon-extension.svg?raw";
-// import iconIos from "./graphical/icon-ios.svg?raw";
-import iconIos from "./graphical/svg_icons/icon_ios_apple.svg?raw";
-import iconWeb from "./graphical/svg_icons/icon_web_globe.svg?raw";
+
+// console.log(`CSS from SCSS\n\n${animateLogoStyles}`);
 
 // color on tip of meteor
 // rgb(77, 134, 232)
@@ -24,11 +21,13 @@ import iconWeb from "./graphical/svg_icons/icon_web_globe.svg?raw";
 
 @customElement("meteor-action-ui-container")
 export class MeteorActionUiContainer extends LitElement {
+  private logger = MeteorLogger.createLogger("MeteorConnect:<meteor-action-ui-container>");
+
   @property({ type: Object }) action!: ExecutableAction<any>;
-  @property({ attribute: false }) cleanupUi?: () => void;
+  @property({ type: Function }) closeAction: (() => void) | undefined = undefined;
 
   static styles = [
-    unsafeCSS(animateLogoStyles),
+    unsafeCSS(animate_meteor_logo_css),
     css`
       :host {
         --meteor-brand-blue-standard: 61, 39, 246;
@@ -138,11 +137,18 @@ export class MeteorActionUiContainer extends LitElement {
         filter: drop-shadow(0 0.05rem 0.07rem rgba(0, 0, 0, 0.5));
       }
 
+      .close-circle:hover {
+        background: rgba(var(--meteor-topbar-blue-lightest), 0.5);
+        cursor: pointer;
+        transition: background 150ms ease;
+      }
+
       .close-circle svg {
-        width: 35%;
-        height: 35%;
-        color: rgba(var(--meteor-text-on-dark-light), 0.3);
-        filter: drop-shadow(0 0.05rem 0.07rem rgba(0, 0, 0, 0.3));
+        width: 45%;
+        height: 45%;
+        color: rgba(0, 0, 0, 0.2);
+        /* box-shadow: 0 0 15px 6px inset rgba(0,0,0, 1); */
+        /* filter: drop-shadow(0 -1px 0 rgba(255, 255, 255, 0.2)); */
       }
 
       .title-text-box {
@@ -306,9 +312,14 @@ export class MeteorActionUiContainer extends LitElement {
   private qrCode?: QRCodeStyling;
   private lastQrValue?: string;
 
+  private _handleActionClose() {
+    this.logger.log("Overlay clicked, closing overlay");
+    this.closeAction?.();
+  }
+
   connectedCallback() {
     super.connectedCallback();
-    this.actionController = new ActionUiController(this, this.action, this.cleanupUi);
+    this.actionController = new ActionUiController(this, this.action, this.closeAction);
   }
 
   disconnectedCallback(): void {
@@ -361,15 +372,15 @@ export class MeteorActionUiContainer extends LitElement {
         <div class="meteor-connect-title-box">
         <div class="meteor-logo-and-title">
           <div class="meteor-logo">
-            ${unsafeSVG(meteorLogoSvgOther)}
+            ${unsafeSVG(svg_meteor_logo_text)}
           </div>
           <div class="title-text-box">
             <span class="title">Meteor</span>
             <span class="subtitle">Connect</span>
           </div>
         </div>
-          <div class="close-circle">
-            ${unsafeSVG(iconClose)}
+          <div class="close-circle" @click=${() => this._handleActionClose()}>
+            ${unsafeSVG(svg_icons_text.icon_close_x)}
           </div>
         </div>
         <div class="meteor-connect-content">
@@ -378,12 +389,12 @@ export class MeteorActionUiContainer extends LitElement {
             <div class="option-buttons-row">
               <meteor-action-button
                 label="Browser Extension"
-                .icon=${iconExtension}
+                .icon=${svg_icons_text.icon_extension_puzzle}
                 @meteor-button-click=${() => this.actionController.executeAction("v1_ext")}
               ></meteor-action-button>
               <meteor-action-button
                 label="Web App"
-                .icon=${iconWeb}
+                .icon=${svg_icons_text.icon_web_globe}
                 @meteor-button-click=${() => this.actionController.executeAction("v1_web")}
               ></meteor-action-button>
             </div>
@@ -413,22 +424,22 @@ export class MeteorActionUiContainer extends LitElement {
             <div class="option-buttons-row">
               <meteor-action-button
                 label="Android"
-                .icon=${iconAndroid}
+                .icon=${svg_icons_text.icon_android}
                 @meteor-button-click=${() => this.actionController.executeAction("v1_web")}
               ></meteor-action-button>
               <meteor-action-button
                 label="iOS"
-                .icon=${iconIos}
+                .icon=${svg_icons_text.icon_ios_apple}
                 @meteor-button-click=${() => this.actionController.executeAction("v1_web")}
               ></meteor-action-button>
               <meteor-action-button
                 label="Extension"
-                .icon=${iconExtension}
+                .icon=${svg_icons_text.icon_extension_puzzle}
                 @meteor-button-click=${() => this.actionController.executeAction("v1_web")}
               ></meteor-action-button>
               <meteor-action-button
                 label="Web"
-                .icon=${iconWeb}
+                .icon=${svg_icons_text.icon_web_globe}
                 @meteor-button-click=${() => this.actionController.executeAction("v1_web")}
               ></meteor-action-button>
             </div>

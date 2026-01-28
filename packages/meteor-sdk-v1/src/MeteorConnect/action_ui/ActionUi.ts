@@ -21,6 +21,7 @@ export class ActionUi {
   private styleElement: HTMLStyleElement | null = null;
   static shared: ActionUi = new ActionUi();
   private logger = MeteorLogger.createLogger("MeteorConnect:ActionUi");
+  // private _onCancelAction: (() => void) | undefined = undefined;
 
   /**
    * Opens the UI and returns a Promise that resolves with the data
@@ -62,7 +63,7 @@ export class ActionUi {
     });*/
   }
 
-  private renderAction(input: IRenderActionUi_Input<any>) {
+  private renderAction(input: IRenderActionUi_Input) {
     if (input.strategy?.strategy === "target_element") {
       this.container =
         typeof input.strategy.element === "string"
@@ -71,7 +72,7 @@ export class ActionUi {
     }
 
     if (!this.container) {
-      this.container = this.createPopupOverlay();
+      this.container = this.createPopupOverlay(input.action);
       document.body.appendChild(this.container);
     }
 
@@ -83,7 +84,10 @@ export class ActionUi {
 
     this.actionUiComponent = new MeteorActionUiContainer();
     this.actionUiComponent.action = input.action;
-    this.actionUiComponent.cleanupUi = () => this.cleanup();
+    this.actionUiComponent.closeAction = () => {
+      this.cleanup();
+      input.action.cancelAction();
+    };
 
     this.container.appendChild(this.actionUiComponent);
   }
@@ -105,10 +109,13 @@ export class ActionUi {
     }
   }
 
-  private createPopupOverlay(): HTMLElement {
+  private createPopupOverlay(action: ExecutableAction<any>): HTMLElement {
     const popupOverlay = new MeteorActionUiOverlay();
     this.logger.log("Created popup overlay for action UI", popupOverlay);
-    popupOverlay.closeAction = () => this.cleanup();
+    popupOverlay.closeAction = () => {
+      this.cleanup();
+      action.cancelAction();
+    };
     return popupOverlay;
   }
 }

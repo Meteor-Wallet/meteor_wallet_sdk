@@ -26,6 +26,11 @@ export default defineConfig({
   // Generate both ESM and CommonJS outputs
   format: ["esm", "cjs"],
 
+  define: {
+    "import.meta.hot": "undefined",
+    "import.meta.env.SSR": "false",
+  },
+
   // Output directory structure
   outDir: "./dist",
 });
