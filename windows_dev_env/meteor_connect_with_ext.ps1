@@ -1,5 +1,3 @@
-# start-dev.ps1
-
 # -w 0 tells Windows Terminal to use the CURRENT window
 # nt (new-tab) creates a new tab
 # -d sets the directory
