@@ -1,4 +1,5 @@
 import {
+  type ConnectorAction,
   type NearWalletBase,
   type SignAndSendTransactionParams,
   type SignAndSendTransactionsParams,
@@ -26,6 +27,7 @@ import type {
   NearConnectSignedMessage,
 } from "./near-connect.types";
 import { head } from "./view";
+import type { Action, Network } from "@hot-labs/near-connect/build/types";
 
 // import { head } from "./view";
 
@@ -282,6 +284,34 @@ class NearWallet implements Omit<NearWalletBase, "manifest"> {
       return await action.execute();
     }
   };
+
+
+  signDelegateAction = async (payload: {
+    network?: Network;
+    signerId?: string;
+    delegateAction: {
+      actions: Array<Action | ConnectorAction>;
+      receiverId: string
+    }
+  }) => {
+    const meteorData = await getMeteorData();
+
+    if (meteorData != null) {
+      const met = await getMeteorConnect();
+      const action = await met.createAction({
+        id: "near::sign_delegate",
+        input: {
+          target: meteorData.identifier,
+          delegateAction: {
+            receiverId: payload.delegateAction.receiverId,
+            actions: payload.delegateAction.actions.map(convertSelectorActionToNearAction),
+          }
+        },
+      });
+
+      return await action.execute();
+    }
+  }
 }
 
 window.selector.ready(new NearWallet());

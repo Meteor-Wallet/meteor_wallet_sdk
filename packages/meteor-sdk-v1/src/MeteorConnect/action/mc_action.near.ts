@@ -1,5 +1,5 @@
 import type { SignedMessage } from "@near-js/signers";
-import type { Action } from "@near-js/transactions";
+import type { Action, SignedDelegate } from "@near-js/transactions";
 import type { FinalExecutionOutcome } from "@near-js/types";
 import type { IODappAction_VerifyOwner_Output } from "../../ported_common/dapp/dapp.types";
 import type {
@@ -68,6 +68,10 @@ export interface IMCA_Near_SignTransactions_Input extends IMCAction_WithExactAcc
   transactions: TSimpleNearTransaction[];
 }
 
+export interface IMCA_Near_SignDelegateActions_Input extends IMCAction_WithExactAccountTarget {
+  delegateAction: TSimpleNearTransaction;
+}
+
 // --------------------------
 //
 // NEAR ACTION DEFINITION MAP
@@ -105,6 +109,18 @@ export const MCNearActions = {
     input: {} as IMCA_Near_SignTransactions_Input,
     expandedInput: {} as IMCA_Near_SignTransactions_Input & IMCAction_WithFullAccount,
     output: {} as FinalExecutionOutcome[],
+    meta: {
+      inputTransform: ["targeted_account"],
+      executionTargetSource: "targeted_account",
+    },
+  },
+  "near::sign_delegate": {
+    input: {} as IMCA_Near_SignDelegateActions_Input,
+    expandedInput: {} as IMCA_Near_SignDelegateActions_Input & IMCAction_WithFullAccount,
+    output: {} as {
+      delegateHash: Uint8Array;
+      signedDelegate: SignedDelegate;
+    },
     meta: {
       inputTransform: ["targeted_account"],
       executionTargetSource: "targeted_account",

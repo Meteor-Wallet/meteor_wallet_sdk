@@ -212,6 +212,20 @@ export class MeteorConnectV1Client extends MeteorConnectClientBase {
       }
     }
 
+    if (request.id === "near::sign_delegate"){
+      const { wallet } = this.getSdkForNetworkAndTarget(
+        request.expandedInput.account.identifier.network,
+        executionTarget,
+      );
+
+      return await wallet.requestSignDelegateAction({
+        delegateAction: {
+          receiverId: request.expandedInput.delegateAction.receiverId,
+          actions: request.expandedInput.delegateAction.actions.map((action) => nearActionToSdkV1Action(action)),
+        }
+      })
+    }
+
     throw new Error(`MeteorConnectV1Client: Action ID [${request["id"]}] not implemented`);
   }
 }

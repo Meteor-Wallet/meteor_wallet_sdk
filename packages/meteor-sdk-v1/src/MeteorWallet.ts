@@ -484,7 +484,7 @@ export class MeteorWallet {
   }: {
     delegateAction: TMeteorSdkV1Transaction
   }): Promise<{
-    delegatedHash: Uint8Array;
+    delegateHash: Uint8Array;
     signedDelegate: SignedDelegate;
   }> {
     this.logger.log(
@@ -503,10 +503,12 @@ export class MeteorWallet {
     }>(
       {
         actionType: EExternalActionType.sign_delegate,
-        inputs: transformedTransactions
-          .map((transaction) => transaction.encode())
-          .map((serialized) => Buffer.from(serialized).toString("base64"))
-          .join(","),
+        inputs: {
+          transactions: transformedTransactions
+            .map((transaction) => transaction.encode())
+            .map((serialized) => Buffer.from(serialized).toString("base64"))
+            .join(",")
+        },
         network: this._networkId as ENearNetwork,
         forceExecutionTarget: this._forceTargetPlatform,
       }
@@ -515,7 +517,7 @@ export class MeteorWallet {
     if (response.success) {
       const { hash, signedDelegate } = response.payload;
       return {
-        delegatedHash: hash,
+        delegateHash: hash,
         signedDelegate
       };
     }
