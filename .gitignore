@@ -139,3 +139,6 @@ dist
 .idea/
 
 .dev.vars
+
+# meteor files
+near-connect/
