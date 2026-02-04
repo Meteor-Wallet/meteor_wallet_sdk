@@ -890,18 +890,18 @@ ${new this._window.XMLSerializer().serializeToString(E)}`;return typeof Blob>"u"
       </button>
     `}_handleClick(){this.dispatchEvent(new CustomEvent("meteor-button-click",{bubbles:!0,composed:!0,detail:{label:this.label}}))}};MeteorActionButton.styles=css`
     :host {
-      --border-radius: 0.75rem;
-      --padding: 0.55rem 0.8rem;
+      --meteor-button-primary-light: 62, 19, 231;
+      --meteor-button-primary-accent: 89, 47, 254;
+
+      --meteor-button-secondary-light: 30, 30, 61;
+      --meteor-button-secondary-accent: 30, 32, 65;
+      
+      --meteor-button-text-color: 255, 255, 255;
+
+      --border-radius: 0.5rem;
+      --padding: 0.9rem 1.2rem;
       --gap: 0.4rem;
       --transition: transform 120ms ease, background 120ms ease;
-/*       --meteor-brand-blue-lightest: 77, 144, 232;
-      --meteor-brand-blue-light: 57, 124, 212;
-      --button-dark-part: 35, 69, 105;
-      --background-primary: 27, 84, 182;
-      --background-primary-hover: rgba(255, 255, 255, 0.16);
-      --background-primary-active: rgba(255, 255, 255, 0.2);
-      --text-color: white;
-      --transition: transform 120ms ease, background 120ms ease; */
     }
 
     button {
@@ -912,11 +912,11 @@ ${new this._window.XMLSerializer().serializeToString(E)}`;return typeof Blob>"u"
       padding: var(--padding);
       /* border: none; */
       border-radius: var(--border-radius);
-      border: 1px solid rgba(var(--meteor-button-blue-light), 0.5);
+      border-width: 0;
       box-sizing: content-box;
-      background: linear-gradient(135deg, rgba(var(--meteor-button-blue-light), 0.8) 0%, rgba(var(--meteor-button-accent-light), 0.7) 100%);
+      background: linear-gradient(135deg, rgba(var(--meteor-button-secondary-light), 0.8) 0%, rgba(var(--meteor-button-secondary-accent), 0.7) 100%);
       filter: drop-shadow(0 3px 10px rgba(0, 0, 0, 0.2));
-      color: rgba(var(--meteor-text-on-dark-light), 1);
+      color: rgba(var(--meteor-button-text-color), 1);
       font-weight: 700;
       letter-spacing: 0.035rem;
       line-height: 1em;
@@ -928,12 +928,12 @@ ${new this._window.XMLSerializer().serializeToString(E)}`;return typeof Blob>"u"
     }
 
     button:hover:not(:disabled) {
-      background: linear-gradient(135deg, rgba(var(--meteor-button-blue-light), 1) 0%, rgba(var(--meteor-button-accent-light), 1) 100%);
+      background: linear-gradient(135deg, rgba(var(--meteor-button-secondary-light), 1) 0%, rgba(var(--meteor-button-secondary-accent), 1) 100%);
       transform: translateY(-1px);
     }
 
     button:active:not(:disabled) {
-      background: linear-gradient(135deg, rgba(var(--meteor-button-blue-light), 1) 0%, rgba(var(--meteor-button-accent-light), 1) 100%);
+      background: linear-gradient(135deg, rgba(var(--meteor-button-secondary-light), 1) 0%, rgba(var(--meteor-button-secondary-accent), 1) 100%);
       transform: translateY(0);
     }
 
@@ -959,16 +959,16 @@ ${new this._window.XMLSerializer().serializeToString(E)}`;return typeof Blob>"u"
 
     /* Primary variant */
     :host([variant="primary"]) button {
-      background: linear-gradient(135deg, rgba(77, 134, 232, 0.8) 0%, rgba(136, 114, 255, 0.7) 100%);
+      background: linear-gradient(135deg, rgba(var(--meteor-button-primary-light), 0.8) 0%, rgba(var(--meteor-button-primary-accent), 0.7) 100%);
       font-weight: 700;
     }
 
     :host([variant="primary"]) button:hover:not(:disabled) {
-      background: linear-gradient(135deg, rgba(77, 134, 232, 1) 0%, rgba(136, 114, 255, 0.85) 100%);
+      background: linear-gradient(135deg, rgba(var(--meteor-button-primary-light), 1) 0%, rgba(var(--meteor-button-primary-accent), 0.85) 100%);
     }
 
     :host([variant="primary"]) button:active:not(:disabled) {
-      background: linear-gradient(135deg, rgba(57, 114, 212, 1) 0%, rgba(116, 94, 245, 0.85) 100%);
+      background: linear-gradient(135deg, rgba(var(--meteor-button-primary-light), 1) 0%, rgba(var(--meteor-button-primary-accent), 0.85) 100%);
     }
   `,__decorateClass$2([property({type:String})],MeteorActionButton.prototype,"label",2),__decorateClass$2([property({type:String})],MeteorActionButton.prototype,"icon",2),__decorateClass$2([property({type:String})],MeteorActionButton.prototype,"variant",2),__decorateClass$2([property({type:Boolean})],MeteorActionButton.prototype,"disabled",2),MeteorActionButton=__decorateClass$2([customElement("meteor-action-button")],MeteorActionButton);var __defProp$1=Object.defineProperty,__getOwnPropDesc$1=Object.getOwnPropertyDescriptor,__decorateClass$1=(t,e,r,n)=>{for(var u=n>1?void 0:n?__getOwnPropDesc$1(e,r):e,o=t.length-1,g;o>=0;o--)(g=t[o])&&(u=(n?g(e,r,u):g(u))||u);return n&&u&&__defProp$1(e,r,u),u};let MeteorActionUiContainer=class extends LitElement{constructor(){super(...arguments),this.logger=MeteorLogger.createLogger("MeteorConnect:<meteor-action-ui-container>"),this.closeAction=void 0}_handleActionClose(){this.logger.log("Overlay clicked, closing overlay"),this.closeAction?.()}connectedCallback(){super.connectedCallback(),this.actionController=new ActionUiController(this,this.action,this.closeAction)}disconnectedCallback(){this.qrCode=void 0,this.lastQrValue=void 0,super.disconnectedCallback()}registerHmrBoundary(){}queueQrRender(t){this.updateComplete.then(()=>this.drawQrCode(t))}drawQrCode(t){this.qrCodeTarget&&(this.qrCode?this.lastQrValue!==t&&this.qrCode.update({data:t}):this.qrCode=new QRCodeStyling({width:120,height:120,type:"svg",data:t,dotsOptions:{color:"#22105f",type:"rounded"},backgroundOptions:{color:"#ffffff"}}),this.lastQrValue=t,this.qrCodeTarget.innerHTML="",this.qrCode.append(this.qrCodeTarget))}render(){return this.registerHmrBoundary(),html`
       <div class="modal">
@@ -989,9 +989,17 @@ ${new this._window.XMLSerializer().serializeToString(E)}`;return typeof Blob>"u"
         <div class="meteor-connect-content">
           <span class="section-action-title">Choose your wallet</span>
           <div class="options">
+            <div class="qr-section">
+              ${this.actionController.meteorV2RequestIdTask.render({initial:()=>html`<p>Initializing...</p>`,pending:()=>html`<div class="spinner">Generating QR Code...</div>`,complete:t=>(this.queueQrRender(t),html`
+                    <div class="qr-container">
+                      <div id="qr-code-target" class="qr-code-target" role="img" aria-label="Meteor Wallet QR code"></div>
+                      <p class="qr-helper">Scan with your mobile device</p>
+                    </div>
+                  `),error:t=>html`<p class="error">Failed to load QR: ${t}</p>`})}
+            </div>
             <div class="option-buttons-row">
               <meteor-action-button
-                label="Browser Extension"
+                label="Chrome Extension"
                 .icon=${svg_icons_text.icon_extension_puzzle}
                 @meteor-button-click=${()=>this.actionController.executeAction("v1_ext")}
               ></meteor-action-button>
@@ -1001,14 +1009,6 @@ ${new this._window.XMLSerializer().serializeToString(E)}`;return typeof Blob>"u"
                 @meteor-button-click=${()=>this.actionController.executeAction("v1_web")}
               ></meteor-action-button>
             </div>
-            <div class="qr-section">
-              ${this.actionController.meteorV2RequestIdTask.render({initial:()=>html`<p>Initializing...</p>`,pending:()=>html`<div class="spinner">Generating QR Code...</div>`,complete:t=>(this.queueQrRender(t),html`
-                    <div class="qr-container">
-                      <div id="qr-code-target" class="qr-code-target" role="img" aria-label="Meteor Wallet QR code"></div>
-                      <p class="qr-helper">Scan with your mobile device</p>
-                    </div>
-                  `),error:t=>html`<p class="error">Failed to load QR: ${t}</p>`})}
-            </div>
           </div>
           <div class="divider">
             <span class="divider-line"></span>
@@ -1016,6 +1016,12 @@ ${new this._window.XMLSerializer().serializeToString(E)}`;return typeof Blob>"u"
             <span class="divider-line"></span>
           </div>
           <div class="options">
+            <meteor-action-button variant="primary"
+              label="Get Meteor Wallet"
+              @meteor-button-click=${()=>{console.log("Get Meteor Wallet clicked")}}
+            ></meteor-action-button>
+          </div>
+          <!-- <div class="options">
             <div class="option-buttons-row">
               <meteor-action-button
                 label="Android"
@@ -1038,35 +1044,21 @@ ${new this._window.XMLSerializer().serializeToString(E)}`;return typeof Blob>"u"
                 @meteor-button-click=${()=>this.actionController.executeAction("v1_web")}
               ></meteor-action-button>
             </div>
-          </div>
+          </div> -->
         </div>
       </div>
     `}};MeteorActionUiContainer.styles=[unsafeCSS(animate_meteor_logo_css),css`
       :host {
-        --meteor-brand-blue-standard: 61, 39, 246;
-        --meteor-brand-blue-darker: 65, 30, 223;
+        /* --meteor-topbar-blue-lightest: 110, 78, 255; */
+        /* --meteor-topbar-blue-standard: 88, 46, 253; */
 
-        /* --meteor-topbar-blue-lightest: 87, 144, 242; */
-        --meteor-topbar-blue-lightest: 110, 78, 255;
-        --meteor-topbar-blue-standard: 88, 46, 253;
-        /* --meteor-topbar-blue-darker: 88, 46, 253; */
-
-        --meteor-brand-accent: 101, 31, 239;
-        /* --meteor-brand-blue-lightest: 87, 144, 242;
-        --meteor-brand-blue-dark: 45, 34, 100;
-        --meteor-brand-blue-darkest: 28, 28, 69; */
-
-        --meteor-button-blue-light: 60, 18, 230;
-        --meteor-button-accent-light: 88, 46, 253;
-        --meteor-button-text-color: 255, 255, 255;
-
-        --meteor-dark-gray-lightest: 37, 37, 50;
+        --meteor-dark-gray-lightest: 34, 34, 41;
         --meteor-dark-gray-standard: 27, 27, 38;
-        --meteor-dark-gray-darkest: 18, 18, 29;
+        --meteor-dark-gray-darkest: 14, 14, 23;
 
         --meteor-text-on-dark-light: 220, 220, 255;
-        --meteor-text-on-dark-standard: 180, 180, 220;
-        --meteor-text-on-dark-dark: 110, 110, 150;
+        --meteor-text-on-dark-standard: 190, 190, 230;
+        --meteor-text-on-dark-dark: 100, 100, 140;
       }
 
       /* Add your styles here */
@@ -1074,7 +1066,7 @@ ${new this._window.XMLSerializer().serializeToString(E)}`;return typeof Blob>"u"
         font-family: 'Gilroy';
         font-weight: 500;
         font-style: normal;
-        background: linear-gradient(135deg, rgb(var(--meteor-dark-gray-darkest)) 0%, rgb(var(--meteor-dark-gray-standard)) 100%);
+        background: linear-gradient(135deg, rgb(var(--meteor-dark-gray-darkest)) 0%, rgb(var(--meteor-dark-gray-standard)) 150%);
         color: rgb(var(--meteor-text-on-dark-light));
         box-sizing: border-box;
         position: relative;
@@ -1100,8 +1092,8 @@ ${new this._window.XMLSerializer().serializeToString(E)}`;return typeof Blob>"u"
         gap: 0.7rem;
         padding: 0.7rem;
         /* background: rgba(255, 255, 255, 0.3); */
-        background: linear-gradient(140deg, rgba(var(--meteor-topbar-blue-lightest), 0.8) 0%, rgba(var(--meteor-topbar-blue-standard), 0.5) 100%);
-        border-bottom: 1px solid rgb(var(--meteor-dark-gray-darkest));
+        /* background: linear-gradient(140deg, rgba(var(--meteor-topbar-blue-lightest), 0.8) 0%, rgba(var(--meteor-topbar-blue-standard), 0.5) 100%); */
+        border-bottom: 1px solid rgb(var(--meteor-dark-gray-lightest));
         /* border-radius: 0.75rem; */
         align-items: center;
         justify-content: space-between
@@ -1114,7 +1106,7 @@ ${new this._window.XMLSerializer().serializeToString(E)}`;return typeof Blob>"u"
       }
 
       #meteor_svg_logo {
-        filter: drop-shadow(-0.1rem 0.1rem 0.2em rgba(10, 40, 120, 0.15));
+        filter: drop-shadow(-0.1rem 0.1rem 0.2em rgba(0, 0, 20, 0.15));
         //filter: drop-shadow(0 -0.2em rgba(255, 255, 255, 0.5));
       }
 
@@ -1143,23 +1135,22 @@ ${new this._window.XMLSerializer().serializeToString(E)}`;return typeof Blob>"u"
         flex-direction: column;
         align-items: center;  
         justify-content: center;
-        /* padding: 0em 0.2em 0.7em 0.7rem; */
         border-radius: 100%;
-        /* background: rgba(255, 255, 255, 0.5); */
-        background: rgba(var(--meteor-topbar-blue-lightest), 0.3);
+        background: rgba(255, 255, 255, 0);
         filter: drop-shadow(0 0.05rem 0.07rem rgba(0, 0, 0, 0.5));
-      }
-
-      .close-circle:hover {
-        background: rgba(var(--meteor-topbar-blue-lightest), 0.5);
         cursor: pointer;
         transition: background 150ms ease;
       }
 
+      .close-circle:hover {
+        background: rgba(255, 255, 255, 0.03);
+      }
+
       .close-circle svg {
-        width: 45%;
-        height: 45%;
-        color: rgba(0, 0, 0, 0.2);
+        width: 30%;
+        height: 30%;
+        color: rgba(var(--meteor-text-on-dark-light), 1);
+        /* color: rgba(0, 0, 0, 0.2); */
         /* box-shadow: 0 0 15px 6px inset rgba(0,0,0, 1); */
         /* filter: drop-shadow(0 -1px 0 rgba(255, 255, 255, 0.2)); */
       }
@@ -1210,16 +1201,23 @@ ${new this._window.XMLSerializer().serializeToString(E)}`;return typeof Blob>"u"
 
       .options {
         flex-grow: 1;
-        padding: 1rem;
+        padding: 0.5rem;
         display: flex;
         flex-direction: column;
         gap: 1.3rem;
         align-items: center;
-        /* justify-content: space-evenly */
+        /* justify-content: space-between; */
+        /* justify-content: space-evenly; */
       }
 
       .meteor-connect-content {
-        padding: 1rem;
+        padding: 1.5rem;
+        display: flex;
+        flex-direction: column;
+        /* justify-content: space-evenly; */
+        justify-content: space-between;
+        flex-grow: 1;
+        gap: 1rem;
       }
 
       .section-action-title {
@@ -1281,6 +1279,8 @@ ${new this._window.XMLSerializer().serializeToString(E)}`;return typeof Blob>"u"
       }
 
       .qr-section {
+        height: 190px;
+        box-sizing: border-box;
         // width: 100%;
         display: flex;
         align-items: center;
@@ -1319,6 +1319,7 @@ ${new this._window.XMLSerializer().serializeToString(E)}`;return typeof Blob>"u"
       }
     `],__decorateClass$1([property({type:Object})],MeteorActionUiContainer.prototype,"action",2),__decorateClass$1([property({type:Function})],MeteorActionUiContainer.prototype,"closeAction",2),__decorateClass$1([query("#qr-code-target")],MeteorActionUiContainer.prototype,"qrCodeTarget",2),MeteorActionUiContainer=__decorateClass$1([customElement("meteor-action-ui-container")],MeteorActionUiContainer);var __defProp=Object.defineProperty,__getOwnPropDesc=Object.getOwnPropertyDescriptor,__decorateClass=(t,e,r,n)=>{for(var u=n>1?void 0:n?__getOwnPropDesc(e,r):e,o=t.length-1,g;o>=0;o--)(g=t[o])&&(u=(n?g(e,r,u):g(u))||u);return n&&u&&__defProp(e,r,u),u};let MeteorActionUiOverlay=class extends LitElement{constructor(){super(...arguments),this.logger=MeteorLogger.createLogger("MeteorConnect:<meteor-action-ui-overlay>"),this.closeAction=null}_handleOverlayClick(){if(this.logger.log("Overlay clicked, closing overlay"),this.closeAction)try{this.closeAction()}catch(t){this.logger.log("Error during closeAction",t)}else this.remove()}connectedCallback(){super.connectedCallback(),this.id=METEOR_ACTION_UI_POPUP_PARENT_ID,this.addEventListener("click",this._handleOverlayClick)}disconnectedCallback(){this.removeEventListener("click",this._handleOverlayClick),super.disconnectedCallback()}render(){return this.logger.log("Rendering MeteorActionUiOverlay"),html`
       <div>
+        <div class="modal-backdrop"></div>
         <div class="modal-container" @click=${t=>t.stopPropagation()}>
           <slot></slot>
         </div>
@@ -1329,16 +1330,28 @@ ${new this._window.XMLSerializer().serializeToString(E)}`;return typeof Blob>"u"
         left: 0;
         width: 100vw;
         height: 100vh;
-        background-color: rgba(0, 0, 0, 0.4);
         display: flex;
         align-items: center;
         justify-content: center;
         position: fixed;
         z-index: 10000;
         pointer-events: auto;
+        /* filter: blur(20px); */
+        /* filter: blur(0.5px) drop-shadow(0 0 2px rgba(0, 0, 0, 0.3)); */
+      }
+
+      .modal-backdrop {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background-color: rgba(0, 0, 0, 0.4);
+        backdrop-filter: blur(20px);
       }
 
       .modal-container {
+        z-index: 2;
         height: 556px;
         width: 415px;
         border-radius: 1.2em;

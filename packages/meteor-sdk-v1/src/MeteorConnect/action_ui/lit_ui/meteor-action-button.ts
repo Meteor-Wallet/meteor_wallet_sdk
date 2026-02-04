@@ -15,18 +15,18 @@ export class MeteorActionButton extends LitElement {
 
   static styles = css`
     :host {
-      --border-radius: 0.75rem;
-      --padding: 0.55rem 0.8rem;
+      --meteor-button-primary-light: 62, 19, 231;
+      --meteor-button-primary-accent: 89, 47, 254;
+
+      --meteor-button-secondary-light: 30, 30, 61;
+      --meteor-button-secondary-accent: 30, 32, 65;
+      
+      --meteor-button-text-color: 255, 255, 255;
+
+      --border-radius: 0.5rem;
+      --padding: 0.9rem 1.2rem;
       --gap: 0.4rem;
       --transition: transform 120ms ease, background 120ms ease;
-/*       --meteor-brand-blue-lightest: 77, 144, 232;
-      --meteor-brand-blue-light: 57, 124, 212;
-      --button-dark-part: 35, 69, 105;
-      --background-primary: 27, 84, 182;
-      --background-primary-hover: rgba(255, 255, 255, 0.16);
-      --background-primary-active: rgba(255, 255, 255, 0.2);
-      --text-color: white;
-      --transition: transform 120ms ease, background 120ms ease; */
     }
 
     button {
@@ -37,11 +37,11 @@ export class MeteorActionButton extends LitElement {
       padding: var(--padding);
       /* border: none; */
       border-radius: var(--border-radius);
-      border: 1px solid rgba(var(--meteor-button-blue-light), 0.5);
+      border-width: 0;
       box-sizing: content-box;
-      background: linear-gradient(135deg, rgba(var(--meteor-button-blue-light), 0.8) 0%, rgba(var(--meteor-button-accent-light), 0.7) 100%);
+      background: linear-gradient(135deg, rgba(var(--meteor-button-secondary-light), 0.8) 0%, rgba(var(--meteor-button-secondary-accent), 0.7) 100%);
       filter: drop-shadow(0 3px 10px rgba(0, 0, 0, 0.2));
-      color: rgba(var(--meteor-text-on-dark-light), 1);
+      color: rgba(var(--meteor-button-text-color), 1);
       font-weight: 700;
       letter-spacing: 0.035rem;
       line-height: 1em;
@@ -53,12 +53,12 @@ export class MeteorActionButton extends LitElement {
     }
 
     button:hover:not(:disabled) {
-      background: linear-gradient(135deg, rgba(var(--meteor-button-blue-light), 1) 0%, rgba(var(--meteor-button-accent-light), 1) 100%);
+      background: linear-gradient(135deg, rgba(var(--meteor-button-secondary-light), 1) 0%, rgba(var(--meteor-button-secondary-accent), 1) 100%);
       transform: translateY(-1px);
     }
 
     button:active:not(:disabled) {
-      background: linear-gradient(135deg, rgba(var(--meteor-button-blue-light), 1) 0%, rgba(var(--meteor-button-accent-light), 1) 100%);
+      background: linear-gradient(135deg, rgba(var(--meteor-button-secondary-light), 1) 0%, rgba(var(--meteor-button-secondary-accent), 1) 100%);
       transform: translateY(0);
     }
 
@@ -84,16 +84,16 @@ export class MeteorActionButton extends LitElement {
 
     /* Primary variant */
     :host([variant="primary"]) button {
-      background: linear-gradient(135deg, rgba(77, 134, 232, 0.8) 0%, rgba(136, 114, 255, 0.7) 100%);
+      background: linear-gradient(135deg, rgba(var(--meteor-button-primary-light), 0.8) 0%, rgba(var(--meteor-button-primary-accent), 0.7) 100%);
       font-weight: 700;
     }
 
     :host([variant="primary"]) button:hover:not(:disabled) {
-      background: linear-gradient(135deg, rgba(77, 134, 232, 1) 0%, rgba(136, 114, 255, 0.85) 100%);
+      background: linear-gradient(135deg, rgba(var(--meteor-button-primary-light), 1) 0%, rgba(var(--meteor-button-primary-accent), 0.85) 100%);
     }
 
     :host([variant="primary"]) button:active:not(:disabled) {
-      background: linear-gradient(135deg, rgba(57, 114, 212, 1) 0%, rgba(116, 94, 245, 0.85) 100%);
+      background: linear-gradient(135deg, rgba(var(--meteor-button-primary-light), 1) 0%, rgba(var(--meteor-button-primary-accent), 0.85) 100%);
     }
   `;
 

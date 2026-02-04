@@ -15,16 +15,28 @@ export class MeteorActionUiOverlay extends LitElement {
         left: 0;
         width: 100vw;
         height: 100vh;
-        background-color: rgba(0, 0, 0, 0.4);
         display: flex;
         align-items: center;
         justify-content: center;
         position: fixed;
         z-index: 10000;
         pointer-events: auto;
+        /* filter: blur(20px); */
+        /* filter: blur(0.5px) drop-shadow(0 0 2px rgba(0, 0, 0, 0.3)); */
+      }
+
+      .modal-backdrop {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background-color: rgba(0, 0, 0, 0.4);
+        backdrop-filter: blur(20px);
       }
 
       .modal-container {
+        z-index: 2;
         height: 556px;
         width: 415px;
         border-radius: 1.2em;
@@ -70,6 +82,7 @@ export class MeteorActionUiOverlay extends LitElement {
 
     return html`
       <div>
+        <div class="modal-backdrop"></div>
         <div class="modal-container" @click=${(e: Event) => e.stopPropagation()}>
           <slot></slot>
         </div>
