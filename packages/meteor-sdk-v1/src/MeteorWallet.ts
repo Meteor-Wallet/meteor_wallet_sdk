@@ -4,7 +4,7 @@ import { KeyStore } from "@near-js/keystores";
 import { BrowserLocalStorageKeyStore } from "@near-js/keystores-browser";
 import { JsonRpcProvider } from "@near-js/providers";
 import { KeyPairSigner } from "@near-js/signers";
-import { createTransaction, SCHEMA, SignedDelegate } from "@near-js/transactions";
+import { createTransaction, SignedDelegate } from "@near-js/transactions";
 import { type AccessKeyInfoView } from "@near-js/types";
 import type {
   Action,
@@ -41,7 +41,6 @@ import { notNullEmpty } from "./ported_common/utils/nullEmptyString";
 import { CEnvironmentStorageAdapter_Sync } from "./ported_common/utils/storage/EnvironmentStorageAdapter_Sync";
 import { getMeteorPostMessenger } from "./postMessage/MeteorPostMessenger";
 import { resolveWalletUrl } from "./utils/MeteorSdkUtils";
-import { deserialize } from "borsh";
 
 const LOGIN_WALLET_URL_SUFFIX = "/login/";
 const SIGN_WALLET_URL_SUFFIX = "/sign/";
@@ -484,33 +483,41 @@ export class MeteorWallet {
     delegateAction
   }: {
     delegateAction: TMeteorSdkV1Transaction
-  }): Promise<[Uint8Array, SignedDelegate]> {
+  }): Promise<{
+    delegatedHash: Uint8Array;
+    signedDelegate: SignedDelegate;
+  }> {
     this.logger.log(
       `Requesting sign delegate action for account [${this.getAccountId() ?? "<unknown>"}]`,
     );
 
-    const response = await getMeteorPostMessenger().connectAndWaitForResponse<[
-      Uint8Array, Uint8Array
-    ]>(
+    const transformedTransactions = await this.transformTransactions([{
+      actions: delegateAction.actions,
+      receiverId: delegateAction.receiverId,
+      signerId: this.getAccountId()
+    }]);
+
+    const response = await getMeteorPostMessenger().connectAndWaitForResponse<{
+      hash: Uint8Array;
+      signedDelegate: SignedDelegate
+    }>(
       {
         actionType: EExternalActionType.sign_delegate,
-        inputs: {
-          actions: delegateAction.actions,
-          receiverId: delegateAction.receiverId,
-        },
+        inputs: transformedTransactions
+          .map((transaction) => transaction.encode())
+          .map((serialized) => Buffer.from(serialized).toString("base64"))
+          .join(","),
         network: this._networkId as ENearNetwork,
         forceExecutionTarget: this._forceTargetPlatform,
       }
     )
 
     if (response.success) {
-      const [hash, signedDelegateActionUint8Array] = response.payload;
-      return [
-        hash,
-        <SignedDelegate>(
-          deserialize(SCHEMA.SignedDelegate, signedDelegateActionUint8Array)
-        )
-      ]
+      const { hash, signedDelegate } = response.payload;
+      return {
+        delegatedHash: hash,
+        signedDelegate
+      };
     }
 
     throw new MeteorActionError({
