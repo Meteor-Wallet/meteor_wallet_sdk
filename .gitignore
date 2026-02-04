@@ -141,4 +141,4 @@ dist
 .dev.vars
 
 # meteor files
-near-connect/
+**/meteor-near-connect.js
