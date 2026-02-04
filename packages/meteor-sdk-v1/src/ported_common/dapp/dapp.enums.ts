@@ -5,6 +5,7 @@ export enum EExternalActionType {
   verify_owner = "verify_owner",
   keypom_claim = "keypom_claim",
   sign_message = "sign_message",
+  sign_delegate = "sign_delegate",
 }
 
 export enum EMeteorWalletSignInType {
