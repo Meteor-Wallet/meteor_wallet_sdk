@@ -1,0 +1,69 @@
+name: Release Meteor Near Connect
+
+on:
+  push:
+    branches:
+      - release/meteor-near-connect
+
+jobs:
+  release-meteor-near-connect:
+    name: Release Meteor Near Connect
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      deployments: write
+      id-token: write
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up tools with proto
+        uses: moonrepo/setup-toolchain@v0
+        with:
+          auto-install: true
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Set Github Identity
+        run: |
+          git config --global user.name "${GITHUB_ACTOR}"
+          git config --global user.email "${GITHUB_ACTOR}@users.noreply.github.com"
+
+      - name: Build meteor-near-connect.js locally
+        working-directory: packages/meteor-near-connect
+        run: |
+          bun run build
+
+      - name: Add Current Timestamp to ENV
+        id: date
+        run: echo "TIME_NOW=$(date +'%Y-%m-%dT%H-%M-%S')" >> $GITHUB_ENV
+      
+      - name: Debug Date Environment Variable
+        run: env | grep TIME_NOW
+
+      - name: Authenticate with Google Cloud
+        uses: google-github-actions/auth@v2
+        id: auth
+        with:
+          credentials_json: '${{ secrets.GOOGLE_CREDENTIALS }}'
+
+      - name: Upload NEAR Connect JS to Google Cloud Storage (Timestamped)
+        uses: google-github-actions/upload-cloud-storage@v2
+        id: upload-file-timestamped
+        with:
+          path: './near-connect/meteor-near-connect.js'
+          destination: meteor-apps-v2/near-connect/executor/timestamped/${{ env.TIME_NOW }}
+          parent: false
+
+      - name: Upload NEAR Connect JS to Google Cloud Storage
+        uses: google-github-actions/upload-cloud-storage@v2
+        id: upload-file
+        with:
+          path: './near-connect/meteor-near-connect.js'
+          destination: meteor-apps-v2/near-connect/executor/latest
+          parent: false
