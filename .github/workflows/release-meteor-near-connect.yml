@@ -67,3 +67,6 @@ jobs:
           path: './near-connect/meteor-near-connect.js'
           destination: meteor-apps-v2/near-connect/executor/latest
           parent: false
+          headers: |-
+            content-type: application/javascript
+            cache-control: public, max-age=60, stale-while-revalidate=30
