@@ -1,4 +1,4 @@
-import { DelegateAction, type SignedDelegate } from "@near-js/transactions";
+import { type SignedDelegate } from "@near-js/transactions";
 import { type FinalExecutionOutcome } from "@near-js/types";
 import { useLocalStorage } from "usehooks-ts";
 import { ActionCard } from "./action-builder/ActionCard";
@@ -66,8 +66,8 @@ export const SendTx = ({ wallet, network }: IPropsWalletAction) => {
     setLastError("");
     try {
       const connectorActions = actions.map((a) => buildConnectorAction(a));
-      const result = await wallet.signDelegateAction({
-        delegateAction: { actions: connectorActions, receiverId },
+      const result = await wallet.signDelegateActions({
+        delegateActions: [{ actions: connectorActions, receiverId }],
       });
 
       console.log("send delegate result", result);

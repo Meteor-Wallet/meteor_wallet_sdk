@@ -285,10 +285,10 @@ class NearWallet implements Omit<NearWalletBase, "manifest"> {
     }
   };
 
-  signDelegateAction = async (payload: {
+  signDelegateActions = async (payload: {
     network?: Network;
     signerId?: string;
-    delegateAction: TSimpleNearDelegateAction;
+    delegateActions: TSimpleNearDelegateAction[];
   }) => {
     const meteorData = await getMeteorData();
 
@@ -298,13 +298,15 @@ class NearWallet implements Omit<NearWalletBase, "manifest"> {
         id: "near::sign_delegate_actions",
         input: {
           target: meteorData.identifier,
-          delegateActions: [payload.delegateAction],
+          delegateActions: payload.delegateActions,
         },
       });
 
       const response = await action.execute();
 
-      return response.signedDelegatesWithHashes[0];
+      return {
+        signedDelegateActions: response.signedDelegatesWithHashes,
+      };
     }
   };
 }
