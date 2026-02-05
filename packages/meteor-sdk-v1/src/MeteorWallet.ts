@@ -8,6 +8,8 @@ import {
   buildDelegateAction,
   createTransaction,
   DelegateAction,
+  encodeDelegateAction,
+  SCHEMA,
   SignedDelegate,
 } from "@near-js/transactions";
 import { type AccessKeyInfoView } from "@near-js/types";
@@ -17,6 +19,7 @@ import type {
   Optional,
   Transaction,
 } from "@near-wallet-selector/core";
+import { serialize } from "borsh";
 import { type ConnectConfig, utils } from "near-api-js";
 import type { TSimpleNearDelegateAction } from "./MeteorConnect/action/mc_action.near";
 import { MeteorLogger } from "./MeteorConnect/logging/MeteorLogger";
@@ -28,6 +31,7 @@ import {
   type IDappAction_Logout_Data,
   type IDappAction_SignDelegateActions_Data,
   type IMeteorActionResponse_Output,
+  type IODappAction_PostMessage_SignDelegateActions_Input,
   type IODappAction_PostMessage_SignDelegateActions_Output,
   type IODappAction_PostMessage_SignIn_Output,
   type IODappAction_PostMessage_SignTransactions_Input,
@@ -473,8 +477,11 @@ export class MeteorWallet {
         {
           actionType: EExternalActionType.sign_delegate_actions,
           inputs: {
-            delegateActions: transformedDelegateActions,
-          } as IDappAction_SignDelegateActions_Data,
+            delegateActions: transformedDelegateActions
+              .map((delegateAction) => serialize(SCHEMA.DelegateAction, delegateAction))
+              .map((serialized) => Buffer.from(serialized).toString("base64"))
+              .join(","),
+          } as IODappAction_PostMessage_SignDelegateActions_Input,
           network: this._networkId as ENearNetwork,
           forceExecutionTargetConfig: this._forceTargetPlatformConfig,
         },

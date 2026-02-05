@@ -191,6 +191,10 @@ export interface ISignedDelegateWithHash {
   signedDelegate: SignedDelegate;
 }
 
+export interface IODappAction_PostMessage_SignDelegateActions_Input {
+  delegateActions: string;
+}
+
 export interface IODappAction_PostMessage_SignDelegateActions_Output {
   signedDelegatesWithHashes: ISignedDelegateWithHash[];
 }
