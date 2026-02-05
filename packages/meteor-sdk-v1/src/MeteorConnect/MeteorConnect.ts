@@ -74,7 +74,7 @@ export class MeteorConnect {
     this.logger.log("Initialized");
   }
 
-  private get storage() {
+  get storage() {
     return this._typedStorageHelper.get();
   }
 

@@ -18,6 +18,9 @@ export class MeteorConnectV2MessengerClient extends MeteorConnectClientBase {
   async getExecutionTargetConfigs<R extends TMCActionRequestUnionExpandedInput<TMCActionRegistry>>(
     _request: R,
   ): Promise<TMeteorExecutionTargetConfig[]> {
+    // For now we don't support any targets for V2 Messenger Client, as the deep link and QR code flows are not yet implemented
+    return [];
+
     const supportedTargets: TMeteorExecutionTargetConfig[] = [
       {
         executionTarget: "v2_rid_mobile_deep_link",

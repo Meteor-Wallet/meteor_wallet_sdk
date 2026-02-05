@@ -15,7 +15,17 @@ import "./app.css";
 import { MeteorLogger } from "@meteorwallet/sdk";
 import { Button } from "~/ui/Button";
 
+const envVars = {
+  ...process.env,
+};
+
+console.log("environemnt variables", envVars);
+
+console.log(process.env["NODE_ENV"]);
+console.log(envVars["NODE_ENV"]);
+
 if (process.env.NODE_ENV === "development") {
+  console.log("Setting MeteorLogger global logging level to debug for development environment");
   MeteorLogger.setGlobalLoggingLevel("debug");
 }
 

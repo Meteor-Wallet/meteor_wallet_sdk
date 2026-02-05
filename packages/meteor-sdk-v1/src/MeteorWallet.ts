@@ -14,6 +14,7 @@ import type {
 } from "@near-wallet-selector/core";
 import { type ConnectConfig, utils } from "near-api-js";
 import { MeteorLogger } from "./MeteorConnect/logging/MeteorLogger";
+import type { TMeteorConnectV1ExecutionTargetConfig } from "./MeteorConnect/target_clients/v1_client/MeteorConnectV1Client.types";
 import { isV1ExtensionAvailable } from "./MeteorConnect/utils/isV1ExtensionAvailable";
 import { convertSelectorActionToNearAction } from "./near_utils/convertSelectorActionToNearAction";
 import { EExternalActionType } from "./ported_common/dapp/dapp.enums";
@@ -72,7 +73,7 @@ export interface IMeteorWallet_Init_Inputs extends Partial<ConnectConfig> {
 }
 
 export interface IMeteorWallet_Constructor extends IMeteorWallet_Init_Inputs {
-  forceTargetPlatform?: "v1_web" | "v1_ext";
+  forceTargetPlatformConfig?: TMeteorConnectV1ExecutionTargetConfig;
   keyStore: KeyStore;
 }
 
@@ -126,7 +127,7 @@ export class MeteorWallet {
   /** @hidden */
   _connectedAccount: ConnectedMeteorWalletAccount | undefined;
 
-  _forceTargetPlatform?: "v1_web" | "v1_ext";
+  _forceTargetPlatformConfig?: TMeteorConnectV1ExecutionTargetConfig;
 
   /** @hidden */
   _initializationPromises: Promise<any>[] = [];
@@ -174,9 +175,9 @@ export class MeteorWallet {
     networkId,
     walletUrl,
     nodeUrl,
-    forceTargetPlatform,
+    forceTargetPlatformConfig,
   }: IMeteorWallet_Constructor) {
-    this._forceTargetPlatform = forceTargetPlatform;
+    this._forceTargetPlatformConfig = forceTargetPlatformConfig;
 
     const authDataKey = appKeyPrefix + LOCAL_STORAGE_KEY_SUFFIX;
     this._authDataKey = authDataKey;
@@ -190,7 +191,7 @@ export class MeteorWallet {
     });
 
     this.logger.log(
-      `Initialized MeteorWallet V1 Client for network [${networkId}] targeting platform [${this._forceTargetPlatform != null ? this._forceTargetPlatform : this._walletBaseUrl}]`,
+      `Initialized MeteorWallet V1 Client for network [${networkId}] targeting platform [${this._forceTargetPlatformConfig != null ? this._forceTargetPlatformConfig.executionTarget : this._walletBaseUrl}]`,
     );
   }
 
@@ -252,7 +253,7 @@ export class MeteorWallet {
           message: options.message,
         } as IODappAction_VerifyOwner_Input,
         network: this._networkId as ENearNetwork,
-        forceExecutionTarget: this._forceTargetPlatform,
+        forceExecutionTargetConfig: this._forceTargetPlatformConfig,
       });
 
     if (response.success) {
@@ -289,7 +290,7 @@ export class MeteorWallet {
           actionType: EExternalActionType.login,
           inputs: { public_key: usingPublicKey, ...restOptions },
           network: this._networkId as ENearNetwork,
-          forceExecutionTarget: this._forceTargetPlatform,
+          forceExecutionTargetConfig: this._forceTargetPlatformConfig,
         },
       );
 
@@ -339,7 +340,7 @@ export class MeteorWallet {
         actionType: EExternalActionType.logout,
         inputs,
         network: this._networkId as ENearNetwork,
-        forceExecutionTarget: this._forceTargetPlatform,
+        forceExecutionTargetConfig: this._forceTargetPlatformConfig,
       });
     }
 
@@ -390,7 +391,7 @@ export class MeteorWallet {
           accountId,
         },
         network: this._networkId as ENearNetwork,
-        forceExecutionTarget: this._forceTargetPlatform,
+        forceExecutionTargetConfig: this._forceTargetPlatformConfig,
       });
     if (response.success) {
       response.payload.state = state;
@@ -463,7 +464,7 @@ export class MeteorWallet {
           } as IODappAction_PostMessage_SignTransactions_Input,
           // inputs: { public_key: usingPublicKey, ...options },
           network: this._networkId as ENearNetwork,
-          forceExecutionTarget: this._forceTargetPlatform,
+          forceExecutionTargetConfig: this._forceTargetPlatformConfig,
         },
       );
 
@@ -480,9 +481,9 @@ export class MeteorWallet {
   }
 
   async requestSignDelegateAction({
-    delegateAction
+    delegateAction,
   }: {
-    delegateAction: TMeteorSdkV1Transaction
+    delegateAction: TMeteorSdkV1Transaction;
   }): Promise<{
     delegateHash: Uint8Array;
     signedDelegate: SignedDelegate;
@@ -491,34 +492,34 @@ export class MeteorWallet {
       `Requesting sign delegate action for account [${this.getAccountId() ?? "<unknown>"}]`,
     );
 
-    const transformedTransactions = await this.transformTransactions([{
-      actions: delegateAction.actions,
-      receiverId: delegateAction.receiverId,
-      signerId: this.getAccountId()
-    }]);
+    const transformedTransactions = await this.transformTransactions([
+      {
+        actions: delegateAction.actions,
+        receiverId: delegateAction.receiverId,
+        signerId: this.getAccountId(),
+      },
+    ]);
 
     const response = await getMeteorPostMessenger().connectAndWaitForResponse<{
       hash: Uint8Array;
-      signedDelegate: SignedDelegate
-    }>(
-      {
-        actionType: EExternalActionType.sign_delegate,
-        inputs: {
-          transactions: transformedTransactions
-            .map((transaction) => transaction.encode())
-            .map((serialized) => Buffer.from(serialized).toString("base64"))
-            .join(",")
-        },
-        network: this._networkId as ENearNetwork,
-        forceExecutionTarget: this._forceTargetPlatform,
-      }
-    )
+      signedDelegate: SignedDelegate;
+    }>({
+      actionType: EExternalActionType.sign_delegate,
+      inputs: {
+        transactions: transformedTransactions
+          .map((transaction) => transaction.encode())
+          .map((serialized) => Buffer.from(serialized).toString("base64"))
+          .join(","),
+      },
+      network: this._networkId as ENearNetwork,
+      forceExecutionTargetConfig: this._forceTargetPlatformConfig,
+    });
 
     if (response.success) {
       const { hash, signedDelegate } = response.payload;
       return {
         delegateHash: hash,
-        signedDelegate
+        signedDelegate,
       };
     }
 

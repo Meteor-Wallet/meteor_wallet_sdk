@@ -84,7 +84,7 @@ export default defineConfig(({ isSsrBuild }) => ({
   },
   define: {
     "process.env": {
-      NODE_ENV: JSON.stringify(process.env.NODE_ENV),
+      NODE_ENV: process.env.NODE_ENV,
       LOCAL_IP: localIp || "localhost",
     },
   },

@@ -50,6 +50,7 @@ export interface IMeteorConnectTargetedClient<
 
 export type TMeteorConnectionExecutionTarget =
   | "v1_web"
+  | "v1_web_localhost"
   | "v1_ext"
   | "v2_rid_mobile_deep_link"
   | "v2_rid_qr_code"
@@ -67,6 +68,10 @@ export interface IMeteorConnection_Test_RidDeepLink
 export interface IMeteorConnection_Test_RidQrCode
   extends IMeteorConnection_Base<"test_rid_qr_code"> {}
 export interface IMeteorConnection_V1_Web extends IMeteorConnection_Base<"v1_web"> {}
+export interface IMeteorConnection_V1_Web_Localhost
+  extends IMeteorConnection_Base<"v1_web_localhost"> {
+  baseUrl: string;
+}
 export interface IMeteorConnection_V1_Ext extends IMeteorConnection_Base<"v1_ext"> {}
 export interface IMeteorConnection_V2_MobileDeepLink
   extends IMeteorConnection_Base<"v2_rid_mobile_deep_link"> {}
@@ -74,6 +79,7 @@ export interface IMeteorConnection_V2_QrCode extends IMeteorConnection_Base<"v2_
 
 export type TMeteorExecutionTargetConfig =
   | IMeteorConnection_V1_Web
+  | IMeteorConnection_V1_Web_Localhost
   | IMeteorConnection_V1_Ext
   | IMeteorConnection_V2_MobileDeepLink
   | IMeteorConnection_V2_QrCode
@@ -97,6 +103,7 @@ export interface IMeteorConnectTypedStorage {
   accounts: IMeteorConnectAccount[];
   lastInitialized: number;
   selectedNetworkAccounts: TMCSelectedAccountForNetwork;
+  webDevLocalhostBaseUrl: string;
 }
 
 export interface IMeteorConnect_Initialize_Input {

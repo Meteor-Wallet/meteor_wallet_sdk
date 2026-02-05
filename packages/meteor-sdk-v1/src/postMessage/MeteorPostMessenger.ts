@@ -2,6 +2,7 @@ import { nanoid } from "nanoid";
 import { stringify } from "query-string";
 import { envConfig } from "../envConfig";
 import { MeteorLogger } from "../MeteorConnect/logging/MeteorLogger";
+import type { TMeteorConnectV1ExecutionTargetConfig } from "../MeteorConnect/target_clients/v1_client/MeteorConnectV1Client.types";
 import { SIGN_POPUP_HEIGHT, SIGN_POPUP_WIDTH } from "../ported_common/constants_theme";
 import {
   EDappActionConnectionStatus,
@@ -25,7 +26,7 @@ interface IOConnectAndWaitForResponse_Input {
   network: ENearNetwork;
   actionType: EExternalActionType;
   inputs: any;
-  forceExecutionTarget: "v1_web" | "v1_ext" | undefined;
+  forceExecutionTargetConfig: TMeteorConnectV1ExecutionTargetConfig | undefined;
 }
 
 declare global {
@@ -55,11 +56,16 @@ class ComWindow {
   ) {
     this.logger.log("Creating ComWindow for connection", connection);
 
-    const baseWalletUrl = envConfig.wallet_base_url;
+    const baseWalletUrl =
+      connection.forceExecutionTargetConfig?.executionTarget === "v1_web_localhost"
+        ? connection.forceExecutionTargetConfig.baseUrl
+        : envConfig.wallet_base_url;
     const url = new URL(baseWalletUrl);
     this.walletOrigin = url.origin;
 
-    const forceWeb = connection.forceExecutionTarget === "v1_web";
+    const forceWeb =
+      connection.forceExecutionTargetConfig?.executionTarget === "v1_web" ||
+      connection.forceExecutionTargetConfig?.executionTarget === "v1_web_localhost";
 
     if (forceWeb || window.meteorCom == null) {
       this.comType = EDappActionSource.website_post_message;
@@ -109,7 +115,7 @@ class ComWindow {
     } else {
       this.comType = EDappActionSource.extension_injected;
 
-      if (connection.forceExecutionTarget === "v1_ext") {
+      if (connection.forceExecutionTargetConfig?.executionTarget === "v1_ext") {
         this.directExtensionState = {
           listener,
         };
@@ -389,7 +395,7 @@ class MeteorPostMessenger {
     actionType,
     network,
     inputs,
-    forceExecutionTarget,
+    forceExecutionTargetConfig,
   }: IOConnectAndWaitForResponse_Input): Promise<IMeteorActionResponse_Output<T>> {
     let newConnection: IPostMessageConnection = {
       uid: nanoid(),
@@ -404,7 +410,7 @@ class MeteorPostMessenger {
       inputs,
       network,
       endTags: [],
-      forceExecutionTarget,
+      forceExecutionTargetConfig,
     };
 
     console.log("Starting execution for V1", newConnection);

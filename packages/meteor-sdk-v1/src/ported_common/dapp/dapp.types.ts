@@ -3,6 +3,7 @@ import { Transaction as NearFullTransaction } from "@near-js/transactions";
 import type { FinalExecutionOutcome } from "@near-js/types";
 import type { Action, Transaction } from "@near-wallet-selector/core";
 import { z } from "zod";
+import type { TMeteorConnectV1ExecutionTargetConfig } from "../../MeteorConnect/target_clients/v1_client/MeteorConnectV1Client.types";
 import { ENearNetwork } from "../near/near_basic_types";
 import type { PartialBy } from "../utils/special_typescript_types";
 import {
@@ -302,7 +303,7 @@ export interface IPostMessageConnection {
   lastAttemptedConnection: number;
   lastConnection: number;
   network: ENearNetwork;
-  forceExecutionTarget?: "v1_web" | "v1_ext";
+  forceExecutionTargetConfig?: TMeteorConnectV1ExecutionTargetConfig;
 }
 
 export type TPostMessageSend = Pick<
