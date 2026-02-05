@@ -1,3 +1,4 @@
+import { wait_utils } from "@meteorwallet/utils/javascript_helpers/wait.utils";
 import { nanoid } from "nanoid";
 import { stringify } from "query-string";
 import { envConfig } from "../envConfig";
@@ -254,10 +255,12 @@ class MeteorPostMessenger {
 
             this.sendComs();
 
-            currentConnection.resolve({
-              success: true,
-              endTags: [],
-              payload: data.payload,
+            wait_utils.waitMillis(100).then(() => {
+              currentConnection.resolve({
+                success: true,
+                endTags: [],
+                payload: data.payload,
+              });
             });
           }
 

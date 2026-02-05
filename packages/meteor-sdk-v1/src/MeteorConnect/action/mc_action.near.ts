@@ -5,6 +5,7 @@ import type { FinalExecutionOutcome } from "@near-js/types";
 import type {
   IODappAction_PostMessage_SignDelegateActions_Output,
   IODappAction_VerifyOwner_Output,
+  IORequestSignDelegateActions_Output,
 } from "../../ported_common/dapp/dapp.types";
 import type {
   IMeteorConnectAccount,
@@ -144,7 +145,7 @@ export const MCNearActions = {
   "near::sign_delegate_actions": {
     input: {} as IMCA_Near_SignDelegateActions_Input,
     expandedInput: {} as IMCA_Near_SignDelegateActions_Input & IMCAction_WithFullAccount,
-    output: {} as IODappAction_PostMessage_SignDelegateActions_Output,
+    output: {} as IORequestSignDelegateActions_Output,
     meta: {
       inputTransform: ["targeted_account"],
       executionTargetSource: "targeted_account",

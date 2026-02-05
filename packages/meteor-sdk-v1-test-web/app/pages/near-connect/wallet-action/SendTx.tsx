@@ -1,3 +1,4 @@
+import { DelegateAction, type SignedDelegate } from "@near-js/transactions";
 import { type FinalExecutionOutcome } from "@near-js/types";
 import { useLocalStorage } from "usehooks-ts";
 import { ActionCard } from "./action-builder/ActionCard";
@@ -23,10 +24,19 @@ export const SendTx = ({ wallet, network }: IPropsWalletAction) => {
     `send-tx-${network}-new-action-type`,
     "Transfer",
   );
-  const [lastResult, setLastResult] = useLocalStorage<FinalExecutionOutcome | undefined>(
+  const [lastTrxResult, setLastTrxResult] = useLocalStorage<FinalExecutionOutcome | undefined>(
     `send-tx-${network}-last-result`,
     undefined,
   );
+
+  const [lastDelegateResult, setLastDelegateResult] = useLocalStorage<
+    | {
+        delegateHash: Uint8Array;
+        signedDelegate: SignedDelegate;
+      }
+    | undefined
+  >(`send-tx-${network}-last-delegate-result`, undefined);
+
   const [actionsStored, setActionsStored] = useLocalStorage<unknown>(
     `send-tx-${network}-actions`,
     [],
@@ -39,12 +49,29 @@ export const SendTx = ({ wallet, network }: IPropsWalletAction) => {
   };
 
   const sendTx = async () => {
-    setLastResult(undefined);
+    setLastTrxResult(undefined);
     setLastError("");
     try {
       const connectorActions = actions.map((a) => buildConnectorAction(a));
       const result = await wallet.signAndSendTransaction({ actions: connectorActions, receiverId });
-      setLastResult(result);
+      setLastTrxResult(result);
+    } catch (e) {
+      setLastError(e instanceof Error ? e.message : String(e));
+      throw e;
+    }
+  };
+
+  const sendDelegateAction = async () => {
+    setLastDelegateResult(undefined);
+    setLastError("");
+    try {
+      const connectorActions = actions.map((a) => buildConnectorAction(a));
+      const result = await wallet.signDelegateAction({
+        delegateAction: { actions: connectorActions, receiverId },
+      });
+
+      console.log("send delegate result", result);
+      // setLastDelegateResult(result);
     } catch (e) {
       setLastError(e instanceof Error ? e.message : String(e));
       throw e;
@@ -172,13 +199,17 @@ export const SendTx = ({ wallet, network }: IPropsWalletAction) => {
           <button className={"input-button w-full"} onClick={() => sendTx()}>
             Send tx
           </button>
+          <button className={"input-button w-full"} onClick={() => sendDelegateAction()}>
+            Sign delegate
+          </button>
         </div>
 
         {previewError ? (
           <p className={"text-left text-xs text-amber-400"}>Preview error: {previewError}</p>
         ) : null}
         {lastError ? <p className={"text-left text-xs text-red-400"}>{lastError}</p> : null}
-        {lastResult != null && <FinalOutcome outcome={lastResult} network={network} />}
+        {lastTrxResult != null && <FinalOutcome outcome={lastTrxResult} network={network} />}
+        {lastDelegateResult != null && <div>{lastDelegateResult.delegateHash.toString()}</div>}
       </div>
     </div>
   );

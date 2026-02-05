@@ -177,9 +177,18 @@ export interface IDappAction_SignTransactions_Data {
 
 /* DELEGATE ACTION SIGNING */
 
-export interface IORequestSignDelegateActions_Inputs {
-  /** list of transactions to sign */
+export interface IORequestSignDelegateActions_Input {
+  /** list of delegate actions to sign */
   delegateActions: TSimpleNearDelegateAction[];
+}
+
+export interface ISignDelegateActionReturn {
+  delegateHash: Uint8Array;
+  signedDelegate: SignedDelegate;
+}
+
+export interface IORequestSignDelegateActions_Output {
+  signedDelegatesWithHashes: ISignDelegateActionReturn[];
 }
 
 export interface IDappAction_SignDelegateActions_Data {
@@ -195,8 +204,15 @@ export interface IODappAction_PostMessage_SignDelegateActions_Input {
   delegateActions: string;
 }
 
+export interface ISerializedSignedDelegateWithHashes {
+  // base64 encoded hash
+  delegateHash: string;
+  // base64 encoding of the borsh serialized `SignedDelegateAction`
+  signedDelegateAction: string;
+}
+
 export interface IODappAction_PostMessage_SignDelegateActions_Output {
-  signedDelegatesWithHashes: ISignedDelegateWithHash[];
+  signedDelegatesWithHashes: ISerializedSignedDelegateWithHashes[];
 }
 
 // ---------------------------

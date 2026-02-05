@@ -19,7 +19,7 @@ import type {
   Optional,
   Transaction,
 } from "@near-wallet-selector/core";
-import { serialize } from "borsh";
+import { deserialize, serialize } from "borsh";
 import { type ConnectConfig, utils } from "near-api-js";
 import type { TSimpleNearDelegateAction } from "./MeteorConnect/action/mc_action.near";
 import { MeteorLogger } from "./MeteorConnect/logging/MeteorLogger";
@@ -43,8 +43,11 @@ import {
   type IOMeteorWalletSdk_RequestSignIn_Inputs,
   type IOMeteorWalletSdk_SignIn_Output,
   type IOMeteorWalletSdkAccount_SignAndSendTransaction_Input,
+  type IORequestSignDelegateActions_Input,
+  type IORequestSignDelegateActions_Output,
   type IORequestSignTransactions_Inputs,
   type IOWalletExternalLinkedContract,
+  type ISignDelegateActionReturn,
   MeteorActionError,
 } from "./ported_common/dapp/dapp.types";
 import { ENearNetwork } from "./ported_common/near/near_basic_types";
@@ -463,9 +466,7 @@ export class MeteorWallet {
 
   async requestSignDelegateActions({
     delegateActions,
-  }: {
-    delegateActions: TSimpleNearDelegateAction[];
-  }): Promise<IODappAction_PostMessage_SignDelegateActions_Output> {
+  }: IORequestSignDelegateActions_Input): Promise<IORequestSignDelegateActions_Output> {
     this.logger.log(
       `Requesting sign delegate action for account [${this.getAccountId() ?? "<unknown>"}]`,
     );
@@ -488,7 +489,21 @@ export class MeteorWallet {
       );
 
     if (response.success) {
-      return response.payload;
+      const deserializedSignedDelegates = response.payload.signedDelegatesWithHashes.map(
+        (serializedSignedDelegate) => {
+          return {
+            delegateHash: Buffer.from(serializedSignedDelegate.delegateHash, "base64"),
+            signedDelegate: deserialize(
+              SCHEMA.SignedDelegate,
+              Buffer.from(serializedSignedDelegate.signedDelegateAction, "base64"),
+            ) as SignedDelegate,
+          } satisfies ISignDelegateActionReturn;
+        },
+      );
+
+      return {
+        signedDelegatesWithHashes: deserializedSignedDelegates,
+      };
     }
 
     throw new MeteorActionError({
