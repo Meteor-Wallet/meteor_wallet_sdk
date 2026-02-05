@@ -1,0 +1,10 @@
+{
+  "modules": [
+    {
+      "moduleName": "@hot-labs/near-connect",
+      "relativePathToRoot": "../near-connect",
+      "addToPackages": []
+    }
+  ],
+  "exclude": ["node_modules", ".git", ".idea"]
+}

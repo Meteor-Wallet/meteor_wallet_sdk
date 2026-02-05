@@ -6,7 +6,9 @@
     "type-check-all": "bun run --filter '*' type-check",
     "type-check-watch-all": "bun run --filter '*' type-check-watch",
     "clean-files": "bunx glcl",
-    "clean-cache-files": "bunx glcl -f glob-list.caches.clean"
+    "clean-cache-files": "bunx glcl -f glob-list.caches.clean",
+    "link-local-packages-watch": "bunx local-package-link@0.1.0 --watch",
+    "link-local-packages": "bunx local-package-link@0.1.0"
   },
   "dependencies": {},
   "devDependencies": {

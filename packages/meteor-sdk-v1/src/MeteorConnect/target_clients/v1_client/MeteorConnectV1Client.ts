@@ -227,19 +227,14 @@ export class MeteorConnectV1Client extends MeteorConnectClientBase {
       }
     }
 
-    if (request.id === "near::sign_delegate") {
+    if (request.id === "near::sign_delegate_actions") {
       const { wallet } = this.getSdkForNetworkAndTarget(
         request.expandedInput.account.identifier.network,
         connectionConfig,
       );
 
-      return await wallet.requestSignDelegateAction({
-        delegateAction: {
-          receiverId: request.expandedInput.delegateAction.receiverId,
-          actions: request.expandedInput.delegateAction.actions.map((action) =>
-            nearActionToSdkV1Action(action),
-          ),
-        },
+      return await wallet.requestSignDelegateActions({
+        delegateActions: request.expandedInput.delegateActions,
       });
     }
 

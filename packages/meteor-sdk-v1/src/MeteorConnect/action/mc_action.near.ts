@@ -1,3 +1,4 @@
+import type { PublicKey } from "@near-js/crypto";
 import type { SignedMessage } from "@near-js/signers";
 import type { Action, SignedDelegate } from "@near-js/transactions";
 import type { FinalExecutionOutcome } from "@near-js/types";
@@ -64,12 +65,35 @@ export type TSimpleNearTransaction = {
   actions: Action[];
 };
 
+// export type TSimpleNearTransaction_DelegateAction = {
+//   receiverId: string;
+//   actions: DelegateAction[];
+// };
+
 export interface IMCA_Near_SignTransactions_Input extends IMCAction_WithExactAccountTarget {
   transactions: TSimpleNearTransaction[];
 }
 
+//
+// SIGN DELEGATE ACTIONS
+//
+
+export interface INearNativeDelegateAction {
+  senderId: string;
+  receiverId: string;
+  actions: Array<Action>;
+  nonce: bigint;
+  maxBlockHeight: bigint;
+  publicKey: PublicKey;
+}
+
+export type TSimpleNearDelegateAction = Omit<
+  INearNativeDelegateAction,
+  "senderId" | "publicKey" | "nonce" | "blockHash" | "maxBlockHeight"
+>;
+
 export interface IMCA_Near_SignDelegateActions_Input extends IMCAction_WithExactAccountTarget {
-  delegateAction: TSimpleNearTransaction;
+  delegateActions: TSimpleNearDelegateAction[];
 }
 
 // --------------------------
@@ -114,7 +138,7 @@ export const MCNearActions = {
       executionTargetSource: "targeted_account",
     },
   },
-  "near::sign_delegate": {
+  "near::sign_delegate_actions": {
     input: {} as IMCA_Near_SignDelegateActions_Input,
     expandedInput: {} as IMCA_Near_SignDelegateActions_Input & IMCAction_WithFullAccount,
     output: {} as {

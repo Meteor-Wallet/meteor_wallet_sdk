@@ -186,6 +186,26 @@ const MeteorConnectWithAccount = ({
     },
   });
 
+  const mutate_signDelegateAction = useMutation({
+    mutationKey: ["mutate_signDelegateAction", account.identifier],
+    mutationFn: async () => {
+      const action = await meteorConnect.createAction({
+        id: "near::sign_delegate_actions",
+        input: {
+          target: account.identifier,
+          delegateActions: [
+            {
+              receiverId: "pebble.testnet",
+              actions: [actionCreators.transfer(BigInt(parseNearAmount("0.001")!))],
+            },
+          ],
+        },
+      });
+
+      return await action.execute();
+    },
+  });
+
   const mutate_verifyOwner = useMutation({
     mutationKey: ["verify_owner", account.identifier],
     mutationFn: async () => {
@@ -220,6 +240,17 @@ const MeteorConnectWithAccount = ({
       >
         Verify Owner
       </Button>
+      <div className="p-5 flex flex-col gap-2 border border-gray-200 dark:border-gray-700 rounded-lg">
+        <code>Send 0.001 NEAR to pebble.testnet</code>
+        <Button
+          onClick={async () => {
+            const response = await mutate_signDelegateAction.mutateAsync();
+            console.log("Signed delegate action response", response);
+          }}
+        >
+          Test Signed Delegate Action
+        </Button>
+      </div>
       <AddMessageComponent
         onPressAddMessage={async (params) => {
           console.log("Adding message");

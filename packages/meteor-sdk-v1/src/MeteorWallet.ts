@@ -13,6 +13,7 @@ import type {
   Transaction,
 } from "@near-wallet-selector/core";
 import { type ConnectConfig, utils } from "near-api-js";
+import type { TSimpleNearDelegateAction } from "./MeteorConnect/action/mc_action.near";
 import { MeteorLogger } from "./MeteorConnect/logging/MeteorLogger";
 import type { TMeteorConnectV1ExecutionTargetConfig } from "./MeteorConnect/target_clients/v1_client/MeteorConnectV1Client.types";
 import { isV1ExtensionAvailable } from "./MeteorConnect/utils/isV1ExtensionAvailable";
@@ -34,7 +35,6 @@ import {
   type IORequestSignTransactions_Inputs,
   type IOWalletExternalLinkedContract,
   MeteorActionError,
-  type TMeteorSdkV1Transaction,
 } from "./ported_common/dapp/dapp.types";
 import { ENearNetwork } from "./ported_common/near/near_basic_types";
 import { NEAR_BASE_CONFIG_FOR_NETWORK } from "./ported_common/near/near_static_data";
@@ -407,36 +407,6 @@ export class MeteorWallet {
     });
   }
 
-  /*async requestSignTransactionsNearNative(inputs: IORequestSignTransactionsNearNative_Inputs): Promise<FinalExecutionOutcome[]> {
-    console.log("Transformed transactions", transformedTransactions);
-
-    const response =
-      await getMeteorPostMessenger().connectAndWaitForResponse<IODappAction_PostMessage_SignTransactions_Output>(
-        {
-          actionType: EExternalActionType.sign,
-          inputs: {
-            transactions: transformedTransactions
-              .map((transaction) => transaction.encode())
-              .map((serialized) => Buffer.from(serialized).toString("base64"))
-              .join(","),
-          } as IODappAction_PostMessage_SignTransactions_Input,
-          // inputs: { public_key: usingPublicKey, ...options },
-          network: this._networkId as ENearNetwork,
-        },
-      );
-
-    // console.log("Finished sign-in request", response);
-
-    if (response.success) {
-      return response.payload.executionOutcomes;
-    }
-
-    throw new MeteorActionError({
-      endTags: response.endTags,
-      message: response.message,
-    });
-  }*/
-
   /**
    * Sign transactions using Meteor Wallet. Will return a promise with an array of `FinalExecutionOutcome`
    * of the given transactions.
@@ -480,10 +450,10 @@ export class MeteorWallet {
     });
   }
 
-  async requestSignDelegateAction({
-    delegateAction,
+  async requestSignDelegateActions({
+    delegateActions,
   }: {
-    delegateAction: TMeteorSdkV1Transaction;
+    delegateActions: TSimpleNearDelegateAction[];
   }): Promise<{
     delegateHash: Uint8Array;
     signedDelegate: SignedDelegate;
@@ -492,19 +462,11 @@ export class MeteorWallet {
       `Requesting sign delegate action for account [${this.getAccountId() ?? "<unknown>"}]`,
     );
 
-    const transformedTransactions = await this.transformTransactions([
-      {
-        actions: delegateAction.actions,
-        receiverId: delegateAction.receiverId,
-        signerId: this.getAccountId(),
-      },
-    ]);
-
-    const response = await getMeteorPostMessenger().connectAndWaitForResponse<{
+    /* const response = await getMeteorPostMessenger().connectAndWaitForResponse<{
       hash: Uint8Array;
       signedDelegate: SignedDelegate;
     }>({
-      actionType: EExternalActionType.sign_delegate,
+      actionType: EExternalActionType.sign_delegate_actions,
       inputs: {
         transactions: transformedTransactions
           .map((transaction) => transaction.encode())
@@ -526,7 +488,9 @@ export class MeteorWallet {
     throw new MeteorActionError({
       endTags: response.endTags,
       message: response.message,
-    });
+    }); */
+
+    throw new Error("Not implemented yet");
   }
 
   /**

@@ -1,8 +1,9 @@
 import { KeyPair, KeyType } from "@near-js/crypto";
 import { Transaction as NearFullTransaction } from "@near-js/transactions";
 import type { FinalExecutionOutcome } from "@near-js/types";
-import type { Action, Transaction } from "@near-wallet-selector/core";
+import type { Action, Transaction as WalletSelectorTransaction } from "@near-wallet-selector/core";
 import { z } from "zod";
+import type { TSimpleNearDelegateAction } from "../../MeteorConnect/action/mc_action.near";
 import type { TMeteorConnectV1ExecutionTargetConfig } from "../../MeteorConnect/target_clients/v1_client/MeteorConnectV1Client.types";
 import { ENearNetwork } from "../near/near_basic_types";
 import type { PartialBy } from "../utils/special_typescript_types";
@@ -151,25 +152,16 @@ export interface IODappAction_PostMessage_SignTransactions_Output {
  */
 export interface IORequestSignTransactionsRedirect_Inputs {
   /** list of transactions to sign */
-  transactions: Transaction[];
+  transactions: WalletSelectorTransaction[];
   /** url NEAR Wallet will redirect to after transaction signing is complete */
   callback_url?: string;
   /** meta information NEAR Wallet will send back to the application. `meta` will be attached to the `callbackUrl` as a url search param */
   meta?: string;
 }
 
-export type TMeteorSdkV1Transaction = Omit<Transaction, "signerId">;
-export type TNearNativeSimpleTransaction = Omit<
-  NearFullTransaction,
-  "publicKey" | "signerId" | "nonce" | "blockHash"
->;
+export type TMeteorSdkV1Transaction = Omit<WalletSelectorTransaction, "signerId">;
 
 export interface IORequestSignTransactions_Inputs {
-  /** list of transactions to sign */
-  transactions: TMeteorSdkV1Transaction[];
-}
-
-export interface IORequestSignTransactionsNearNative_Inputs {
   /** list of transactions to sign */
   transactions: TMeteorSdkV1Transaction[];
 }
@@ -177,6 +169,13 @@ export interface IORequestSignTransactionsNearNative_Inputs {
 export interface IDappAction_SignTransactions_Data {
   status: EWalletExternalActionStatus;
   transactions: NearFullTransaction[];
+}
+
+/* DELEGATE ACTION SIGNING */
+
+export interface IORequestSignDelegateActions_Inputs {
+  /** list of transactions to sign */
+  delegateActions: TSimpleNearDelegateAction[];
 }
 
 export interface IOWalletExternalLinkedContract {

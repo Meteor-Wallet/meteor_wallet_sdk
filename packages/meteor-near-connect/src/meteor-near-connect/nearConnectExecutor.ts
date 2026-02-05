@@ -1,10 +1,10 @@
 import {
-  type ConnectorAction,
   type NearWalletBase,
   type SignAndSendTransactionParams,
   type SignAndSendTransactionsParams,
   type SignMessageParams,
 } from "@hot-labs/near-connect";
+import type { Network } from "@hot-labs/near-connect/build/types";
 import type {
   IMeteorComInjectedObject,
   IMeteorComInjectedObjectV2,
@@ -21,13 +21,13 @@ import {
 } from "@meteorwallet/sdk";
 import type { FinalExecutionOutcome } from "@near-js/types";
 import { base64 } from "@scure/base";
+import type { TSimpleNearDelegateAction } from "../../../meteor-sdk-v1/src/MeteorConnect/action/mc_action.near";
 import type {
   NearConnectAccount,
   NearConnectNetwork,
   NearConnectSignedMessage,
 } from "./near-connect.types";
 import { head } from "./view";
-import type { Action, Network } from "@hot-labs/near-connect/build/types";
 
 // import { head } from "./view";
 
@@ -285,33 +285,26 @@ class NearWallet implements Omit<NearWalletBase, "manifest"> {
     }
   };
 
-
   signDelegateAction = async (payload: {
     network?: Network;
     signerId?: string;
-    delegateAction: {
-      actions: Array<Action | ConnectorAction>;
-      receiverId: string
-    }
+    delegateAction: TSimpleNearDelegateAction;
   }) => {
     const meteorData = await getMeteorData();
 
     if (meteorData != null) {
       const met = await getMeteorConnect();
       const action = await met.createAction({
-        id: "near::sign_delegate",
+        id: "near::sign_delegate_actions",
         input: {
           target: meteorData.identifier,
-          delegateAction: {
-            receiverId: payload.delegateAction.receiverId,
-            actions: payload.delegateAction.actions.map(convertSelectorActionToNearAction),
-          }
+          delegateActions: [payload.delegateAction],
         },
       });
 
       return await action.execute();
     }
-  }
+  };
 }
 
 window.selector.ready(new NearWallet());
