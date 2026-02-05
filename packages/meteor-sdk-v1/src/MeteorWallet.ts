@@ -4,7 +4,12 @@ import { KeyStore } from "@near-js/keystores";
 import { BrowserLocalStorageKeyStore } from "@near-js/keystores-browser";
 import { JsonRpcProvider } from "@near-js/providers";
 import { KeyPairSigner } from "@near-js/signers";
-import { createTransaction, SignedDelegate } from "@near-js/transactions";
+import {
+  buildDelegateAction,
+  createTransaction,
+  DelegateAction,
+  SignedDelegate,
+} from "@near-js/transactions";
 import { type AccessKeyInfoView } from "@near-js/types";
 import type {
   Action,
@@ -21,7 +26,9 @@ import { convertSelectorActionToNearAction } from "./near_utils/convertSelectorA
 import { EExternalActionType } from "./ported_common/dapp/dapp.enums";
 import {
   type IDappAction_Logout_Data,
+  type IDappAction_SignDelegateActions_Data,
   type IMeteorActionResponse_Output,
+  type IODappAction_PostMessage_SignDelegateActions_Output,
   type IODappAction_PostMessage_SignIn_Output,
   type IODappAction_PostMessage_SignTransactions_Input,
   type IODappAction_PostMessage_SignTransactions_Output,
@@ -454,43 +461,33 @@ export class MeteorWallet {
     delegateActions,
   }: {
     delegateActions: TSimpleNearDelegateAction[];
-  }): Promise<{
-    delegateHash: Uint8Array;
-    signedDelegate: SignedDelegate;
-  }> {
+  }): Promise<IODappAction_PostMessage_SignDelegateActions_Output> {
     this.logger.log(
       `Requesting sign delegate action for account [${this.getAccountId() ?? "<unknown>"}]`,
     );
 
-    /* const response = await getMeteorPostMessenger().connectAndWaitForResponse<{
-      hash: Uint8Array;
-      signedDelegate: SignedDelegate;
-    }>({
-      actionType: EExternalActionType.sign_delegate_actions,
-      inputs: {
-        transactions: transformedTransactions
-          .map((transaction) => transaction.encode())
-          .map((serialized) => Buffer.from(serialized).toString("base64"))
-          .join(","),
-      },
-      network: this._networkId as ENearNetwork,
-      forceExecutionTargetConfig: this._forceTargetPlatformConfig,
-    });
+    const transformedDelegateActions = await this.transformDelegateActions(delegateActions);
+
+    const response =
+      await getMeteorPostMessenger().connectAndWaitForResponse<IODappAction_PostMessage_SignDelegateActions_Output>(
+        {
+          actionType: EExternalActionType.sign_delegate_actions,
+          inputs: {
+            delegateActions: transformedDelegateActions,
+          } as IDappAction_SignDelegateActions_Data,
+          network: this._networkId as ENearNetwork,
+          forceExecutionTargetConfig: this._forceTargetPlatformConfig,
+        },
+      );
 
     if (response.success) {
-      const { hash, signedDelegate } = response.payload;
-      return {
-        delegateHash: hash,
-        signedDelegate,
-      };
+      return response.payload;
     }
 
     throw new MeteorActionError({
       endTags: response.endTags,
       message: response.message,
-    }); */
-
-    throw new Error("Not implemented yet");
+    });
   }
 
   /**
@@ -520,9 +517,42 @@ export class MeteorWallet {
     return this._connectedAccount;
   }
 
+  async transformDelegateActions(
+    delegateActions: TSimpleNearDelegateAction[],
+    blockHeightTtl = 200,
+  ): Promise<DelegateAction[]> {
+    const account = await this.account();
+    const signer = account.getSigner()!;
+    const provider = account.provider;
+
+    const localKey = await signer.getPublicKey();
+
+    return Promise.all(
+      delegateActions.map(async (delegateAction) => {
+        const accessKey = await account.accessKeyForTransaction(localKey);
+
+        if (!accessKey) {
+          throw new Error(
+            `Failed to find matching key for delegate action sent to ${delegateAction.receiverId}`,
+          );
+        }
+
+        const block = await provider.viewBlock({ finality: "optimistic" });
+
+        return buildDelegateAction({
+          actions: delegateAction.actions,
+          receiverId: delegateAction.receiverId,
+          senderId: account.accountId,
+          publicKey: PublicKey.from(accessKey.public_key),
+          nonce: BigInt(accessKey.access_key.nonce) + BigInt(1),
+          maxBlockHeight: BigInt(block.header.height) + BigInt(blockHeightTtl),
+        });
+      }),
+    );
+  }
+
   async transformTransactions(transactions: Array<Optional<Transaction, "signerId">>) {
     const account = await this.account();
-    // const { networkId, signer, provider } = account.getConnection();
     const signer = account.getSigner()!;
     const provider = account.provider;
 
@@ -542,7 +572,7 @@ export class MeteorWallet {
           convertSelectorActionToNearAction(action),
         );
 
-        const block = await provider.viewBlock({ finality: "final" });
+        const block = await provider.viewBlock({ finality: "optimistic" });
 
         return createTransaction(
           account.accountId,
@@ -553,11 +583,6 @@ export class MeteorWallet {
           transformedActions,
           utils.serialize.base_decode(block.header.hash),
         );
-        /*return {
-          receiverId: transaction.receiverId,
-          signerId: account.accountId,
-          actions: transformedActions,
-        };*/
       }),
     );
   }

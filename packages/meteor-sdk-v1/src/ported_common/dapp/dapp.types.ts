@@ -1,5 +1,9 @@
 import { KeyPair, KeyType } from "@near-js/crypto";
-import { Transaction as NearFullTransaction } from "@near-js/transactions";
+import {
+  DelegateAction,
+  Transaction as NearFullTransaction,
+  SignedDelegate,
+} from "@near-js/transactions";
 import type { FinalExecutionOutcome } from "@near-js/types";
 import type { Action, Transaction as WalletSelectorTransaction } from "@near-wallet-selector/core";
 import { z } from "zod";
@@ -178,6 +182,21 @@ export interface IORequestSignDelegateActions_Inputs {
   delegateActions: TSimpleNearDelegateAction[];
 }
 
+export interface IDappAction_SignDelegateActions_Data {
+  delegateActions: DelegateAction[];
+}
+
+export interface ISignedDelegateWithHash {
+  delegateHash: Uint8Array;
+  signedDelegate: SignedDelegate;
+}
+
+export interface IODappAction_PostMessage_SignDelegateActions_Output {
+  signedDelegatesWithHashes: ISignedDelegateWithHash[];
+}
+
+// ---------------------------
+
 export interface IOWalletExternalLinkedContract {
   contract_id: string;
   public_key: string;
@@ -261,8 +280,6 @@ export interface IDappAction_SignTransaction extends IExternalAction_Base {
   inputs: IDappAction_SignTransactions_Data;
   callbackUrl?: string;
   meta?: string;
-  // login?: undefined;
-  // sign?: IMeteorWalletExternalAction_SignTransactions_Data;
 }
 
 export interface IDappAction_Logout extends IExternalAction_Base {
@@ -273,6 +290,11 @@ export interface IDappAction_Logout extends IExternalAction_Base {
 export interface IDappAction_VerifyOwner extends IExternalAction_Base {
   actionType: EExternalActionType.verify_owner;
   inputs: IODappAction_VerifyOwner_Input;
+}
+
+export interface IDappAction_SignDelegateActions extends IExternalAction_Base {
+  actionType: EExternalActionType.sign_delegate_actions;
+  inputs: IDappAction_SignDelegateActions_Data;
 }
 
 export type IMeteorActionResponse_Output<T> =
