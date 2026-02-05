@@ -1,37 +1,44 @@
-export let devManifest = {
-  version: "1.1.0",
-  wallets: [
-    {
-      id: "meteor-wallet",
-      name: "Meteor Wallet",
-      icon: "https://storage.herewallet.app/upload/9c3981ca59212248e09d37011c07492bf1e19d7d55b9210213af3be6079a05ae.svg",
-      description:
-        "The most simple and secure wallet to manage your crypto, access DeFi, and explore Web3",
-      website: "https://meteorwallet.app/",
-      version: "1.0.0",
-      executor: `http://${process.env.LOCAL_IP || "localhost"}:5173/meteor-near-connect.js`,
-      type: "sandbox",
+export const devManifest = (useLiveExecutor = false) =>
+  ({
+    version: "1.1.0",
+    wallets: [
+      {
+        id: "meteor-wallet",
+        name: "Meteor Wallet",
+        icon: "https://storage.herewallet.app/upload/9c3981ca59212248e09d37011c07492bf1e19d7d55b9210213af3be6079a05ae.svg",
+        description:
+          "The most simple and secure wallet to manage your crypto, access DeFi, and explore Web3",
+        website: "https://meteorwallet.app/",
+        version: "1.0.0",
+        executor: useLiveExecutor
+          ? "https://storage.googleapis.com/meteor-apps-v2/near-connect/executor/latest/meteor-near-connect.js"
+          : `http://${process.env.LOCAL_IP || "localhost"}:5173/meteor-near-connect.js`,
+        type: "sandbox",
 
-      features: {
-        signMessage: true,
-        signInWithoutAddKey: true,
-        signAndSendTransaction: true,
-        signAndSendTransactions: true,
-        mainnet: true,
-        testnet: true,
-      },
+        features: {
+          signMessage: true,
+          signInWithoutAddKey: true,
+          signAndSendTransaction: true,
+          signAndSendTransactions: true,
+          mainnet: true,
+          testnet: true,
+        },
 
-      platform: {
-        web: "https://wallet.meteorwallet.app",
-        chrome:
-          "https://chromewebstore.google.com/detail/meteor-wallet/pcndjhkinnkaohffealmlmhaepkpmgkb",
-      },
+        platform: {
+          web: "https://wallet.meteorwallet.app",
+          chrome:
+            "https://chromewebstore.google.com/detail/meteor-wallet/pcndjhkinnkaohffealmlmhaepkpmgkb",
+        },
 
-      permissions: {
-        storage: true,
-        allowsOpen: ["https://wallet.meteorwallet.app", "https://meteorwallet.app"],
-        external: ["meteorCom", "meteorComV2"],
+        permissions: {
+          storage: true,
+          allowsOpen: [
+            "https://wallet.meteorwallet.app",
+            "https://meteorwallet.app",
+            "https://localhost:3001",
+          ],
+          external: ["meteorCom", "meteorComV2"],
+        },
       },
-    },
-  ],
-} as any;
+    ],
+  }) as any;
