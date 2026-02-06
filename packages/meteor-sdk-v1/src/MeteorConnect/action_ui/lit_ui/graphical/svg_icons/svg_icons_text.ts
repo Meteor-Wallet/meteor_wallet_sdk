@@ -29,6 +29,10 @@ const icon_chrome = `<svg xmlns="http://www.w3.org/2000/svg" fill="currentColor"
     <path d="M44 4c-13.212 0-24.911 6.387-32.191 16.242l12.355 21.4a20 20 0 0 1 19.6-17.631 2 2 0 0 1 .236-.012h34.646C71.736 12.041 58.823 4 44 4zM9.355 23.996A39.84 39.84 0 0 0 3.999 44c0 20.602 15.522 37.53 35.525 39.75L51.86 62.385A20 20 0 0 1 44 64a20 20 0 0 1-17.146-9.746 2 2 0 0 1-.176-.254zM44 28a16 16 0 0 0-16 16 16 16 0 0 0 16 16 16 16 0 0 0 16-16 16 16 0 0 0-16-16m11.967 0A20 20 0 0 1 64 44a20 20 0 0 1-2.531 9.691 2 2 0 0 1-.146.309l-17.32 30C66.117 83.999 84 66.114 84 44a39.9 39.9 0 0 0-3.329-16z" style="paint-order:markers fill stroke" transform="translate(1 1)"/>
 </svg>`;
 
+const icon_arrow_back = `<svg xmlns="http://www.w3.org/2000/svg" width="27" height="27" fill="currentColor" viewBox="-1 -1 29 29">
+    <path d="M6.46 11.764H27v3.472H6.46l9.052 9.31L13.125 27 0 13.5 13.125 0l2.387 2.454z"/>
+</svg>`;
+
 export const svg_icons_text = {
   icon_android,
   icon_ios_apple,
@@ -36,4 +40,5 @@ export const svg_icons_text = {
   icon_close_x,
   icon_web_globe,
   icon_chrome,
+  icon_arrow_back,
 };

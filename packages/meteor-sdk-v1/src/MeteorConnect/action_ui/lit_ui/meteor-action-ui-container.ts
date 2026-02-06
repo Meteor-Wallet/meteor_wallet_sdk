@@ -10,6 +10,7 @@ import { animate_meteor_logo_css } from "./graphical/styles/animate_meteor_logo_
 import { svg_icons_text } from "./graphical/svg_icons/svg_icons_text";
 import { svg_meteor_logo_text } from "./graphical/svg_meteor_logo_text";
 import "./meteor-action-button";
+import "./get-meteor-screen";
 
 // console.log(`CSS from SCSS\n\n${animateLogoStyles}`);
 
@@ -25,6 +26,8 @@ export class MeteorActionUiContainer extends LitElement {
 
   @property({ type: Object }) action!: ExecutableAction<any>;
   @property({ type: Function }) closeAction: (() => void) | undefined = undefined;
+  @property({ type: Boolean })
+  showGetMeteor: boolean = false;
 
   static styles = [
     unsafeCSS(animate_meteor_logo_css),
@@ -152,6 +155,7 @@ export class MeteorActionUiContainer extends LitElement {
         font-size: 1.65rem;
         font-weight: 700;
         line-height: 0.9em;
+        letter-spacing: 0.03rem;
         color: rgba(255, 255, 255, 0.9);
         filter: drop-shadow(0 0.05rem 0.07rem rgba(0, 0, 0, 0.3));
       }
@@ -161,12 +165,19 @@ export class MeteorActionUiContainer extends LitElement {
         font-size: 0.8rem;
         font-weight: 700;
         line-height: 0.9em;
-        letter-spacing: 0.28rem;
+        letter-spacing: 0.3rem;
         text-transform: uppercase;
-        color: rgba(160, 160, 255, 1);
-        /* filter: drop-shadow(0 0.05rem 0.07rem rgba(25, 25, 75, 0.3)); */
-        /* color: rgba(15, 15, 49, 1); */
-        /* filter: drop-shadow(0 0.05rem 0.07rem rgba(220, 200, 255, 0.3)); */
+        color: rgba(180, 180, 255, 1);
+      }
+
+      .title-text-box .subsection-title {
+        font-family: 'Gilroy';
+        margin: 0;
+        font-size: 1.2rem;
+        font-weight: 500;
+        letter-spacing: 0.02rem;
+        color: rgba(255, 255, 255, 0.9);
+        filter: drop-shadow(0 0.05rem 0.07rem rgba(0, 0, 0, 0.3));
       }
 
       .connect-link-gif-box {
@@ -195,6 +206,7 @@ export class MeteorActionUiContainer extends LitElement {
       }
 
       .meteor-connect-content {
+        position: relative;
         padding: 1.5rem;
         display: flex;
         flex-direction: column;
@@ -202,6 +214,26 @@ export class MeteorActionUiContainer extends LitElement {
         justify-content: space-between;
         flex-grow: 1;
         gap: 1rem;
+      }
+
+      .background-graphics-box {
+        position: absolute;
+        top: 5%;
+        left: 10%;
+        right: 10%;
+        bottom: 25%;
+        z-index: -1;
+        background: radial-gradient(rgba(0, 0, 0, 0.3), rgba(0, 0, 0, 0) 70%);
+      }
+
+      .background-graphics-box img {
+        filter: blur(0.5px) brightness(1.5);
+        opacity: 0.2;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        pointer-events: none;
+        user-select: none;
       }
 
       .section-action-title {
@@ -259,6 +291,13 @@ export class MeteorActionUiContainer extends LitElement {
         flex-grow: 1;
         height: 1px;
         background: rgba(255, 255, 255, 0.2);
+      }
+
+      .no-wallet-bottom-section {
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 1.3rem;
       }
 
       .qr-section {
@@ -369,88 +408,91 @@ export class MeteorActionUiContainer extends LitElement {
         .getAllExecutionTargetConfigs()
         .find((t) => t.executionTarget === "v1_web_localhost") != null;
 
+    const supportedPlatforms = this.action
+      .getAllExecutionTargetConfigs()
+      .map((t) => t.executionTarget);
+
     return html`
       <div class="modal">
         <div class="meteor-connect-title-box">
-        <div class="meteor-logo-and-title">
-          <div class="meteor-logo">
-            ${unsafeSVG(svg_meteor_logo_text)}
+          <div class="meteor-logo-and-title">
+            ${
+              this.showGetMeteor
+                ? html`
+            <div class="close-circle" @click=${() => (this.showGetMeteor = false)}>
+              ${unsafeSVG(svg_icons_text.icon_arrow_back)}
+            </div>
+            <div class="title-text-box">
+              <span class="subsection-title">Get Meteor Wallet</span>
+            </div>`
+                : html`
+            <div class="meteor-logo">
+              ${unsafeSVG(svg_meteor_logo_text)}
+            </div>
+            <div class="title-text-box">
+              <span class="title">Meteor</span>
+              <span class="subtitle">Connect</span>
+            </div>`
+            }
           </div>
-          <div class="title-text-box">
-            <span class="title">Meteor</span>
-            <span class="subtitle">Connect</span>
-          </div>
-        </div>
           <div class="close-circle" @click=${() => this._handleActionClose()}>
             ${unsafeSVG(svg_icons_text.icon_close_x)}
           </div>
         </div>
-        <div class="meteor-connect-content">
-          <div class="options">
-            <span class="section-action-title">Choose your wallet</span>
-            <div class="option-buttons-row">
-              <meteor-action-button
-                label="Chrome Extension"
-                .icon=${svg_icons_text.icon_chrome}
-                @meteor-button-click=${() => this.actionController.executeAction("v1_ext")}
-              ></meteor-action-button>
-              <meteor-action-button
-                label="Web App"
-                .icon=${svg_icons_text.icon_web_globe}
-                @meteor-button-click=${() => this.actionController.executeAction("v1_web")}
-              ></meteor-action-button>
-              ${
-                includeWebDevLocalhost
-                  ? html`
-                    <meteor-action-button
-                      label="Dev Web (Localhost)"
-                      .icon=${svg_icons_text.icon_web_globe}
-                      @meteor-button-click=${() => this.actionController.executeAction("v1_web_localhost")}
-                    ></meteor-action-button>
-                  `
-                  : ""
-              }
+          ${
+            this.showGetMeteor
+              ? html`<get-meteor-screen .supportedPlatforms=${supportedPlatforms}></get-meteor-screen>`
+              : html`
+          <div class="meteor-connect-content">
+            <div class="background-graphics-box">
+              <img src="https://storage.googleapis.com/meteor-apps-v2/graphics/meteor_connect_ui/star.gif" alt="Meteor Background Stars" class="star-gif" />
+            </div>
+            <div class="options">
+              <span class="section-action-title">Choose your wallet</span>
+              <div class="option-buttons-row">
+                <meteor-action-button
+                  label="Chrome Extension"
+                  .icon=${svg_icons_text.icon_chrome}
+                  @meteor-button-click=${() => this.actionController.executeAction("v1_ext")}
+                ></meteor-action-button>
+                <meteor-action-button
+                  label="Web App"
+                  .icon=${svg_icons_text.icon_web_globe}
+                  @meteor-button-click=${() => this.actionController.executeAction("v1_web")}
+                ></meteor-action-button>
+                ${
+                  includeWebDevLocalhost
+                    ? html`
+                      <meteor-action-button
+                        label="Dev Web (Localhost)"
+                        .icon=${svg_icons_text.icon_web_globe}
+                        @meteor-button-click=${() => this.actionController.executeAction("v1_web_localhost")}
+                      ></meteor-action-button>
+                    `
+                    : ""
+                }
+              </div>
+            </div>
+            <div class="no-wallet-bottom-section">
+              <div class="divider">
+                <span class="divider-line"></span>
+                <span class="section-action-title">Don't have a wallet?</span>
+                <span class="divider-line"></span>
+              </div>
+              <div class="options">
+                <meteor-action-button variant="primary"
+                  label="Get Meteor Wallet"
+                  @meteor-button-click=${() => {
+                    console.log("Get Meteor Wallet clicked");
+                    this.showGetMeteor = true;
+                    // window.open("https://meteorwallet.app", "_blank", "noopener");
+                  }}
+                ></meteor-action-button>
+              </div>
             </div>
           </div>
-          <div class="divider">
-            <span class="divider-line"></span>
-            <span class="section-action-title">Don't have a wallet?</span>
-            <span class="divider-line"></span>
-          </div>
-          <div class="options">
-            <meteor-action-button variant="primary"
-              label="Get Meteor Wallet"
-              @meteor-button-click=${() => {
-                console.log("Get Meteor Wallet clicked");
-                window.open("https://meteorwallet.app", "_blank", "noopener");
-              }}
-            ></meteor-action-button>
-          </div>
-          <!-- <div class="options">
-            <div class="option-buttons-row">
-              <meteor-action-button
-                label="Android"
-                .icon=${svg_icons_text.icon_android}
-                @meteor-button-click=${() => this.actionController.executeAction("v1_web")}
-              ></meteor-action-button>
-              <meteor-action-button
-                label="iOS"
-                .icon=${svg_icons_text.icon_ios_apple}
-                @meteor-button-click=${() => this.actionController.executeAction("v1_web")}
-              ></meteor-action-button>
-              <meteor-action-button
-                label="Extension"
-                .icon=${svg_icons_text.icon_extension_puzzle}
-                @meteor-button-click=${() => this.actionController.executeAction("v1_web")}
-              ></meteor-action-button>
-              <meteor-action-button
-                label="Web"
-                .icon=${svg_icons_text.icon_web_globe}
-                @meteor-button-click=${() => this.actionController.executeAction("v1_web")}
-              ></meteor-action-button>
-            </div>
-          </div> -->
-        </div>
+            `
+          }
       </div>
     `;
   }

@@ -1,4 +1,4 @@
-export const svg_meteor_logo_text = `<svg id="meteor_svg_logo" data-name="Layer 1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 450 450">
+export const svg_meteor_logo_text = /* svg */ `<svg id="meteor_svg_logo" data-name="Layer 1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 450 450">
   <defs>
     <linearGradient id="linear-gradient" x1="319.75" y1="882.69" x2="486.74" y2="882.69" gradientTransform="matrix(.79 0 0 .86 -178.94 -645.22)" gradientUnits="userSpaceOnUse">
       <stop offset=".07" stop-color="#232371" stop-opacity=".6"/>
@@ -6,17 +6,17 @@ export const svg_meteor_logo_text = `<svg id="meteor_svg_logo" data-name="Layer 
     </linearGradient>
     <linearGradient id="linear-gradient-2" x1="453.7" y1="974.62" x2="620.69" y2="974.62" gradientTransform="matrix(1.49 0 0 .86 -559.94 -684.4)" xlink:href="#linear-gradient"/>
     <linearGradient id="linear-gradient-3" x1="470.78" y1="1086.98" x2="637.77" y2="1086.98" gradientTransform="matrix(1.66 0 0 .86 -585.38 -740.81)" gradientUnits="userSpaceOnUse">
-      <stop offset=".07" stop-color="#232371" stop-opacity=".5"/>
-      <stop offset=".94" stop-color="#171e9b" stop-opacity=".6"/>
+      <stop offset=".07" stop-color="#333381" stop-opacity=".5"/>
+      <stop offset=".94" stop-color="#272eAb" stop-opacity=".3"/>
     </linearGradient>
     <linearGradient id="linear-gradient-4" x1="405.04" y1="1192.73" x2="572.04" y2="1192.73" gradientTransform="matrix(.97 0 0 .86 -93.54 -748.57)" xlink:href="#linear-gradient"/>
     <linearGradient id="linear-gradient-5" x1="255" y1="925.83" x2="421.99" y2="925.83" gradientTransform="matrix(1.41 0 0 1 -319.65 -758.68)" gradientUnits="userSpaceOnUse">
-      <stop offset=".07" stop-color="#0f0f36" stop-opacity=".5"/>
-      <stop offset=".76" stop-color="#232371" stop-opacity=".6"/>
+      <stop offset=".07" stop-color="#1f1f46" stop-opacity=".5"/>
+      <stop offset=".76" stop-color="#333381" stop-opacity=".3"/>
     </linearGradient>
     <linearGradient id="tail_gradient" x1="325.11" y1="1021.4" x2="509.05" y2="1021.4" gradientTransform="matrix(1.72 0 0 1 -462.13 -819.2)" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#0f0f36" stop-opacity=".5"/>
-      <stop offset=".8" stop-color="#232371" stop-opacity=".6"/>
+      <stop offset="0" stop-color="#181852" stop-opacity=".5"/>
+      <stop offset=".8" stop-color="#363691" stop-opacity=".4"/>
     </linearGradient>
     <linearGradient id="linear-gradient-6" x1="338.6" y1="1114.84" x2="406.35" y2="1114.84" gradientTransform="matrix(2.84 0 0 1 -762.95 -818.01)" xlink:href="#linear-gradient-5"/>
     <linearGradient id="main_gradient" x1="76.21" y1="1019.27" x2="471.23" y2="1019.27" gradientTransform="rotate(-45 -685.44 725.79)" gradientUnits="userSpaceOnUse">
