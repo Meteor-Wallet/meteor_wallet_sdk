@@ -335,6 +335,46 @@ export class MeteorActionUiContainer extends LitElement {
         font-weight: 500;
         color: rgba(var(--meteor-text-on-dark-dark), 1);
       }
+
+      /* Content transition animations */
+      @keyframes fadeInContent {
+        from {
+          opacity: 0;
+          transform: translateY(8px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      @keyframes fadeOutContent {
+        from {
+          opacity: 1;
+          transform: translateY(0);
+        }
+        to {
+          opacity: 0;
+          transform: translateY(-8px);
+        }
+      }
+
+      .meteor-connect-content {
+        animation: fadeInContent 300ms ease-out forwards;
+      }
+
+      meteor-action-ui-executing {
+        animation: fadeInContent 300ms ease-out forwards;
+      }
+
+      get-meteor-screen {
+        animation: fadeInContent 300ms ease-out forwards;
+      }
+
+      .meteor-connect-title-box {
+        animation: fadeInContent 280ms ease-out forwards;
+        animation-delay: 40ms;
+      }
     `,
   ];
 

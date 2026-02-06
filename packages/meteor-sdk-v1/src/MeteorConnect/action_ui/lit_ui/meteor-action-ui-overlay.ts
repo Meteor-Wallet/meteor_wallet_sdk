@@ -10,6 +10,26 @@ export class MeteorActionUiOverlay extends LitElement {
   @property({ type: Function }) closeAction: (() => void) | null = null;
 
   static styles = css`
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+        }
+        to {
+          opacity: 1;
+        }
+      }
+
+      @keyframes scaleInUp {
+        from {
+          opacity: 0;
+          transform: scale(0.92) translateY(10px);
+        }
+        to {
+          opacity: 1;
+          transform: scale(1) translateY(0);
+        }
+      }
+
       :host {
         top: 0;
         left: 0;
@@ -21,6 +41,7 @@ export class MeteorActionUiOverlay extends LitElement {
         position: fixed;
         z-index: 10000;
         pointer-events: auto;
+        animation: fadeIn 300ms ease-out forwards;
         /* filter: blur(20px); */
         /* filter: blur(0.5px) drop-shadow(0 0 2px rgba(0, 0, 0, 0.3)); */
       }
@@ -33,6 +54,7 @@ export class MeteorActionUiOverlay extends LitElement {
         height: 100vh;
         background-color: rgba(0, 0, 0, 0.4);
         backdrop-filter: blur(20px);
+        animation: fadeIn 300ms ease-out forwards;
       }
 
       .modal-container {
@@ -43,6 +65,7 @@ export class MeteorActionUiOverlay extends LitElement {
         border: 1px solid #2b2d38;
         overflow: hidden;
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        animation: scaleInUp 400ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
       }
     `;
 
