@@ -40,5 +40,5 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy packages/meteor-sdk-v1-test-web/build --project-name=meteorwallet-sdk-demo --branch=main
+          command: pages deploy packages/meteor-sdk-v1-test-web/build/client --project-name=meteorwallet-sdk-demo --branch=main
           gitHubToken: ${{ secrets.GITHUB_TOKEN }}
