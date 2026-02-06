@@ -359,6 +359,15 @@ export class MeteorActionUiContainer extends LitElement {
         }
       }
 
+      @keyframes contentFadeOut {
+        from {
+          opacity: 1;
+        }
+        to {
+          opacity: 0;
+        }
+      }
+
       .meteor-connect-content {
         animation: fadeInContent 300ms ease-out forwards;
       }
@@ -375,6 +384,14 @@ export class MeteorActionUiContainer extends LitElement {
         animation: fadeInContent 280ms ease-out forwards;
         animation-delay: 40ms;
       }
+
+      /* Apply fade out to content when parent overlay is closing */
+      :host-context(meteor-action-ui-overlay[closing]) .meteor-connect-content,
+      :host-context(meteor-action-ui-overlay[closing]) meteor-action-ui-executing,
+      :host-context(meteor-action-ui-overlay[closing]) get-meteor-screen,
+      :host-context(meteor-action-ui-overlay[closing]) .meteor-connect-title-box {
+        animation: contentFadeOut 200ms ease-in forwards;
+      }
     `,
   ];
 
@@ -384,7 +401,8 @@ export class MeteorActionUiContainer extends LitElement {
   private lastQrValue?: string;
 
   private _handleActionClose() {
-    this.logger.log("Overlay clicked, closing overlay");
+    this.logger.log("Close button clicked, calling closeAction");
+    // Call closeAction which will be the wrapped version from overlay if available
     this.closeAction?.();
   }
 
@@ -479,7 +497,7 @@ export class MeteorActionUiContainer extends LitElement {
           </div>
           ${
             this.executionState.isExecuting
-              ? html`<div class="close-circle" @click=${() => this._handleActionClose()}></div>`
+              ? html`<div class="close-circle"></div>`
               : html`
             <div class="close-circle" @click=${() => this._handleActionClose()}>
             ${unsafeSVG(svg_icons_text.icon_close_x)}

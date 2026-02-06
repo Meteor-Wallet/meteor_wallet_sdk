@@ -7,7 +7,22 @@ import { customElement } from "./custom-element"; // Your new util
 @customElement("meteor-action-ui-overlay")
 export class MeteorActionUiOverlay extends LitElement {
   private logger = MeteorLogger.createLogger("MeteorConnect:<meteor-action-ui-overlay>");
-  @property({ type: Function }) closeAction: (() => void) | null = null;
+
+  private _originalCloseAction: (() => void) | null = null;
+  private _wrappedCloseAction: (() => void) | null = null;
+
+  // Wrap closeAction to always use animated close
+  @property({ type: Function })
+  set closeAction(value: (() => void) | null) {
+    this._originalCloseAction = value;
+    // Create wrapped version that triggers animation
+    this._wrappedCloseAction = value ? () => this._animateClose() : null;
+  }
+  get closeAction(): (() => void) | null {
+    return this._wrappedCloseAction;
+  }
+
+  @property({ type: Boolean }) private closing: boolean = false;
 
   static styles = css`
       @keyframes fadeIn {
@@ -30,6 +45,26 @@ export class MeteorActionUiOverlay extends LitElement {
         }
       }
 
+      @keyframes fadeOut {
+        from {
+          opacity: 1;
+        }
+        to {
+          opacity: 0;
+        }
+      }
+
+      @keyframes scaleOutDown {
+        from {
+          opacity: 1;
+          transform: scale(1) translateY(0);
+        }
+        to {
+          opacity: 0;
+          transform: scale(0.95) translateY(8px);
+        }
+      }
+
       :host {
         top: 0;
         left: 0;
@@ -41,9 +76,16 @@ export class MeteorActionUiOverlay extends LitElement {
         position: fixed;
         z-index: 10000;
         pointer-events: auto;
-        animation: fadeIn 300ms ease-out forwards;
         /* filter: blur(20px); */
         /* filter: blur(0.5px) drop-shadow(0 0 2px rgba(0, 0, 0, 0.3)); */
+      }
+
+      :host(:not([closing])) {
+        animation: fadeIn 300ms ease-out forwards;
+      }
+
+      :host([closing]) {
+        animation: fadeOut 250ms ease-in forwards;
       }
 
       .modal-backdrop {
@@ -54,7 +96,14 @@ export class MeteorActionUiOverlay extends LitElement {
         height: 100vh;
         background-color: rgba(0, 0, 0, 0.4);
         backdrop-filter: blur(20px);
+      }
+
+      :host(:not([closing])) .modal-backdrop {
         animation: fadeIn 300ms ease-out forwards;
+      }
+
+      :host([closing]) .modal-backdrop {
+        animation: fadeOut 250ms ease-in forwards;
       }
 
       .modal-container {
@@ -65,22 +114,41 @@ export class MeteorActionUiOverlay extends LitElement {
         border: 1px solid #2b2d38;
         overflow: hidden;
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+      }
+
+      :host(:not([closing])) .modal-container {
         animation: scaleInUp 400ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+      }
+
+      :host([closing]) .modal-container {
+        animation: scaleOutDown 250ms ease-in forwards;
       }
     `;
 
   private _handleOverlayClick() {
-    this.logger.log("Overlay clicked, closing overlay");
-    // Prefer invoking provided cleanup to reset ActionUi state
-    if (this.closeAction) {
-      try {
-        this.closeAction();
-      } catch (e) {
-        this.logger.log("Error during closeAction", e);
+    if (this.closing) return; // Prevent multiple close triggers
+    this.logger.log("Overlay backdrop clicked, closing with animation");
+    this._animateClose();
+  }
+
+  private _animateClose() {
+    if (this.closing) return;
+    this.logger.log("Starting close animation");
+    this.closing = true;
+
+    // Wait for animation to complete before actually closing
+    setTimeout(() => {
+      // Call the original closeAction to perform actual cleanup
+      if (this._originalCloseAction) {
+        try {
+          this._originalCloseAction();
+        } catch (e) {
+          this.logger.log("Error during closeAction", e);
+        }
+      } else {
+        this.remove();
       }
-    } else {
-      this.remove();
-    }
+    }, 250); // Match the fadeOut animation duration
   }
 
   connectedCallback() {
@@ -101,7 +169,14 @@ export class MeteorActionUiOverlay extends LitElement {
     if (import.meta.hot) {
       import.meta.hot.accept();
     }
-    this.logger.log("Rendering MeteorActionUiOverlay");
+    this.logger.log("Rendering MeteorActionUiOverlay", { closing: this.closing });
+
+    // Update the closing attribute for CSS selector
+    if (this.closing) {
+      this.setAttribute("closing", "");
+    } else {
+      this.removeAttribute("closing");
+    }
 
     return html`
       <div>
