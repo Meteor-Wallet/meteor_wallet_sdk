@@ -67,7 +67,7 @@ const MeteorConnectTestInitialized = ({ meteorConnect }: { meteorConnect: Meteor
 
   return (
     <div className={"p-5"}>
-      <h1>NEAR Connect Test</h1>
+      <h1>Meteor Connect (bare Meteor SDK) Test</h1>
       <NetworkSelector
         network={network}
         onSelectNetwork={(network) => {
