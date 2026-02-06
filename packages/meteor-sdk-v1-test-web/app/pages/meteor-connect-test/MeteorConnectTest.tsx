@@ -188,12 +188,16 @@ const MeteorConnectWithAccount = ({
 
   const mutate_signDelegateAction = useMutation({
     mutationKey: ["mutate_signDelegateAction", account.identifier],
-    mutationFn: async () => {
+    mutationFn: async (multiple: boolean) => {
       const action = await meteorConnect.createAction({
         id: "near::sign_delegate_actions",
         input: {
           target: account.identifier,
           delegateActions: [
+            {
+              receiverId: "pebble.testnet",
+              actions: [actionCreators.transfer(BigInt(parseNearAmount("0.001")!))],
+            },
             {
               receiverId: "pebble.testnet",
               actions: [actionCreators.transfer(BigInt(parseNearAmount("0.001")!))],
@@ -244,11 +248,19 @@ const MeteorConnectWithAccount = ({
         <code>Send 0.001 NEAR to pebble.testnet</code>
         <Button
           onClick={async () => {
-            const response = await mutate_signDelegateAction.mutateAsync();
+            const response = await mutate_signDelegateAction.mutateAsync(false);
             console.log("Signed delegate action response", response);
           }}
         >
           Test Signed Delegate Action
+        </Button>
+        <Button
+          onClick={async () => {
+            const response = await mutate_signDelegateAction.mutateAsync(true);
+            console.log("Signed (multiple) delegate action response", response);
+          }}
+        >
+          Test Signed Delegate Action (multiple)
         </Button>
       </div>
       <AddMessageComponent
