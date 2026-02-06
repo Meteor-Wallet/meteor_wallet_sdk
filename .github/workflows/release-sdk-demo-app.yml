@@ -1,0 +1,44 @@
+name: Deploy SDK Demo App
+
+on:
+  push:
+    branches:
+      - release/sdk-demo-app
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      deployments: write
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up tools with proto
+        uses: moonrepo/setup-toolchain@v0
+        with:
+          auto-install: true
+
+      - name: Set Github Identity
+        run: |
+          git config --global user.name "${GITHUB_ACTOR}"
+          git config --global user.email "${GITHUB_ACTOR}@users.noreply.github.com"
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Build the web version
+        working-directory: packages/meteor-sdk-v1-test-web
+        run: bun run build
+
+      - name: Publish
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy packages/meteor-sdk-v1-test-web/build --project-name=meteorwallet-sdk-demo --branch=main
+          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
