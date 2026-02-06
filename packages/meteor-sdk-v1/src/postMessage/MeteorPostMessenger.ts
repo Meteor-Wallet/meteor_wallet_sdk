@@ -255,7 +255,7 @@ class MeteorPostMessenger {
 
             this.sendComs();
 
-            wait_utils.waitMillis(100).then(() => {
+            wait_utils.waitMillis(200).then(() => {
               currentConnection.resolve({
                 success: true,
                 endTags: [],
