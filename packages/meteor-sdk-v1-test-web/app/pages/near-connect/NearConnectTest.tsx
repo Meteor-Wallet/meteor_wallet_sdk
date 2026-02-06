@@ -25,7 +25,7 @@ export const NearConnectTest = () => {
 
   const [connector] = useState<NearConnector>(() => {
     const connector = new NearConnector({
-      manifest: process.env.NODE_ENV === "production" ? undefined : devManifest(false),
+      manifest: devManifest(process.env.NODE_ENV === "production"),
       providers: { mainnet: ["https://relmn.aurora.dev"] },
       network,
       logger,
