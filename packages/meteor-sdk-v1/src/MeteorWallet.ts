@@ -549,28 +549,26 @@ export class MeteorWallet {
 
     const localKey = await signer.getPublicKey();
 
-    return Promise.all(
-      delegateActions.map(async (delegateAction) => {
-        const accessKey = await account.accessKeyForTransaction(localKey);
+    const accessKey = await account.accessKeyForTransaction(localKey);
 
-        if (!accessKey) {
-          throw new Error(
-            `Failed to find matching key for delegate action sent to ${delegateAction.receiverId}`,
-          );
-        }
+    if (!accessKey) {
+      throw new Error(
+        `Failed to find matching key for delegate actions`,
+      );
+    }
 
-        const block = await provider.viewBlock({ finality: "optimistic" });
+    const block = await provider.viewBlock({ finality: "optimistic" });
 
-        return buildDelegateAction({
-          actions: delegateAction.actions,
-          receiverId: delegateAction.receiverId,
-          senderId: account.accountId,
-          publicKey: PublicKey.from(accessKey.public_key),
-          nonce: BigInt(accessKey.access_key.nonce) + BigInt(1),
-          maxBlockHeight: BigInt(block.header.height) + BigInt(blockHeightTtl),
-        });
-      }),
-    );
+    return delegateActions.map((delegateAction, idx) => {
+      return buildDelegateAction({
+        actions: delegateAction.actions,
+        receiverId: delegateAction.receiverId,
+        senderId: account.accountId,
+        publicKey: PublicKey.from(accessKey.public_key),
+        nonce: BigInt(accessKey.access_key.nonce) + BigInt(idx + 1),
+        maxBlockHeight: BigInt(block.header.height) + BigInt(blockHeightTtl),
+      });
+    })
   }
 
   async transformTransactions(transactions: Array<Optional<Transaction, "signerId">>) {
