@@ -34,8 +34,9 @@ export const NEAR_BASE_CONNECT_CONFIG_BETANET: TNearBaseConnectConfig = {
 export const NEAR_BASE_CONNECT_CONFIG_MAINNET: TNearBaseConnectConfig = {
   networkId: ENearNetwork.mainnet,
   name: "Fastnear Mainnet",
-  nodeUrl: "https://mw.rpc.fastnear.com",
+  // nodeUrl: "https://mw.rpc.fastnear.com",
   // nodeUrl: "https://rpc.mainnet.near.org",
+  nodeUrl: "https://free.rpc.fastnear.com",
 
   archivalUrl: "https://archival-rpc.mainnet.near.org",
   // walletUrl: "https://wallet.mainnet.near.org",
