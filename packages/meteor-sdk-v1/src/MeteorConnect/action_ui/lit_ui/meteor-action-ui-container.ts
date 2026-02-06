@@ -11,14 +11,8 @@ import { svg_icons_text } from "./graphical/svg_icons/svg_icons_text";
 import { svg_meteor_logo_text } from "./graphical/svg_meteor_logo_text";
 import "./meteor-action-button";
 import "./get-meteor-screen";
-
-// console.log(`CSS from SCSS\n\n${animateLogoStyles}`);
-
-// color on tip of meteor
-// rgb(77, 134, 232)
-
-// color on tail of meteor
-// rgb(43, 51, 123)
+import "./meteor-action-ui-executing";
+import type { IMCActionExecutionState } from "../../action/mc_action.types";
 
 @customElement("meteor-action-ui-container")
 export class MeteorActionUiContainer extends LitElement {
@@ -28,14 +22,16 @@ export class MeteorActionUiContainer extends LitElement {
   @property({ type: Function }) closeAction: (() => void) | undefined = undefined;
   @property({ type: Boolean })
   showGetMeteor: boolean = false;
+  @property({ type: Object })
+  executionState: IMCActionExecutionState = {
+    isExecuting: false,
+    targetedPlatform: "unset",
+  };
 
   static styles = [
     unsafeCSS(animate_meteor_logo_css),
     css`
       :host {
-        /* --meteor-topbar-blue-lightest: 110, 78, 255; */
-        /* --meteor-topbar-blue-standard: 88, 46, 253; */
-
         --meteor-dark-gray-lightest: 34, 34, 41;
         --meteor-dark-gray-standard: 27, 27, 38;
         --meteor-dark-gray-darkest: 14, 14, 23;
@@ -355,6 +351,12 @@ export class MeteorActionUiContainer extends LitElement {
   connectedCallback() {
     super.connectedCallback();
     this.actionController = new ActionUiController(this, this.action, this.closeAction);
+    this.action.addExecutionStateListener((executionState) => {
+      this.executionState = executionState;
+      this.logger.log("Received execution state update in container", executionState);
+    });
+
+    this.executionState = this.action.getExecutionState();
   }
 
   disconnectedCallback(): void {
@@ -435,12 +437,20 @@ export class MeteorActionUiContainer extends LitElement {
             </div>`
             }
           </div>
-          <div class="close-circle" @click=${() => this._handleActionClose()}>
+          ${
+            this.executionState.isExecuting
+              ? html`<div class="close-circle" @click=${() => this._handleActionClose()}></div>`
+              : html`
+            <div class="close-circle" @click=${() => this._handleActionClose()}>
             ${unsafeSVG(svg_icons_text.icon_close_x)}
           </div>
+          `
+          }
         </div>
-          ${
-            this.showGetMeteor
+        ${
+          this.executionState.isExecuting
+            ? html`<meteor-action-ui-executing .executingForPlatform=${this.executionState.targetedPlatform}></meteor-action-ui-executing>`
+            : this.showGetMeteor
               ? html`<get-meteor-screen .supportedPlatforms=${supportedPlatforms}></get-meteor-screen>`
               : html`
           <div class="meteor-connect-content">
@@ -492,7 +502,7 @@ export class MeteorActionUiContainer extends LitElement {
             </div>
           </div>
             `
-          }
+        }
       </div>
     `;
   }

@@ -1,3 +1,4 @@
+import { wait_utils } from "@meteorwallet/utils/javascript_helpers/wait.utils";
 import type { ExecutableAction } from "../action/ExecutableAction";
 import { MeteorLogger } from "../logging/MeteorLogger";
 import { METEOR_ACTION_UI_POPUP_PARENT_ID } from "./action_ui.static";
@@ -30,9 +31,23 @@ export class ActionUi {
   public async prompt<A extends ExecutableAction<any>>(
     input: IRenderActionUi_Input<A>,
   ): Promise<A extends ExecutableAction<infer O> ? O : never> {
-    this.renderAction(input);
     try {
-      const response = await input.action.waitForExecutionOutput();
+      const responsePromise = input.action.waitForExecutionOutput();
+
+      const knownExecutionTarget = input.action.getActionKnownContextualTarget();
+
+      if (knownExecutionTarget != null) {
+        this.logger.log(
+          `Action has known contextual target ${knownExecutionTarget}, executing with that target`,
+        );
+        input.action.execute(knownExecutionTarget);
+      }
+
+      await wait_utils.waitMillis(10);
+
+      this.renderAction(input);
+
+      const response = await responsePromise;
       this.logger.log("Prompted action finished", response);
       return response;
     } finally {

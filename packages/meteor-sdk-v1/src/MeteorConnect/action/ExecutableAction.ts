@@ -8,6 +8,7 @@ import type {
 } from "../MeteorConnect.types.ts";
 import { MCActionRegistryMap, type TMCActionRegistry } from "./mc_action.combined";
 import type {
+  IMCActionExecutionState,
   IMCActionMeta,
   TMCActionRequestUnion,
   TMCActionRequestUnionExpandedInput,
@@ -17,6 +18,10 @@ export class ExecutableAction<R extends TMCActionRequestUnion<TMCActionRegistry>
   readonly id: R["id"];
   readonly expandedInput: any;
   private readonly meta: IMCActionMeta;
+
+  private executionStateListeners: ((executionState: IMCActionExecutionState) => void)[] = [];
+  private executingTargetedPlatform?: TMeteorConnectionExecutionTarget;
+
   private execute_promise?: Promise<TMCActionRegistry[R["id"]]["output"]>;
   private executeWithUi_promise?: Promise<TMCActionRegistry[R["id"]]["output"]>;
   private waitForExecutionOutput_promise?: Promise<TMCActionRegistry[R["id"]]["output"]>;
@@ -54,6 +59,27 @@ export class ExecutableAction<R extends TMCActionRequestUnion<TMCActionRegistry>
     return this.connectionTargetConfig.contextualExecutionTarget;
   }
 
+  getExecutionState(): IMCActionExecutionState {
+    return {
+      isExecuting: this.execute_promise != null,
+      targetedPlatform: this.executingTargetedPlatform ?? "unset",
+    };
+  }
+
+  addExecutionStateListener(listener: (executionState: IMCActionExecutionState) => void) {
+    this.executionStateListeners.push(listener);
+
+    return () => {
+      this.executionStateListeners = this.executionStateListeners.filter((l) => l !== listener);
+    };
+  }
+
+  private triggerExecutionStateUpdate() {
+    const state = this.getExecutionState();
+    this.logger.log(`Triggering execution state update for action ${this.id}`, state);
+    this.executionStateListeners.forEach((listener) => listener(state));
+  }
+
   private async _execute(
     executionTarget?: TMeteorConnectionExecutionTarget,
   ): Promise<TMCActionRegistry[R["id"]]["output"]> {
@@ -72,6 +98,9 @@ export class ExecutableAction<R extends TMCActionRequestUnion<TMCActionRegistry>
 Available targets: [${this.connectionTargetConfig.allExecutionTargets.map((c) => c.executionTarget)}]`),
       );
     }
+
+    this.executingTargetedPlatform = executionTargetConfig.executionTarget;
+    setTimeout(() => this.triggerExecutionStateUpdate(), 5);
 
     if (request.id === "near::sign_in") {
       const response = await this.makeTargetedActionRequest(

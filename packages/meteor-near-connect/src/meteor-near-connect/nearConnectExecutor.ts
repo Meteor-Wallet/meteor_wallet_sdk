@@ -206,7 +206,7 @@ class NearWallet implements Omit<NearWalletBase, "manifest"> {
           target: meteorData.identifier,
         },
       });
-      await action.execute();
+      await promptActionForResponse(action);
     }
   };
 
@@ -223,7 +223,7 @@ class NearWallet implements Omit<NearWalletBase, "manifest"> {
         },
       });
 
-      const response = await action.execute();
+      const response = await promptActionForResponse(action);
 
       logger.log(`Sign message executed for account ${response.accountId}`, response);
 
@@ -255,7 +255,7 @@ class NearWallet implements Omit<NearWalletBase, "manifest"> {
         },
       });
 
-      const response = await action.execute();
+      const response = await promptActionForResponse(action);
 
       return response[0];
     }
@@ -281,7 +281,7 @@ class NearWallet implements Omit<NearWalletBase, "manifest"> {
         },
       });
 
-      return await action.execute();
+      return await promptActionForResponse(action);
     }
   };
 
@@ -302,7 +302,7 @@ class NearWallet implements Omit<NearWalletBase, "manifest"> {
         },
       });
 
-      const response = await action.execute();
+      const response = await promptActionForResponse(action);
 
       return {
         signedDelegateActions: response.signedDelegatesWithHashes,

@@ -1,9 +1,9 @@
 import { MeteorConnectTest } from "~/pages/meteor-connect-test/MeteorConnectTest";
-import type { Route } from "../../.react-router/types/app/routes/+types/home";
+import type { Route } from "./+types/meteor-connect";
 
 export function meta({}: Route.MetaArgs) {
   return [
-    { title: "Meteor Connect Test" },
+    { title: "Meteor Connect SDK Test" },
     {
       name: "description",
       content: "Page to test the MeteorConnect SDK function",

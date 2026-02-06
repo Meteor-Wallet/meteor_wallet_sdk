@@ -3,6 +3,7 @@ import type {
   IMeteorConnectAccount,
   IMeteorConnectAccountIdentifier,
   IMeteorConnectNetworkTarget,
+  TMeteorConnectionExecutionTarget,
 } from "../MeteorConnect.types.ts";
 
 export type TMCActionDomainId = "near";
@@ -58,4 +59,9 @@ export interface IMCAction_WithExactAccountTarget {
 
 export interface IMCAction_WithFullAccount {
   account: IMeteorConnectAccount;
+}
+
+export interface IMCActionExecutionState {
+  isExecuting: boolean;
+  targetedPlatform: TMeteorConnectionExecutionTarget | "unset";
 }

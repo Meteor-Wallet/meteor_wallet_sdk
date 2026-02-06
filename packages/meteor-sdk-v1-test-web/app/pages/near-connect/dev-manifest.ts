@@ -34,6 +34,7 @@ export const devManifest = (useLiveExecutor = false) =>
         permissions: {
           storage: true,
           allowsOpen: [
+            "https://chromewebstore.google.com",
             "https://wallet.meteorwallet.app",
             "https://meteorwallet.app",
             "https://localhost:3001",
