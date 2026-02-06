@@ -5,7 +5,7 @@ export const devManifest = (useLiveExecutor = false) =>
       {
         id: "meteor-wallet",
         name: "Meteor Wallet",
-        icon: "https://storage.herewallet.app/upload/9c3981ca59212248e09d37011c07492bf1e19d7d55b9210213af3be6079a05ae.svg",
+        icon: "https://storage.googleapis.com/meteor-apps-v2/graphics/meteor_connect_ui/meteor-logo-svg.svg",
         description:
           "The most simple and secure wallet to manage your crypto, access DeFi, and explore Web3",
         website: "https://meteorwallet.app/",
@@ -20,6 +20,7 @@ export const devManifest = (useLiveExecutor = false) =>
           signInWithoutAddKey: true,
           signAndSendTransaction: true,
           signAndSendTransactions: true,
+          signDelegateActions: true,
           mainnet: true,
           testnet: true,
         },
