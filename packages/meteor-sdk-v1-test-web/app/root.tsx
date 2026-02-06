@@ -67,14 +67,14 @@ export default function App() {
   return (
     <div>
       <div className={"flex justify-start justify-items-start items-start gap-5 p-5"}>
-        <Button
+        {/* <Button
           active={location.pathname === "/"}
           onClick={() => {
             navigate("/");
           }}
         >
           Meteor Native SDK / Wallet Selector
-        </Button>
+        </Button> */}
         <Button
           active={location.pathname === "/near-connect"}
           onClick={() => {
@@ -84,9 +84,9 @@ export default function App() {
           NEAR Connect
         </Button>
         <Button
-          active={location.pathname === "/meteor-connect"}
+          active={location.pathname === "/"}
           onClick={() => {
-            navigate("/meteor-connect");
+            navigate("/");
           }}
         >
           Meteor Connect
