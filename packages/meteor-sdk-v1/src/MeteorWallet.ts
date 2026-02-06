@@ -8,7 +8,6 @@ import {
   buildDelegateAction,
   createTransaction,
   DelegateAction,
-  encodeDelegateAction,
   SCHEMA,
   SignedDelegate,
 } from "@near-js/transactions";
@@ -29,7 +28,6 @@ import { convertSelectorActionToNearAction } from "./near_utils/convertSelectorA
 import { EExternalActionType } from "./ported_common/dapp/dapp.enums";
 import {
   type IDappAction_Logout_Data,
-  type IDappAction_SignDelegateActions_Data,
   type IMeteorActionResponse_Output,
   type IODappAction_PostMessage_SignDelegateActions_Input,
   type IODappAction_PostMessage_SignDelegateActions_Output,
@@ -552,9 +550,7 @@ export class MeteorWallet {
     const accessKey = await account.accessKeyForTransaction(localKey);
 
     if (!accessKey) {
-      throw new Error(
-        `Failed to find matching key for delegate actions`,
-      );
+      throw new Error(`Failed to find matching key for delegate actions`);
     }
 
     const block = await provider.viewBlock({ finality: "optimistic" });
@@ -568,7 +564,7 @@ export class MeteorWallet {
         nonce: BigInt(accessKey.access_key.nonce) + BigInt(idx + 1),
         maxBlockHeight: BigInt(block.header.height) + BigInt(blockHeightTtl),
       });
-    })
+    });
   }
 
   async transformTransactions(transactions: Array<Optional<Transaction, "signerId">>) {

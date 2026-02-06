@@ -4,12 +4,14 @@ import * as nearAPI from "near-api-js";
 import { MeteorWallet } from "../../../MeteorWallet";
 import { EMeteorWalletSignInType } from "../../../ported_common/dapp/dapp.enums";
 import type { TMeteorSdkV1Transaction } from "../../../ported_common/dapp/dapp.types";
+import { notNullEmpty } from "../../../utils/nullEmpty";
 import type { TMCActionOutput, TMCActionRegistry } from "../../action/mc_action.combined";
 import type { TMCActionRequestUnionExpandedInput } from "../../action/mc_action.types";
 import { MeteorLogger } from "../../logging/MeteorLogger";
 import type {
   TMeteorConnectAccountNetwork,
   TMeteorConnectionExecutionTarget,
+  TMeteorConnectPublicKey,
   TMeteorExecutionTargetConfig,
 } from "../../MeteorConnect.types.ts";
 import { isV1ExtensionWithDirectAvailable } from "../../utils/isV1ExtensionAvailable";
@@ -142,15 +144,26 @@ export class MeteorConnectV1Client extends MeteorConnectClientBase {
       if (response.success) {
         const signedInAccount = response.payload;
 
+        const publicKeys: TMeteorConnectPublicKey[] = [];
+
+        if (notNullEmpty(request.expandedInput.contract?.id)) {
+          publicKeys.push({
+            type: "ed25519",
+            publicKey: signedInAccount.accessKey.getPublicKey().toString(),
+            meta: {
+              contractId: request.expandedInput.contract.id,
+              methodNames: request.expandedInput.contract.methodNames,
+            },
+          });
+        }
+
         return {
           connection: connectionConfig,
           identifier: {
             accountId: signedInAccount.accountId,
             ...request.expandedInput.target,
           },
-          publicKeys: [
-            { type: "ed25519", publicKey: signedInAccount.accessKey.getPublicKey().toString() },
-          ],
+          publicKeys,
         };
       } else {
         throw new Error(`MeteorConnectV1Client: Sign in failed ${response.message}`);
@@ -158,6 +171,13 @@ export class MeteorConnectV1Client extends MeteorConnectClientBase {
     }
 
     if (request.id === "near::sign_out") {
+      if (
+        request.expandedInput.account.publicKeys == null ||
+        request.expandedInput.account.publicKeys.length === 0
+      ) {
+        return request.expandedInput.account.identifier;
+      }
+
       const { wallet } = this.getSdkForNetworkAndTarget(
         request.expandedInput.account.identifier.network,
         connectionConfig,
