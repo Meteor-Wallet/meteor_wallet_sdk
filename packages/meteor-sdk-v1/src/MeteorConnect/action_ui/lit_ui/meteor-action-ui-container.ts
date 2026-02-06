@@ -12,7 +12,9 @@ import { svg_meteor_logo_text } from "./graphical/svg_meteor_logo_text";
 import "./meteor-action-button";
 import "./get-meteor-screen";
 import "./meteor-action-ui-executing";
+import { consume } from "@lit/context";
 import type { IMCActionExecutionState } from "../../action/mc_action.types";
+import { overlayCloseTriggerContext } from "./meteor-action-ui-context";
 
 @customElement("meteor-action-ui-container")
 export class MeteorActionUiContainer extends LitElement {
@@ -27,6 +29,10 @@ export class MeteorActionUiContainer extends LitElement {
     isExecuting: false,
     targetedPlatform: "unset",
   };
+
+  @consume({ context: overlayCloseTriggerContext })
+  @property({ attribute: false })
+  public overlayCloseTrigger?: () => void;
 
   static styles = [
     unsafeCSS(animate_meteor_logo_css),
@@ -402,6 +408,12 @@ export class MeteorActionUiContainer extends LitElement {
 
   private _handleActionClose() {
     this.logger.log("Close button clicked, calling closeAction");
+
+    if (this.overlayCloseTrigger) {
+      this.logger.log("Using overlayCloseTrigger from context");
+      this.overlayCloseTrigger();
+      return;
+    }
     // Call closeAction which will be the wrapped version from overlay if available
     this.closeAction?.();
   }

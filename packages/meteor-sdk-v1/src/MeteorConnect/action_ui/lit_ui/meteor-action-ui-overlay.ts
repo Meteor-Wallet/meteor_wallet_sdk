@@ -1,8 +1,10 @@
+import { provide } from "@lit/context";
 import { css, html, LitElement } from "lit";
 import { property } from "lit/decorators.js"; // You MUST import this explicitly
 import { MeteorLogger } from "../../logging/MeteorLogger";
 import { METEOR_ACTION_UI_POPUP_PARENT_ID } from "../action_ui.static";
 import { customElement } from "./custom-element"; // Your new util
+import { overlayCloseTriggerContext } from "./meteor-action-ui-context";
 
 @customElement("meteor-action-ui-overlay")
 export class MeteorActionUiOverlay extends LitElement {
@@ -23,6 +25,10 @@ export class MeteorActionUiOverlay extends LitElement {
   }
 
   @property({ type: Boolean }) private closing: boolean = false;
+
+  @provide({ context: overlayCloseTriggerContext })
+  @property({ attribute: false })
+  private overlayCloseTrigger = () => this._animateClose();
 
   static styles = css`
       @keyframes fadeIn {
