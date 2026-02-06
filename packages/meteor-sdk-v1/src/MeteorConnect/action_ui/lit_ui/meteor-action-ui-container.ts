@@ -507,15 +507,9 @@ export class MeteorActionUiContainer extends LitElement {
             </div>`
             }
           </div>
-          ${
-            this.executionState.isExecuting
-              ? html`<div class="close-circle"></div>`
-              : html`
-            <div class="close-circle" @click=${() => this._handleActionClose()}>
+          <div class="close-circle" @click=${() => this._handleActionClose()}>
             ${unsafeSVG(svg_icons_text.icon_close_x)}
           </div>
-          `
-          }
         </div>
         ${
           this.executionState.isExecuting

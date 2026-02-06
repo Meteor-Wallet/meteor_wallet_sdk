@@ -30,6 +30,7 @@ export class MeteorActionUiExecuting extends LitElement {
       flex-grow: 1;
       align-items: center;
       justify-content: space-evenly;
+      overflow: hidden;
     }
 
     .meteor-logo {
@@ -63,6 +64,7 @@ export class MeteorActionUiExecuting extends LitElement {
     }
 
     .execution-target-icon {
+      position: relative;
       width: 3em;
       height: 3em;
       border-radius: 9999px;
