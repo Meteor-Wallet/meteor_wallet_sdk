@@ -49,7 +49,7 @@ export class MeteorActionUiContainer extends LitElement {
 
       /* Add your styles here */
       .modal {
-        font-family: 'Gilroy';
+        font-family: 'Gilroy', Inter, sans-serif;
         font-weight: 500;
         font-style: normal;
         background: linear-gradient(135deg, rgb(var(--meteor-dark-gray-darkest)) 0%, rgb(var(--meteor-dark-gray-standard)) 150%);

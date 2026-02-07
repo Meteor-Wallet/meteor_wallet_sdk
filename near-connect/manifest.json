@@ -4,7 +4,7 @@
     {
       "id": "meteor-wallet",
       "name": "Meteor Wallet",
-      "icon": "https://storage.googleapis.com/meteor-apps-v2/graphics/meteor_connect_ui/meteor-logo-svg.svg",
+      "icon": "https://raw.githubusercontent.com/Meteor-Wallet/meteor_wallet_sdk/main/assets/meteor-logo-svg.svg",
       "description": "The most simple and secure wallet to manage your crypto, access DeFi, and explore Web3",
       "website": "https://meteorwallet.app/",
       "version": "1.1.0",
