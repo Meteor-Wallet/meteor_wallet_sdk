@@ -1,0 +1,64 @@
+name: Release Meteor Near Connect on GitHub Storage Branch
+on:
+  push:
+    branches: [ release/meteor-near-connect ]
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Crucial for pushing changes back to the repo
+    
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up tools with proto
+        uses: moonrepo/setup-toolchain@v0
+        with:
+          auto-install: true
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Build meteor-near-connect.js locally
+        working-directory: packages/meteor-near-connect
+        run: |
+          bun run build
+
+      - name: Add Current Timestamp to ENV
+        id: date
+        run: echo "TIME_NOW=$(date +'%Y-%m-%dT%H-%M-%S')" >> $GITHUB_ENV
+      
+      - name: Debug Date Environment Variable
+        run: env | grep TIME_NOW
+
+      - name: Copy files to storage folder
+        run: |
+          mkdir -p storage
+          cp ./near-connect/meteor-near-connect.js ./storage/meteor-near-connect-${{ env.TIME_NOW }}.js
+          cp ./near-connect/meteor-near-connect.js ./storage/meteor-near-connect-latest.js
+
+      - name: Commit and Push to Data Branch
+        env:
+          SSH_DEPLOY_KEY: ${{ secrets.ACTIONS_WRITE_DEPLOY_KEY_PRIVATE_KEY }}
+        run: |
+          # Configure SSH to use the private key
+          mkdir -p ~/.ssh
+          echo "$SSH_DEPLOY_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan github.com >> ~/.ssh/known_hosts
+          
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Switch to the dedicated branch
+          git checkout -B data-storage
+
+          # Add files
+          git add storage/meteor-near-connect-${{ env.TIME_NOW }}.js
+          git add storage/meteor-near-connect-latest.js
+          git commit -m "Automated update for Meteor NEAR Connect executor script"
+
+          # Force push to the dedicated data branch
+          git push origin data-storage --force
