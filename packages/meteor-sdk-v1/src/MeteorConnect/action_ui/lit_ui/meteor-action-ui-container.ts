@@ -152,7 +152,6 @@ export class MeteorActionUiContainer extends LitElement {
       }
 
       .title-text-box .title {
-        font-family: 'Gilroy';
         margin: 0;
         font-size: 1.65rem;
         font-weight: 700;
@@ -173,7 +172,6 @@ export class MeteorActionUiContainer extends LitElement {
       }
 
       .title-text-box .subsection-title {
-        font-family: 'Gilroy';
         margin: 0;
         font-size: 1.2rem;
         font-weight: 500;
