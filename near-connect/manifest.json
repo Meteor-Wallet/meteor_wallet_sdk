@@ -8,7 +8,7 @@
       "description": "The most simple and secure wallet to manage your crypto, access DeFi, and explore Web3",
       "website": "https://meteorwallet.app/",
       "version": "1.1.0",
-      "executor": "https://storage.googleapis.com/meteor-apps-v2/near-connect/executor/latest/meteor-near-connect.js",
+      "executor": "https://raw.githubusercontent.com/Meteor-Wallet/meteor_wallet_sdk/data-storage/storage/meteor-near-connect-latest.js",
       "type": "sandbox",
 
       "features": {
