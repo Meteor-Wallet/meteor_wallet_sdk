@@ -22,4 +22,6 @@ export abstract class MeteorConnectClientBase {
     request: R,
     connection: TMeteorExecutionTargetConfig,
   ): Promise<TMCActionOutput<R>>;
+
+  abstract getEnvironmentSupportedPlatforms(): Promise<TMeteorConnectionExecutionTarget[]>;
 }

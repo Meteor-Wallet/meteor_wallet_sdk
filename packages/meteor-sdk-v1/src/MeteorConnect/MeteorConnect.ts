@@ -44,7 +44,7 @@ export class MeteorConnect {
     v1: new MeteorConnectV1Client(this),
     v2MessengerClient: new MeteorConnectV2MessengerClient(this),
   };
-  // private onCancelAction: (() => void) | undefined = undefined;
+  public supportedPlatforms: TMeteorConnectionExecutionTarget[] = [];
 
   constructor({ isDev = false }: { isDev?: boolean } = {}) {
     this.isDev = isDev;
@@ -70,8 +70,11 @@ export class MeteorConnect {
 
     await typedStorageHelper.setJson("lastInitialized", Date.now());
 
-    // this.onCancelAction = onCancelAction;
-    this.logger.log("Initialized");
+    this.supportedPlatforms = await Promise.all(
+      this.getClients().map((c) => c.getEnvironmentSupportedPlatforms()),
+    ).then((platforms) => platforms.flat());
+
+    this.logger.log("Initialized with supported platforms:", this.supportedPlatforms);
   }
 
   get storage() {

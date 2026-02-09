@@ -20,6 +20,10 @@ export class MeteorConnectTestClient extends MeteorConnectClientBase {
     "test_rid_qr_code",
   ];
 
+  async getEnvironmentSupportedPlatforms(): Promise<TMeteorConnectionExecutionTarget[]> {
+    return this.executionTargets;
+  }
+
   async getExecutionTargetConfigs<R extends TMCActionRequestUnionExpandedInput<TMCActionRegistry>>(
     _request: R,
   ): Promise<TMeteorExecutionTargetConfig[]> {

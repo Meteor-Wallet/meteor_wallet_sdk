@@ -7,6 +7,7 @@ import type { TMeteorSdkV1Transaction } from "../../../ported_common/dapp/dapp.t
 import { notNullEmpty } from "../../../utils/nullEmpty";
 import type { TMCActionOutput, TMCActionRegistry } from "../../action/mc_action.combined";
 import type { TMCActionRequestUnionExpandedInput } from "../../action/mc_action.types";
+import { supportsChromeExtension } from "../../action_ui/utils/supportsChromeExtension";
 import { MeteorLogger } from "../../logging/MeteorLogger";
 import type {
   TMeteorConnectAccountNetwork,
@@ -74,6 +75,14 @@ export class MeteorConnectV1Client extends MeteorConnectClientBase {
     };
 
     return sdkForNetworkAndTarget[key];
+  }
+
+  async getEnvironmentSupportedPlatforms(): Promise<TMeteorConnectionExecutionTarget[]> {
+    if (supportsChromeExtension()) {
+      return ["v1_ext", "v1_web"];
+    }
+
+    return ["v1_web"];
   }
 
   async getExecutionTargetConfigs<R extends TMCActionRequestUnionExpandedInput<TMCActionRegistry>>(

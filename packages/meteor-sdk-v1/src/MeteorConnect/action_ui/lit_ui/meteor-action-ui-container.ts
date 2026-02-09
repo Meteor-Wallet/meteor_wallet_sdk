@@ -478,9 +478,17 @@ export class MeteorActionUiContainer extends LitElement {
         .getAllExecutionTargetConfigs()
         .find((t) => t.executionTarget === "v1_web_localhost") != null;
 
-    const supportedPlatforms = this.action
+    const availablePlatformTargets = this.action
       .getAllExecutionTargetConfigs()
       .map((t) => t.executionTarget);
+
+    const extensionWalletAvailable = availablePlatformTargets.includes("v1_ext");
+    const webWalletAvailable = availablePlatformTargets.includes("v1_web");
+
+    this.logger.log(
+      "Rendering Meteor Action UI Container with [available platforms], [supported platforms]:",
+      [availablePlatformTargets, this.action.meteorConnect.supportedPlatforms],
+    );
 
     return html`
       <div class="modal">
@@ -513,7 +521,7 @@ export class MeteorActionUiContainer extends LitElement {
           this.executionState.isExecuting
             ? html`<meteor-action-ui-executing .executingForPlatform=${this.executionState.targetedPlatform}></meteor-action-ui-executing>`
             : this.showGetMeteor
-              ? html`<get-meteor-screen .supportedPlatforms=${supportedPlatforms}></get-meteor-screen>`
+              ? html`<get-meteor-screen .supportedPlatforms=${this.action.meteorConnect.supportedPlatforms}></get-meteor-screen>`
               : html`
           <div class="meteor-connect-content">
             <div class="background-graphics-box">
@@ -522,16 +530,24 @@ export class MeteorActionUiContainer extends LitElement {
             <div class="options">
               <span class="section-action-title">Choose your wallet</span>
               <div class="option-buttons-row">
-                <meteor-action-button
+              ${
+                extensionWalletAvailable
+                  ? html`<meteor-action-button
                   label="Chrome Extension"
                   .icon=${svg_icons_text.icon_chrome}
                   @meteor-button-click=${() => this.actionController.executeAction("v1_ext")}
-                ></meteor-action-button>
-                <meteor-action-button
+                ></meteor-action-button>`
+                  : ""
+              }
+              ${
+                webWalletAvailable
+                  ? html`<meteor-action-button
                   label="Web App"
                   .icon=${svg_icons_text.icon_web_globe}
                   @meteor-button-click=${() => this.actionController.executeAction("v1_web")}
-                ></meteor-action-button>
+                ></meteor-action-button>`
+                  : ""
+              }
                 ${
                   includeWebDevLocalhost
                     ? html`

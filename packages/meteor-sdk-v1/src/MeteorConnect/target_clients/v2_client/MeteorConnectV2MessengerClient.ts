@@ -1,5 +1,6 @@
 import type { TMCActionOutput, TMCActionRegistry } from "../../action/mc_action.combined";
 import type { TMCActionRequestUnionExpandedInput } from "../../action/mc_action.types";
+import { isMobile } from "../../action_ui/utils/isMobile";
 import { MeteorLogger } from "../../logging/MeteorLogger";
 import type {
   TMeteorConnectionExecutionTarget,
@@ -14,6 +15,14 @@ export class MeteorConnectV2MessengerClient extends MeteorConnectClientBase {
     "v2_rid_qr_code",
   ];
   protected readonly logger = MeteorLogger.createLogger("MeteorConnect:V2MessengerClient");
+
+  async getEnvironmentSupportedPlatforms(): Promise<TMeteorConnectionExecutionTarget[]> {
+    if (isMobile()) {
+      return ["v2_rid_mobile_deep_link", "v2_rid_qr_code"];
+    }
+
+    return [];
+  }
 
   async getExecutionTargetConfigs<R extends TMCActionRequestUnionExpandedInput<TMCActionRegistry>>(
     _request: R,

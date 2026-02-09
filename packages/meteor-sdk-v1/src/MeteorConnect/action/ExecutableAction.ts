@@ -39,7 +39,7 @@ export class ExecutableAction<R extends TMCActionRequestUnion<TMCActionRegistry>
   constructor(
     private readonly request: R,
     expandedInput: any,
-    private readonly meteorConnect: MeteorConnect,
+    readonly meteorConnect: MeteorConnect,
     private readonly connectionTargetConfig: {
       allExecutionTargets: TMeteorExecutionTargetConfig[];
       contextualExecutionTarget?: TMeteorConnectionExecutionTarget;
