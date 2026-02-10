@@ -1,8 +1,10 @@
 import { NearConnector, type NearWalletBase } from "@hot-labs/near-connect";
+import { wait_utils } from "@meteorwallet/utils/javascript_helpers/wait.utils";
 import { useMemo, useState } from "react";
 import { NetworkSelector } from "~/pages/near-connect/NetworkSelector";
 import { WalletActions } from "~/pages/near-connect/WalletActions";
 import { Button } from "~/ui/Button";
+import { createSimpleNonce, GUESTBOOK_CONTRACT_ID } from "../meteor-sdk-test/guestbook";
 import { devManifest } from "./dev-manifest";
 
 export const NearConnectTest = () => {
@@ -76,13 +78,36 @@ export const NearConnectTest = () => {
           connector.switchNetwork(network);
         }}
       />
-      <Button
-        onClick={() => {
-          connectOrDisconnect();
-        }}
-      >
-        {networkAccount != null ? `${networkAccount.id} (logout)` : "Connect"}
-      </Button>
+      <div className="p-5 flex flex-row gap-2 items-start">
+        <Button
+          onClick={() => {
+            connectOrDisconnect();
+          }}
+        >
+          {networkAccount != null ? `${networkAccount.id} (logout)` : "Connect"}
+        </Button>
+        {networkAccount == null && (
+          <Button
+            onClick={async () => {
+              await connectOrDisconnect();
+              const wal = await connector.wallet();
+
+              console.log("Signing message after connect (5 second delay)...");
+
+              await wait_utils.waitSeconds(5);
+
+              await wal.signMessage({
+                message: "Hello from Meteor Connect!",
+                nonce: createSimpleNonce(),
+                recipient: GUESTBOOK_CONTRACT_ID,
+              });
+            }}
+          >
+            {"Connect and Immediate Sign Message"}
+          </Button>
+        )}
+      </div>
+
       {networkAccount != null && <WalletActions wallet={wallet!} network={network} />}
     </div>
   );

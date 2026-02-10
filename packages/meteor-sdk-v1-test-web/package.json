@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@meteorwallet/sdk": "workspace:*",
+    "@meteorwallet/utils": "1.28.0-0",
     "@scure/base": "2.0.0",
     "@near-js/keystores-browser": "2.2.5",
     "@near-js/crypto": "2.2.5",

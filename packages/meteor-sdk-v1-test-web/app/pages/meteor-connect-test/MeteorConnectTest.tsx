@@ -1,5 +1,6 @@
 import type { IMeteorConnectAccount } from "@meteorwallet/sdk";
 import { MeteorConnect, webpage_local_storage } from "@meteorwallet/sdk";
+import { wait_utils } from "@meteorwallet/utils/javascript_helpers/wait.utils";
 import { actionCreators } from "@near-js/transactions";
 import { parseNearAmount } from "@near-js/utils";
 import { QueryClient, QueryClientProvider, useMutation, useQuery } from "@tanstack/react-query";
@@ -75,32 +76,62 @@ const MeteorConnectTestInitialized = ({ meteorConnect }: { meteorConnect: Meteor
         }}
       />
       {account == null ? (
-        <Button
-          onClick={async () => {
-            const action = await meteorConnect.createAction({
-              id: "near::sign_in",
-              input: {
-                target: {
-                  blockchain: "near",
-                  network,
+        <div className={"p-5 flex flex-row gap-5 items-start"}>
+          <Button
+            onClick={async () => {
+              const action = await meteorConnect.createAction({
+                id: "near::sign_in",
+                input: {
+                  target: {
+                    blockchain: "near",
+                    network,
+                  },
                 },
-              },
-            });
+              });
 
-            // const availableTargets = action.getAllExecutionTargetConfigs();
-            /*let target: TMeteorConnectionExecutionTarget = "v1_web";
+              await accountQuery.refetch({ cancelRefetch: true });
+            }}
+          >
+            Sign In
+          </Button>
+          <Button
+            onClick={async () => {
+              const signInAction = await meteorConnect.createAction({
+                id: "near::sign_in",
+                input: {
+                  target: {
+                    blockchain: "near",
+                    network,
+                  },
+                },
+              });
 
-            if (availableTargets.some((target) => target.executionTarget === "v1_ext")) {
-              target = "v1_ext";
-            }*/
+              const newAccount = await signInAction.promptForExecution();
 
-            await action.promptForExecution();
+              await accountQuery.refetch({ cancelRefetch: true });
 
-            await accountQuery.refetch({ cancelRefetch: true });
-          }}
-        >
-          Sign In
-        </Button>
+              const signMessageAction = await meteorConnect.createAction({
+                id: "near::sign_message",
+                input: {
+                  messageParams: {
+                    message: "Immediate sign message after sign in",
+                    nonce: createSimpleNonce(),
+                    recipient: GUESTBOOK_CONTRACT_ID,
+                  },
+                  target: newAccount.identifier,
+                },
+              });
+
+              console.log("Prompting for sign message action immediately after sign in...");
+
+              const signedMessage = await signMessageAction.promptForExecution();
+
+              console.log("Signed message:", signedMessage);
+            }}
+          >
+            Sign In With Immediate Sign Message
+          </Button>
+        </div>
       ) : (
         <>
           <Button
