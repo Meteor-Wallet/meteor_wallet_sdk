@@ -3,8 +3,8 @@
   "version": "0.0.1",
   "scripts": {
     "format": "bunx biome format --write",
-    "type-check-all": "bun run --filter '*' type-check",
-    "type-check-watch-all": "bun run --filter '*' type-check-watch",
+    "type-check-all": "bun run --parallel --workspaces --no-exit-on-error type-check",
+    "type-check-watch-all": "bun run --parallel --workspaces --no-exit-on-error type-check-watch",
     "clean-files": "bunx glcl",
     "clean-cache-files": "bunx glcl -f glob-list.caches.clean",
     "link-local-packages-watch": "bunx local-package-link@0.1.0 --watch",

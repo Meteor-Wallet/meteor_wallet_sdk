@@ -136,6 +136,14 @@ class ComWindow {
   }
 
   sendMessage(data: TPostMessageSend) {
+    if (this.lastSendStatus !== data.status) {
+      this.logger.log(
+        `[sendMessageDataAndRespond()]: SEND [${this.comType}] [status = ${data.status}]`,
+        data,
+      );
+      this.lastSendStatus = data.status;
+    }
+
     if (this.comType === EDappActionSource.website_post_message) {
       this.websiteWindow?.postMessage(data, this.walletOrigin);
     } else {
@@ -160,11 +168,6 @@ class ComWindow {
 
           this.directExtensionState!.listener(response);
         };
-
-        if (this.lastSendStatus !== data.status) {
-          this.logger.log(`[sendMessageDataAndRespond()]: SEND [status = ${data.status}]`, data);
-          this.lastSendStatus = data.status;
-        }
 
         callDirect(data);
       } else {
@@ -197,7 +200,7 @@ class ComWindow {
   }
 }
 
-const pingInterval = 100;
+const pingInterval = 500;
 
 class MeteorPostMessenger {
   baseWalletUrl: string;
@@ -255,7 +258,8 @@ class MeteorPostMessenger {
 
             this.sendComs();
 
-            wait_utils.waitMillis(200).then(() => {
+            wait_utils.waitMillis(300).then(() => {
+              console.log("Ending success with data", data);
               currentConnection.resolve({
                 success: true,
                 endTags: [],
