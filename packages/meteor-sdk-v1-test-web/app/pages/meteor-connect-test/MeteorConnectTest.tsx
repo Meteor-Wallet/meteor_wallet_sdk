@@ -1,6 +1,5 @@
 import type { IMeteorConnectAccount } from "@meteorwallet/sdk";
 import { MeteorConnect, webpage_local_storage } from "@meteorwallet/sdk";
-import { wait_utils } from "@meteorwallet/utils/javascript_helpers/wait.utils";
 import { actionCreators } from "@near-js/transactions";
 import { parseNearAmount } from "@near-js/utils";
 import { QueryClient, QueryClientProvider, useMutation, useQuery } from "@tanstack/react-query";
@@ -79,7 +78,7 @@ const MeteorConnectTestInitialized = ({ meteorConnect }: { meteorConnect: Meteor
         <div className={"p-5 flex flex-row gap-5 items-start"}>
           <Button
             onClick={async () => {
-              const action = await meteorConnect.createAction({
+              const signInAction = await meteorConnect.createAction({
                 id: "near::sign_in",
                 input: {
                   target: {
@@ -89,10 +88,36 @@ const MeteorConnectTestInitialized = ({ meteorConnect }: { meteorConnect: Meteor
                 },
               });
 
+              await signInAction.promptForExecution();
+
               await accountQuery.refetch({ cancelRefetch: true });
             }}
           >
             Sign In
+          </Button>
+          <Button
+            onClick={async () => {
+              const signInWithMessageAction = await meteorConnect.createAction({
+                id: "near::sign_in_and_sign_message",
+                input: {
+                  messageParams: {
+                    message: "test_sign_in_message",
+                    nonce: createSimpleNonce(),
+                    recipient: GUESTBOOK_CONTRACT_ID,
+                  },
+                  target: {
+                    blockchain: "near",
+                    network,
+                  },
+                },
+              });
+
+              await signInWithMessageAction.promptForExecution();
+
+              await accountQuery.refetch({ cancelRefetch: true });
+            }}
+          >
+            Sign In And Sign Message (1 action)
           </Button>
           <Button
             onClick={async () => {
@@ -129,7 +154,7 @@ const MeteorConnectTestInitialized = ({ meteorConnect }: { meteorConnect: Meteor
               console.log("Signed message:", signedMessage);
             }}
           >
-            Sign In With Immediate Sign Message
+            Sign In and Sign Message (2 actions)
           </Button>
         </div>
       ) : (

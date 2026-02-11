@@ -1,9 +1,8 @@
 import type { PublicKey } from "@near-js/crypto";
 import type { SignedMessage } from "@near-js/signers";
-import type { Action, SignedDelegate } from "@near-js/transactions";
+import type { Action } from "@near-js/transactions";
 import type { FinalExecutionOutcome } from "@near-js/types";
 import type {
-  IODappAction_PostMessage_SignDelegateActions_Output,
   IODappAction_VerifyOwner_Output,
   IORequestSignDelegateActions_Output,
 } from "../../ported_common/dapp/dapp.types";
@@ -20,14 +19,29 @@ import type {
 } from "./mc_action.types.ts";
 
 //
-// SIGN IN
+// SIGN IN ACTIONS
 //
+// ---------------
 
-export interface IMCAInput_Near_SignIn extends IMCAction_WithNetworkTarget {
+export interface IMCAInput_Near_SignIn_BaseParams {
   contract?: {
     id: string;
     methodNames?: string[];
   };
+}
+
+export interface IMCAInput_Near_SignIn
+  extends IMCAInput_Near_SignIn_BaseParams,
+    IMCAction_WithNetworkTarget {}
+
+// (WITH SIGN MESSAGE)
+
+export interface IMCAInput_Near_SignInAndSignMessage extends IMCAInput_Near_SignIn {
+  messageParams: INearSignMessageParams;
+}
+
+export interface IMCAOutput_Near_SignInAndSignMessage extends IMeteorConnectAccount {
+  signedMessage: SignedMessage;
 }
 
 // ------------------------------
@@ -111,6 +125,14 @@ export const MCNearActions = {
     input: {} as IMCAInput_Near_SignIn,
     expandedInput: {} as IMCAInput_Near_SignIn,
     output: {} as IMeteorConnectAccount,
+    meta: {
+      executionTargetSource: "on_execution",
+    },
+  },
+  "near::sign_in_and_sign_message": {
+    input: {} as IMCAInput_Near_SignInAndSignMessage,
+    expandedInput: {} as IMCAInput_Near_SignInAndSignMessage,
+    output: {} as IMCAOutput_Near_SignInAndSignMessage,
     meta: {
       executionTargetSource: "on_execution",
     },

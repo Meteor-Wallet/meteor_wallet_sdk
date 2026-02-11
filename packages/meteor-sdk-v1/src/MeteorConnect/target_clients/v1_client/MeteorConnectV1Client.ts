@@ -134,7 +134,7 @@ export class MeteorConnectV1Client extends MeteorConnectClientBase {
       );
     }
 
-    if (request.id === "near::sign_in") {
+    if (request.id === "near::sign_in" || request.id === "near::sign_in_and_sign_message") {
       const { wallet } = this.getSdkForNetworkAndTarget(
         request.expandedInput.target.network,
         connectionConfig,
@@ -148,6 +148,10 @@ export class MeteorConnectV1Client extends MeteorConnectClientBase {
         type: EMeteorWalletSignInType.ALL_METHODS,
         contract_id: request.expandedInput.contract?.id ?? "",
         methods: request.expandedInput.contract?.methodNames,
+        messageParams:
+          request.id === "near::sign_in_and_sign_message"
+            ? request.expandedInput.messageParams
+            : undefined,
       });
 
       if (response.success) {

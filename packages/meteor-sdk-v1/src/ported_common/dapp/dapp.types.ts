@@ -82,6 +82,7 @@ export interface IOMeteorWalletSdk_RequestSignIn_Inputs {
   type: EMeteorWalletSignInType;
   methods?: string[];
   contract_id: string;
+  messageParams?: IODappAction_SignMessage_Input;
 }
 
 export interface IODappAction_SignMessage_Input {
