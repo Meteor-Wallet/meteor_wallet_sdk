@@ -102,7 +102,7 @@ Available targets: [${this.connectionTargetConfig.allExecutionTargets.map((c) =>
     this.executingTargetedPlatform = executionTargetConfig.executionTarget;
     setTimeout(() => this.triggerExecutionStateUpdate(), 5);
 
-    if (request.id === "near::sign_in") {
+    if (request.id === "near::sign_in" || request.id === "near::sign_in_and_sign_message") {
       const response = await this.makeTargetedActionRequest(
         {
           id: request.id,

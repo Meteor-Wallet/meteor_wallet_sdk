@@ -316,14 +316,17 @@ export class MeteorWallet {
           public_key: usingPublicKey,
         },
       };
+
       localStorageAdapter.setJson(this._authDataKey, this._authData);
       await this._keyStore.setKey(this._networkId, accountId, accessKey);
+
       return {
         success: true,
         endTags: [],
         payload: {
           accessKey,
           accountId,
+          signedMessage: response.payload.signedMessage,
         },
       };
     }
