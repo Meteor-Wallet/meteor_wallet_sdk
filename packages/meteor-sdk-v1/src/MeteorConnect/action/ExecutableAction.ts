@@ -141,17 +141,27 @@ Available targets: [${this.connectionTargetConfig.allExecutionTargets.map((c) =>
     return response.output;
   }
 
+  private resolveAction(value: any) {
+    this.actionResolvers.forEach((resolver) => resolver(value));
+    this.logger.log(`Action [${this.id}] resolved with value`, value);
+  }
+
+  private rejectAction(value: any) {
+    this.actionRejecters.forEach((rejecter) => rejecter(value));
+    this.logger.err(`Action [${this.id}] rejected with error`, value);
+  }
+
   async execute(
     executionTarget?: TMeteorConnectionExecutionTarget,
   ): Promise<TMCActionRegistry[R["id"]]["output"]> {
     if (this.execute_promise == null) {
       this.execute_promise = this._execute(executionTarget)
         .then((value) => {
-          this.actionResolvers.forEach((resolver) => resolver(value));
+          this.resolveAction(value);
           return value;
         })
         .catch((err) => {
-          this.actionRejecters.forEach((rejecter) => rejecter(err));
+          this.rejectAction(err);
           throw err;
         });
       this.waitForExecutionOutput_promise = this.execute_promise;

@@ -11,12 +11,7 @@ export enum EExternalActionType {
 export enum EMeteorWalletSignInType {
   ALL_METHODS = "ALL_METHODS",
   SELECTED_METHODS = "SELECTED_METHODS",
-  FULL_ACCESS = "FULL_ACCESS",
-}
-
-export enum EWalletExternalAction_SignIn_AccessType {
-  FULL_ACCESS = "fullAccess",
-  LIMITED_ACCESS = "limitedAccess",
+  ACCOUNT_ONLY = "ACCOUNT_ONLY",
 }
 
 export enum EWalletExternalActionStatus {

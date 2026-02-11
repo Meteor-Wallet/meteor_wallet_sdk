@@ -59,6 +59,24 @@ export class LoggerInstance {
     }
   }
 
+  err(message: string, meta?: any): void {
+    const level = MeteorLogger.getGlobalLoggingLevel();
+
+    if (level === "none") {
+      return;
+    }
+
+    if (level === "basic" || meta == null) {
+      console.error(this.formatMsg(message));
+      return;
+    }
+
+    if (level === "debug") {
+      console.error(this.formatMsg(message), meta);
+      return;
+    }
+  }
+
   formatMsg(message: string): string {
     return `[${this.prefix}]: ${message}`;
   }

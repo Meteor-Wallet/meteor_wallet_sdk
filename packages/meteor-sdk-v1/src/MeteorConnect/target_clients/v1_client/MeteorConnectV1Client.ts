@@ -140,12 +140,24 @@ export class MeteorConnectV1Client extends MeteorConnectClientBase {
         connectionConfig,
       );
 
-      if (request.expandedInput.contract != null) {
-        // TODO need to generate a function call access key to be registered on the account
+      const isContractSignIn = request.expandedInput.contract != null;
+      const isContractWithSelectedMethods =
+        isContractSignIn &&
+        request.expandedInput.contract?.methodNames != null &&
+        request.expandedInput.contract.methodNames.length > 0;
+
+      let signInType: EMeteorWalletSignInType = EMeteorWalletSignInType.ACCOUNT_ONLY;
+
+      if (isContractSignIn) {
+        if (isContractWithSelectedMethods) {
+          signInType = EMeteorWalletSignInType.SELECTED_METHODS;
+        } else {
+          signInType = EMeteorWalletSignInType.ALL_METHODS;
+        }
       }
 
       const response = await wallet.requestSignIn({
-        type: EMeteorWalletSignInType.ALL_METHODS,
+        type: signInType,
         contract_id: request.expandedInput.contract?.id ?? "",
         methods: request.expandedInput.contract?.methodNames,
         messageParams:
@@ -170,6 +182,27 @@ export class MeteorConnectV1Client extends MeteorConnectClientBase {
           });
         }
 
+        let signedMessage:
+          | TMCActionOutput<Extract<R, { id: "near::sign_in_and_sign_message" }>>["signedMessage"]
+          | undefined;
+
+        if (request.id === "near::sign_in_and_sign_message") {
+          if (response.payload.signedMessage == null) {
+            throw new Error(
+              this.logger.formatMsg(
+                `Expected signed message in response payload for action [${request.id}] but it was not present`,
+              ),
+            );
+          }
+
+          signedMessage = {
+            accountId: response.payload.accountId,
+            publicKey: PublicKey.fromString(response.payload.signedMessage.publicKey),
+            signature: Buffer.from(response.payload.signedMessage.signature, "base64"),
+            state: response.payload.signedMessage.state,
+          };
+        }
+
         return {
           connection: connectionConfig,
           identifier: {
@@ -177,6 +210,7 @@ export class MeteorConnectV1Client extends MeteorConnectClientBase {
             ...request.expandedInput.target,
           },
           publicKeys,
+          signedMessage,
         };
       } else {
         throw new Error(`MeteorConnectV1Client: Sign in failed ${response.message}`);

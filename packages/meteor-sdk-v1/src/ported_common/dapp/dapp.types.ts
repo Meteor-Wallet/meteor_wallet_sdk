@@ -20,9 +20,10 @@ import {
   EWalletExternalActionStatus,
 } from "./dapp.enums";
 import { EDappActionErrorTag, getExternalActionErrorMessageForEndTag } from "./dapp.errors";
-import {
-  ZO_DappSignInAction_AllMethods,
-  ZO_DappSignInAction_SelectedMethods,
+import type {
+  ZO_DappSignInAction_AccountOnly,
+  ZO_DappSignInAction_Contract_AllMethods,
+  ZO_DappSignInAction_Contract_SelectedMethods,
 } from "./dapp.validation";
 
 export interface IRejectReason {
@@ -49,36 +50,33 @@ export class MeteorActionError extends Error {
     this.cause = previousError;
   }
 }
-
-/*export interface IWalletExternalAction_Login {
-  success_url?: string;
-  failure_url?: string;
-  contract_id: string;
-  public_key: string;
-}*/
-
-/*interface IWalletExternalAction_SignIn_Processed {
-  accessType: EWalletExternalAction_SignIn_AccessType;
-}*/
-
 export type TMeteorWalletExternalAction_SignIn_AllMethods = z.infer<
-  typeof ZO_DappSignInAction_AllMethods
+  typeof ZO_DappSignInAction_Contract_AllMethods
 >;
 
 export type TMeteorWalletExternalAction_SignIn_SelectedMethods = z.infer<
-  typeof ZO_DappSignInAction_SelectedMethods
+  typeof ZO_DappSignInAction_Contract_SelectedMethods
 >;
+
+export type TMeteorWalletExternalAction_SignIn_AccountOnly = z.infer<
+  typeof ZO_DappSignInAction_AccountOnly
+>;
+
+// export type TMeteorWalletExternalAction_SignIn_AccountAndSignMessage = z.infer<
+//   typeof ZO_DappSignInAction_AccountAndSignMessage
+// >;
 
 export interface IMeteorWalletExternalAction_SignIn_OptionalMessageParams {
   messageParams?: IODappAction_SignMessage_Input;
 }
 
-// export type TWalletExternalAction_SignIn = z.infer<typeof ZO_MeteorSignInAction_Combined>;
 export type TDappAction_SignIn_Data = IMeteorWalletExternalAction_SignIn_OptionalMessageParams &
   (
     | TMeteorWalletExternalAction_SignIn_AllMethods
     | TMeteorWalletExternalAction_SignIn_SelectedMethods
+    | TMeteorWalletExternalAction_SignIn_AccountOnly
   );
+// | TMeteorWalletExternalAction_SignIn_AccountAndSignMessage;
 
 export interface IOMeteorWalletSdk_RequestSignIn_Inputs {
   keyPair?: KeyPair;
@@ -120,11 +118,13 @@ export interface IWithCallbackUrl {
 export interface IOMeteorWalletSdk_SignIn_Output {
   accessKey: KeyPair;
   accountId: string;
+  signedMessage?: IODappAction_SignMessage_Output;
 }
 
 export interface IODappAction_PostMessage_SignIn_Output {
   accountId: string;
   allKeys: string[];
+  signedMessage?: IODappAction_SignMessage_Output;
 }
 
 export interface IODappAction_VerifyOwner_Input {
