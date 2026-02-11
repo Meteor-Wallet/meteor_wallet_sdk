@@ -2,10 +2,10 @@ import { z } from "zod";
 import { EMeteorWalletSignInType } from "./dapp.enums";
 
 export const ZO_DappSignInAction_Base = z.object({
-  contract_id: z.string(),
+  contract_id: z.string().optional(),
   // callback_url: z.string(),
   // network: z.nativeEnum(ENearNetwork),
-  public_key: z.string(),
+  public_key: z.string().optional(),
 });
 
 export const ZO_DappSignInAction_SelectedMethods = ZO_DappSignInAction_Base.merge(

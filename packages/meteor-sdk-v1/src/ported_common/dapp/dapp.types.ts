@@ -64,18 +64,21 @@ export class MeteorActionError extends Error {
 export type TMeteorWalletExternalAction_SignIn_AllMethods = z.infer<
   typeof ZO_DappSignInAction_AllMethods
 >;
+
 export type TMeteorWalletExternalAction_SignIn_SelectedMethods = z.infer<
   typeof ZO_DappSignInAction_SelectedMethods
 >;
-// export type TWalletExternalAction_SignIn = z.infer<typeof ZO_MeteorSignInAction_Combined>;
-export type TDappAction_SignIn_Data =
-  | TMeteorWalletExternalAction_SignIn_AllMethods
-  | TMeteorWalletExternalAction_SignIn_SelectedMethods;
 
-// export type TNearTransactionBase = Omit<
-//   NearFullTransaction,
-//   "nonce" | "publicKey" | "blockHash" | "encode"
-// >;
+export interface IMeteorWalletExternalAction_SignIn_OptionalMessageParams {
+  messageParams?: IODappAction_SignMessage_Input;
+}
+
+// export type TWalletExternalAction_SignIn = z.infer<typeof ZO_MeteorSignInAction_Combined>;
+export type TDappAction_SignIn_Data = IMeteorWalletExternalAction_SignIn_OptionalMessageParams &
+  (
+    | TMeteorWalletExternalAction_SignIn_AllMethods
+    | TMeteorWalletExternalAction_SignIn_SelectedMethods
+  );
 
 export interface IOMeteorWalletSdk_RequestSignIn_Inputs {
   keyPair?: KeyPair;
