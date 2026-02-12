@@ -1,6 +1,8 @@
 import { NearConnector, type NearWalletBase } from "@hot-labs/near-connect";
-import type { NearNep413MessagePayload } from "@meteorwallet/sdk";
+import { type NearNep413MessagePayload, serializeMessageNep413 } from "@meteorwallet/sdk";
 import { wait_utils } from "@meteorwallet/utils/javascript_helpers/wait.utils";
+import { PublicKey } from "@near-js/crypto";
+import { base64 } from "@scure/base";
 import { useMemo, useState } from "react";
 import { NetworkSelector } from "~/pages/near-connect/NetworkSelector";
 import { WalletActions } from "~/pages/near-connect/WalletActions";
@@ -13,6 +15,12 @@ export const NearConnectTest = () => {
   const [network, setNetwork] = useState<"testnet" | "mainnet">("testnet");
   const [account, _setAccount] = useState<{ id: string; network: "testnet" | "mainnet" }>();
   const [wallet, setWallet] = useState<NearWalletBase | undefined>();
+
+  const [messageToSign, setMessageToSign] = useState<NearNep413MessagePayload>(() => ({
+    message: "Hello",
+    recipient: "Demo app",
+    nonce: createSimpleNonce(),
+  }));
 
   const logger = {
     log: (args: any) => console.log("[NearConnector]", args),
@@ -36,18 +44,29 @@ export const NearConnectTest = () => {
     });
 
     connector.on("wallet:signIn", async (t) => {
-      setWallet(await connector.wallet());
-      setAccount(t.accounts[0]);
+      if (t.source === "signIn") {
+        setWallet(await connector.wallet());
+        setAccount(t.accounts[0]);
+      }
     });
 
     connector.on("wallet:signInAndSignMessage", async (t) => {
       setWallet(await connector.wallet());
       setAccount(t.accounts[0]);
 
+      const signedMessage = t.accounts[0].signedMessage;
+
       console.log(
         "Received signInAndSignMessage event with account[0] signed message:",
-        t.accounts[0].signedMessage,
+        signedMessage,
       );
+
+      const messageSerialized = serializeMessageNep413(messageToSign);
+
+      const publicKey = PublicKey.from(signedMessage.publicKey);
+      const isValid = publicKey.verify(messageSerialized, base64.decode(signedMessage.signature));
+
+      console.log(`Is verified: ${isValid}`);
     });
 
     connector.on("wallet:signOut", async () => {
@@ -90,7 +109,7 @@ export const NearConnectTest = () => {
           connector.switchNetwork(network);
         }}
       />
-      <div className="p-5 flex flex-row gap-2 items-start">
+      <div className="p-5 flex flex-row flex-wrap gap-2 items-start">
         <Button
           onClick={() => {
             connectOrDisconnect();
@@ -102,15 +121,7 @@ export const NearConnectTest = () => {
           <>
             <Button
               onClick={() => {
-                // const nonce = new Uint8Array(window.crypto.getRandomValues(new Uint8Array(32)));
-
-                const message: NearNep413MessagePayload = {
-                  message: "Hello",
-                  recipient: "Demo app",
-                  nonce: createSimpleNonce(),
-                };
-
-                connectOrDisconnect(message);
+                connectOrDisconnect(messageToSign);
               }}
             >
               Connect And Sign Message
