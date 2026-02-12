@@ -5,7 +5,7 @@ import type { TMCLoggingLevel } from "../MeteorConnect.types";
  * Manages global logging level and provides customized logger instances
  */
 export class MeteorLogger {
-  private static globalLoggingLevel: TMCLoggingLevel = "basic";
+  private static globalLoggingLevel: TMCLoggingLevel = "none";
 
   /**
    * Set the global logging level for all logger instances

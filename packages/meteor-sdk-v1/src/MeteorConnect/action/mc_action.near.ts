@@ -26,7 +26,7 @@ import type {
 export interface IMCAInput_Near_SignIn_BaseParams {
   contract?: {
     id: string;
-    methodNames?: string[];
+    methods?: string[];
   };
 }
 

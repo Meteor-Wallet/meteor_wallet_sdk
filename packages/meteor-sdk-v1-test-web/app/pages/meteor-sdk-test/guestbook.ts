@@ -3,6 +3,10 @@ import type { Transaction } from "@near-wallet-selector/core";
 import type { WalletSelectorProviderValue } from "@near-wallet-selector/react-hook/src/lib/WalletSelectorProvider";
 
 export const GUESTBOOK_CONTRACT_ID = "guest-book.testnet";
+export const GUESTBOOK_CONTRACT_METHODS = ["addMessage"];
+export const GUESTBOOK_CONTRACT_METHOD_ADD_MESSAGE = "addMessage";
+export const GUESTBOOK_CONTRACT_METHOD_GET_MESSAGES = "getMessages";
+
 const BOATLOAD_OF_GAS = "30000000000000";
 
 export interface Message {

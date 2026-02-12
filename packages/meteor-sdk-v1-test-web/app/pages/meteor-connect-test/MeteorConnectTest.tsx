@@ -8,7 +8,11 @@ import {
   AddMessageComponent,
   type IAddMessageParams,
 } from "~/components/wallet_actions/AddMessageComponent.tsx";
-import { createSimpleNonce, GUESTBOOK_CONTRACT_ID } from "~/pages/meteor-sdk-test/guestbook";
+import {
+  createSimpleNonce,
+  GUESTBOOK_CONTRACT_ID,
+  GUESTBOOK_CONTRACT_METHODS,
+} from "~/pages/meteor-sdk-test/guestbook";
 import { NetworkSelector } from "~/pages/near-connect/NetworkSelector";
 import { Button } from "~/ui/Button";
 
@@ -75,7 +79,7 @@ const MeteorConnectTestInitialized = ({ meteorConnect }: { meteorConnect: Meteor
         }}
       />
       {account == null ? (
-        <div className={"p-5 flex flex-row gap-5 items-start"}>
+        <div className={"p-5 flex flex-row flex-wrap gap-5 items-start"}>
           <Button
             onClick={async () => {
               const signInAction = await meteorConnect.createAction({
@@ -93,7 +97,30 @@ const MeteorConnectTestInitialized = ({ meteorConnect }: { meteorConnect: Meteor
               await accountQuery.refetch({ cancelRefetch: true });
             }}
           >
-            Sign In
+            Sign In (No contract)
+          </Button>
+          <Button
+            onClick={async () => {
+              const signInAction = await meteorConnect.createAction({
+                id: "near::sign_in",
+                input: {
+                  target: {
+                    blockchain: "near",
+                    network,
+                  },
+                  contract: {
+                    id: GUESTBOOK_CONTRACT_ID,
+                    methods: GUESTBOOK_CONTRACT_METHODS,
+                  },
+                },
+              });
+
+              await signInAction.promptForExecution();
+
+              await accountQuery.refetch({ cancelRefetch: true });
+            }}
+          >
+            Sign In To Guestbook
           </Button>
           <Button
             onClick={async () => {
@@ -101,7 +128,7 @@ const MeteorConnectTestInitialized = ({ meteorConnect }: { meteorConnect: Meteor
                 id: "near::sign_in_and_sign_message",
                 input: {
                   messageParams: {
-                    message: "test_sign_in_message",
+                    message: "hello",
                     nonce: createSimpleNonce(),
                     recipient: GUESTBOOK_CONTRACT_ID,
                   },
@@ -112,7 +139,9 @@ const MeteorConnectTestInitialized = ({ meteorConnect }: { meteorConnect: Meteor
                 },
               });
 
-              await signInWithMessageAction.promptForExecution();
+              const response = await signInWithMessageAction.promptForExecution();
+
+              console.log("Signed in with signed message:", response);
 
               await accountQuery.refetch({ cancelRefetch: true });
             }}
@@ -254,10 +283,14 @@ const MeteorConnectWithAccount = ({
               receiverId: "pebble.testnet",
               actions: [actionCreators.transfer(BigInt(parseNearAmount("0.001")!))],
             },
-            {
-              receiverId: "pebble.testnet",
-              actions: [actionCreators.transfer(BigInt(parseNearAmount("0.001")!))],
-            },
+            ...(multiple
+              ? [
+                  {
+                    receiverId: "pebble.testnet",
+                    actions: [actionCreators.transfer(BigInt(parseNearAmount("0.001")!))],
+                  },
+                ]
+              : []),
           ],
         },
       });

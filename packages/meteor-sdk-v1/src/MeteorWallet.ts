@@ -343,13 +343,13 @@ export class MeteorWallet {
   async signOut() {
     const accountId = this.getAccountId();
 
-    this.logger.log(`Signing out account [${accountId ?? "<unknown>"}]`);
-
     if (this._authData.signedInContract != null && accountId != null) {
       const inputs: IDappAction_Logout_Data = {
         accountId,
         contractInfo: this._authData.signedInContract,
       };
+
+      this.logger.log(`Signing out account [${accountId ?? "<unknown>"}]`, inputs);
 
       const response = await getMeteorPostMessenger().connectAndWaitForResponse({
         actionType: EExternalActionType.logout,
@@ -357,6 +357,8 @@ export class MeteorWallet {
         network: this._networkId as ENearNetwork,
         forceExecutionTargetConfig: this._forceTargetPlatformConfig,
       });
+    } else {
+      this.logger.log(`Signing out account [${accountId ?? "<unknown>"}]`);
     }
 
     this._authData = { allKeys: [] };

@@ -3,6 +3,7 @@ import type { IRenderActionUi_Input } from "../action_ui/action_ui.types";
 import { MeteorLogger } from "../logging/MeteorLogger";
 import type { MeteorConnect } from "../MeteorConnect";
 import type {
+  IMeteorConnectAccount,
   TMeteorConnectionExecutionTarget,
   TMeteorExecutionTargetConfig,
 } from "../MeteorConnect.types.ts";
@@ -111,7 +112,13 @@ Available targets: [${this.connectionTargetConfig.allExecutionTargets.map((c) =>
         executionTargetConfig,
       );
 
-      await this.meteorConnect.addSignedInAccount(response.output);
+      const signedInAcccount: IMeteorConnectAccount = {
+        connection: response.output.connection,
+        identifier: response.output.identifier,
+        publicKeys: response.output.publicKeys,
+      };
+
+      await this.meteorConnect.addSignedInAccount(signedInAcccount);
 
       return response.output;
     }

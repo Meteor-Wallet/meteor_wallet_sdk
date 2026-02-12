@@ -120,6 +120,7 @@ export class MeteorConnectV1Client extends MeteorConnectClientBase {
     const executionTarget = connectionConfig.executionTarget;
     this.logger.log(
       `Making request for action [${request.id}] using execution target [${executionTarget}]`,
+      request.expandedInput,
     );
 
     if (
@@ -143,8 +144,8 @@ export class MeteorConnectV1Client extends MeteorConnectClientBase {
       const isContractSignIn = request.expandedInput.contract != null;
       const isContractWithSelectedMethods =
         isContractSignIn &&
-        request.expandedInput.contract?.methodNames != null &&
-        request.expandedInput.contract.methodNames.length > 0;
+        request.expandedInput.contract?.methods != null &&
+        request.expandedInput.contract.methods.length > 0;
 
       let signInType: EMeteorWalletSignInType = EMeteorWalletSignInType.ACCOUNT_ONLY;
 
@@ -159,7 +160,7 @@ export class MeteorConnectV1Client extends MeteorConnectClientBase {
       const response = await wallet.requestSignIn({
         type: signInType,
         contract_id: request.expandedInput.contract?.id ?? "",
-        methods: request.expandedInput.contract?.methodNames,
+        methods: request.expandedInput.contract?.methods,
         messageParams:
           request.id === "near::sign_in_and_sign_message"
             ? request.expandedInput.messageParams
@@ -177,7 +178,7 @@ export class MeteorConnectV1Client extends MeteorConnectClientBase {
             publicKey: signedInAccount.accessKey.getPublicKey().toString(),
             meta: {
               contractId: request.expandedInput.contract.id,
-              methodNames: request.expandedInput.contract.methodNames,
+              methods: request.expandedInput.contract.methods,
             },
           });
         }

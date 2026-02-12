@@ -1,3 +1,4 @@
+import { jsonStringifyCompat } from "../ported_common/utils/jsonStringifyCompat";
 import type { PartialBy } from "../ported_common/utils/special_typescript_types";
 import { CEnvironmentStorageAdapter } from "../ported_common/utils/storage/EnvironmentStorageAdapter";
 import {
@@ -252,13 +253,17 @@ export class MeteorConnect {
         .map((c) => c.executionTarget)
         .join(", ")}]`,
       `\n
-${JSON.stringify({
+Targeted Account:
+${jsonStringifyCompat({
   targetedAccount,
 })}
       
-${JSON.stringify({
-  selectedExecutionTarget,
-})}`,
+Platform Target: ${jsonStringifyCompat({
+        selectedExecutionTarget,
+      })}
+
+Inputs: ${jsonStringifyCompat(expandedRequest.expandedInput)}
+`,
     );
 
     return new ExecutableAction(request, expandedRequest.expandedInput, this, {
