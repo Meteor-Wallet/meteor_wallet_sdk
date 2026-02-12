@@ -1,13 +1,15 @@
 import { type NearNep413MessagePayload, serializeMessageNep413 } from "@meteorwallet/sdk";
 import { PublicKey } from "@near-js/crypto";
 import { base64 } from "@scure/base";
+import { createSimpleNonce } from "~/pages/meteor-sdk-test/guestbook";
 import { type IPropsWalletAction } from "./wallet-action.types";
 // import {} from
 
 export const SignMessage = ({ wallet }: IPropsWalletAction) => {
   const signMessage = async () => {
     try {
-      const nonce = new Uint8Array(window.crypto.getRandomValues(new Uint8Array(32)));
+      // const nonce = new Uint8Array(window.crypto.getRandomValues(new Uint8Array(32)));
+      const nonce = createSimpleNonce();
 
       const message: NearNep413MessagePayload = { message: "Hello", recipient: "Demo app", nonce };
 

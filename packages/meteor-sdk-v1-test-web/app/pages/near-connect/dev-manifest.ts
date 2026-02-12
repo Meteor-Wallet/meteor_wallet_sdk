@@ -18,6 +18,7 @@ export const devManifest = (useLiveExecutor = false) =>
         features: {
           signMessage: true,
           signInWithoutAddKey: true,
+          signInAndSignMessage: true,
           signAndSendTransaction: true,
           signAndSendTransactions: true,
           signDelegateActions: true,
