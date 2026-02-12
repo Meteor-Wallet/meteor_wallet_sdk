@@ -67,7 +67,7 @@ export type TMeteorWalletExternalAction_SignIn_AccountOnly = z.infer<
 // >;
 
 export interface IMeteorWalletExternalAction_SignIn_OptionalMessageParams {
-  messageParams?: IODappAction_SignMessage_Input;
+  messageParams?: Omit<IODappAction_SignMessage_Input, "accountId">;
 }
 
 export type TDappAction_SignIn_Data = IMeteorWalletExternalAction_SignIn_OptionalMessageParams &
