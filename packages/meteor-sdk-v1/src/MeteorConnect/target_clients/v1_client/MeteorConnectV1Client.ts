@@ -94,13 +94,18 @@ export class MeteorConnectV1Client extends MeteorConnectClientBase {
       },
     ];
 
-    if (process.env.NODE_ENV === "development") {
+    const forceDev = (await this.meteorConnect.storage.getJsonOrDef("dev_000_met", 0)) === 1;
+
+    if (forceDev || process.env.NODE_ENV === "development") {
       supportedTargets.push({
         executionTarget: "v1_web_localhost",
-        baseUrl: await this.meteorConnect.storage.getJsonOrDef(
-          "webDevLocalhostBaseUrl",
-          "https://localhost:3001",
-        ),
+        // Only use this specific localhost base URL in dev mode for security reasons
+        baseUrl: forceDev
+          ? "https://localhost:3001"
+          : await this.meteorConnect.storage.getJsonOrDef(
+              "webDevLocalhostBaseUrl",
+              "https://localhost:3001",
+            ),
       });
     }
 

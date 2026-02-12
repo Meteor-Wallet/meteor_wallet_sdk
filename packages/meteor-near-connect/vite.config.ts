@@ -30,7 +30,7 @@ export default defineConfig(({ mode }) => ({
       },
       watch: {
         include: ["src/**", "../meteor-sdk-v1/src/**"],
-      }
+      },
     },
   },
 }));

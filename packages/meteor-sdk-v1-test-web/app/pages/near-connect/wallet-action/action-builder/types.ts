@@ -15,8 +15,17 @@ export type FunctionCallForm = ActionFormBase & {
   depositNear: string;
   depositYocto: string;
 };
-export type TransferForm = ActionFormBase & { type: "Transfer"; depositNear: string; depositYocto: string };
-export type StakeForm = ActionFormBase & { type: "Stake"; stakeNear: string; stakeYocto: string; publicKey: string };
+export type TransferForm = ActionFormBase & {
+  type: "Transfer";
+  depositNear: string;
+  depositYocto: string;
+};
+export type StakeForm = ActionFormBase & {
+  type: "Stake";
+  stakeNear: string;
+  stakeYocto: string;
+  publicKey: string;
+};
 export type AddKeyForm = ActionFormBase & {
   type: "AddKey";
   publicKey: string;

@@ -1,4 +1,4 @@
-import { sha256 } from '@noble/hashes/sha2.js';
+import { sha256 } from "@noble/hashes/sha2.js";
 import { type Schema, serialize } from "borsh";
 
 export interface NearNep413MessagePayload {

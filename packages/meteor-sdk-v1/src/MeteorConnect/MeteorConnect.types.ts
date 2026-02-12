@@ -63,6 +63,7 @@ export interface IMeteorConnection_Base<T extends TMeteorConnectionExecutionTarg
 }
 
 export interface IMeteorConnection_Test extends IMeteorConnection_Base<"test"> {}
+
 export interface IMeteorConnection_Test_RidDeepLink
   extends IMeteorConnection_Base<"test_rid_deep_link"> {}
 export interface IMeteorConnection_Test_RidQrCode
@@ -104,6 +105,7 @@ export interface IMeteorConnectTypedStorage {
   lastInitialized: number;
   selectedNetworkAccounts: TMCSelectedAccountForNetwork;
   webDevLocalhostBaseUrl: string;
+  dev_000_met: number;
 }
 
 export interface IMeteorConnect_Initialize_Input {

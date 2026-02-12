@@ -29,7 +29,7 @@ interface Window {
     open: (
       url: string,
       newTab?: boolean | string,
-      options?: string
+      options?: string,
     ) => {
       close: () => void;
       postMessage: (message: any) => void;

@@ -36,7 +36,8 @@ export type Browser =
 type UserAgentMatch = [Browser, RegExpExecArray] | false;
 type UserAgentRule = [Browser, RegExp];
 
-const SEARCHBOX_UA_REGEX = /alexa|bot|crawl(er|ing)|facebookexternalhit|feedburner|google web preview|nagios|postrank|pingdom|slurp|spider|yahoo!|yandex/;
+const SEARCHBOX_UA_REGEX =
+  /alexa|bot|crawl(er|ing)|facebookexternalhit|feedburner|google web preview|nagios|postrank|pingdom|slurp|spider|yahoo!|yandex/;
 const userAgentRules: Array<UserAgentRule> = [
   ["aol", /AOLShield\/([0-9\._]+)/],
   ["edge", /Edge\/([0-9\._]+)/],
@@ -58,7 +59,10 @@ const userAgentRules: Array<UserAgentRule> = [
   ["opera", /Opera\/([0-9\.]+)(?:\s|$)/],
   ["opera", /OPR\/([0-9\.]+)(:?\s|$)/],
   ["pie", /^Microsoft Pocket Internet Explorer\/(\d+\.\d+)$/],
-  ["pie", /^Mozilla\/\d\.\d+\s\(compatible;\s(?:MSP?IE|MSInternet Explorer) (\d+\.\d+);.*Windows CE.*\)$/],
+  [
+    "pie",
+    /^Mozilla\/\d\.\d+\s\(compatible;\s(?:MSP?IE|MSInternet Explorer) (\d+\.\d+);.*Windows CE.*\)$/,
+  ],
   ["netfront", /^Mozilla\/\d\.\d+.*NetFront\/(\d.\d)/],
   ["ie", /Trident\/7\.0.*rv\:([0-9\.]+).*\).*Gecko$/],
   ["ie", /MSIE\s([0-9\.]+);.*Trident\/[4-7].0/],

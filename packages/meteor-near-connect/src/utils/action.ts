@@ -101,12 +101,19 @@ export const connectorActionsToNearActions = (actions: ConnectorAction[]): Actio
     if (!("type" in action)) return action as Action;
 
     if (action.type === "FunctionCall") {
-      return actionCreators.functionCall(action.params.methodName, action.params.args as any, BigInt(action.params.gas), BigInt(action.params.deposit));
+      return actionCreators.functionCall(
+        action.params.methodName,
+        action.params.args as any,
+        BigInt(action.params.gas),
+        BigInt(action.params.deposit),
+      );
     }
 
     if (action.type === "DeployGlobalContract") {
       const deployMode =
-        action.params.deployMode === "AccountId" ? new GlobalContractDeployMode({ AccountId: null }) : new GlobalContractDeployMode({ CodeHash: null });
+        action.params.deployMode === "AccountId"
+          ? new GlobalContractDeployMode({ AccountId: null })
+          : new GlobalContractDeployMode({ CodeHash: null });
       return actionCreators.deployGlobalContract(action.params.code, deployMode);
     }
 
@@ -118,7 +125,9 @@ export const connectorActionsToNearActions = (actions: ConnectorAction[]): Actio
       const contractIdentifier =
         "accountId" in action.params.contractIdentifier
           ? new GlobalContractIdentifier({ AccountId: action.params.contractIdentifier.accountId })
-          : new GlobalContractIdentifier({ CodeHash: baseDecode(action.params.contractIdentifier.codeHash) });
+          : new GlobalContractIdentifier({
+              CodeHash: baseDecode(action.params.contractIdentifier.codeHash),
+            });
       return actionCreators.useGlobalContract(contractIdentifier);
     }
 
@@ -139,7 +148,10 @@ export const connectorActionsToNearActions = (actions: ConnectorAction[]): Actio
     }
 
     if (action.type === "Stake") {
-      return actionCreators.stake(BigInt(action.params.stake), PublicKey.from(action.params.publicKey));
+      return actionCreators.stake(
+        BigInt(action.params.stake),
+        PublicKey.from(action.params.publicKey),
+      );
     }
 
     if (action.type === "AddKey") {
@@ -154,9 +166,9 @@ export const connectorActionsToNearActions = (actions: ConnectorAction[]): Actio
                   receiverId: action.params.accessKey.permission.receiverId,
                   allowance: BigInt(action.params.accessKey.permission.allowance ?? 0),
                   methodNames: action.params.accessKey.permission.methodNames ?? [],
-                })
+                }),
           ),
-        })
+        }),
       );
     }
 

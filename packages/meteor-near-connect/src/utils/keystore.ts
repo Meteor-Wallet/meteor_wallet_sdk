@@ -10,7 +10,9 @@ export class SelectorStorageKeyStore extends KeyStore {
   }
 
   async getKey(networkId: string, accountId: string): Promise<any> {
-    const value = await this.storage.get(this.storageKeyForSecretKey(networkId, accountId)).catch(() => null);
+    const value = await this.storage
+      .get(this.storageKeyForSecretKey(networkId, accountId))
+      .catch(() => null);
     if (!value) return null;
     return KeyPair.fromString(value as any);
   }

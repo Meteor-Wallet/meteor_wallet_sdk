@@ -19,7 +19,11 @@ export function ActionCard(props: {
       <div className={"flex flex-wrap items-end gap-2"}>
         <div className={"input-group grow min-w-[14rem]"}>
           <p className={"input-label"}>Type</p>
-          <select className={"input-text"} value={value.type} onChange={(e) => onTypeChange(e.target.value as ActionType)}>
+          <select
+            className={"input-text"}
+            value={value.type}
+            onChange={(e) => onTypeChange(e.target.value as ActionType)}
+          >
             {ACTION_TYPES.map((t) => (
               <option key={t} value={t}>
                 {t}
@@ -28,16 +32,27 @@ export function ActionCard(props: {
           </select>
         </div>
 
-        <button className={"input-button compact"} onClick={() => onMove(-1)} disabled={index === 0}>
+        <button
+          className={"input-button compact"}
+          onClick={() => onMove(-1)}
+          disabled={index === 0}
+        >
           Up
         </button>
-        <button className={"input-button compact"} onClick={() => onMove(1)} disabled={index === total - 1}>
+        <button
+          className={"input-button compact"}
+          onClick={() => onMove(1)}
+          disabled={index === total - 1}
+        >
           Down
         </button>
         <button className={"input-button compact danger"} onClick={() => onRemove()}>
           Remove
         </button>
-        <button className={"input-button compact"} onClick={() => onChange({ ...value, collapsed: !value.collapsed })}>
+        <button
+          className={"input-button compact"}
+          onClick={() => onChange({ ...value, collapsed: !value.collapsed })}
+        >
           {value.collapsed ? "Expand" : "Collapse"}
         </button>
       </div>

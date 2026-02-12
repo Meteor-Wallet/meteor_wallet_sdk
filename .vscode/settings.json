@@ -1,8 +1,8 @@
 {
-    "workbench.editor.wrapTabs": true,
-    "search.exclude": {
-        "**/public": true,
-        "**/dist": true,
-        "**/meteor-near-connect.js": true
-    }
+  "workbench.editor.wrapTabs": true,
+  "search.exclude": {
+    "**/public": true,
+    "**/dist": true,
+    "**/meteor-near-connect.js": true
+  }
 }

@@ -184,9 +184,9 @@ class NearWallet implements Omit<NearWalletBase, "manifest"> {
         contract:
           data?.contractId != null
             ? {
-              id: data.contractId,
-              methods: data.methodNames ?? [],
-            }
+                id: data.contractId,
+                methods: data.methodNames ?? [],
+              }
             : undefined,
       },
     });
@@ -222,9 +222,9 @@ class NearWallet implements Omit<NearWalletBase, "manifest"> {
         contract:
           data?.contractId != null
             ? {
-              id: data.contractId,
-              methods: data.methodNames ?? [],
-            }
+                id: data.contractId,
+                methods: data.methodNames ?? [],
+              }
             : undefined,
         messageParams: data.messageParams,
       },

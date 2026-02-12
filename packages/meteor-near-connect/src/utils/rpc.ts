@@ -33,7 +33,12 @@ export class NearRpc extends JsonRpcProvider {
   public currentProviderIndex = 0;
   public startTimeout;
 
-  constructor(providers = rpcProviders, private timeout = 30_000, private triesCountForEveryProvider = 3, private incrementTimout = true) {
+  constructor(
+    providers = rpcProviders,
+    private timeout = 30_000,
+    private triesCountForEveryProvider = 3,
+    private incrementTimout = true,
+  ) {
     super({ url: "" });
     this.currentProviderIndex = 0;
     this.providers = providers.length > 0 ? providers : rpcProviders;
@@ -105,7 +110,11 @@ export class NearRpc extends JsonRpcProvider {
       if (!window.navigator.onLine) {
         throw new NetworkError(0, "RPC Network Error", "No internet connection");
       }
-      throw new NetworkError(0, "RPC Network Error", "Unknown Near RPC Error, maybe connection unstable, try VPN");
+      throw new NetworkError(
+        0,
+        "RPC Network Error",
+        "Unknown Near RPC Error, maybe connection unstable, try VPN",
+      );
     });
 
     clearInterval(timer);
@@ -118,7 +127,9 @@ export class NearRpc extends JsonRpcProvider {
 
     if (response.error) {
       if (typeof response.error.data === "object") {
-        const isReadable = typeof response.error.data.error_message === "string" && typeof response.error.data.error_type === "string";
+        const isReadable =
+          typeof response.error.data.error_message === "string" &&
+          typeof response.error.data.error_type === "string";
         if (isReadable) {
           throw new TypedError(response.error.data.error_message, response.error.data.error_type);
         }
@@ -128,7 +139,10 @@ export class NearRpc extends JsonRpcProvider {
       // NOTE: All this hackery is happening because structured errors not implemented
       // TODO: Fix when https://github.com/nearprotocol/nearcore/issues/1839 gets resolved
       const errorMessage = `[${response.error.code}] ${response.error.message}: ${response.error.data}`;
-      const isTimeout = response.error.data === "Timeout" || errorMessage.includes("Timeout error") || errorMessage.includes("query has timed out");
+      const isTimeout =
+        response.error.data === "Timeout" ||
+        errorMessage.includes("Timeout error") ||
+        errorMessage.includes("query has timed out");
 
       if (isTimeout) {
         throw new TypedError(errorMessage, "TimeoutError");

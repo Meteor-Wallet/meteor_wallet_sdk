@@ -55,9 +55,7 @@ export class CEnvironmentStorageAdapter_Sync {
     };
   }
 
-  createStringGetterSetter(
-    key: string
-  ): IStorageKeyGetterAndSetter_Sync<string> {
+  createStringGetterSetter(key: string): IStorageKeyGetterAndSetter_Sync<string> {
     return {
       get: () => this.getString(key),
       set: (value: string) => this.setString(key, value),
