@@ -19,10 +19,12 @@ import {
   MeteorConnect,
   MeteorLogger,
 } from "@meteorwallet/sdk";
+import type { SignedMessage as NearSignedMessage } from "@near-js/signers";
 import type { FinalExecutionOutcome } from "@near-js/types";
 import { base64 } from "@scure/base";
 import type { TSimpleNearDelegateAction } from "../../../meteor-sdk-v1/src/MeteorConnect/action/mc_action.near";
 import type {
+  NaerConnectAccountWithSignedMessage,
   NearConnectAccount,
   NearConnectNetwork,
   NearConnectSignedMessage,
@@ -101,6 +103,16 @@ function meteorConnectToNearConnectAccount(metAccount: IMeteorConnectAccount): N
   };
 }
 
+function meteorConnectSignedMessageToNearConnectSignedMessage(
+  metSignedMessage: NearSignedMessage,
+): NearConnectSignedMessage {
+  return {
+    accountId: metSignedMessage.accountId,
+    publicKey: metSignedMessage.publicKey.toString(),
+    signature: base64.encode(metSignedMessage.signature),
+  };
+}
+
 interface IMeteorStoredData {
   account: NearConnectAccount;
   identifier: IMeteorConnectAccountIdentifier;
@@ -172,9 +184,9 @@ class NearWallet implements Omit<NearWalletBase, "manifest"> {
         contract:
           data?.contractId != null
             ? {
-                id: data.contractId,
-                methodNames: data.methodNames ?? [],
-              }
+              id: data.contractId,
+              methods: data.methodNames ?? [],
+            }
             : undefined,
       },
     });
@@ -189,6 +201,50 @@ class NearWallet implements Omit<NearWalletBase, "manifest"> {
     });
 
     return [account];
+  };
+
+  signInAndSignMessage = async (data?: {
+    network?: NearConnectNetwork;
+    contractId?: string;
+    methodNames?: Array<string>;
+    messageParams: SignMessageParams;
+  }): Promise<Array<NaerConnectAccountWithSignedMessage>> => {
+    logger.log(`Signing in to NEAR on network ${data?.network ?? window.selector.network}`);
+
+    const met = await getMeteorConnect();
+    const action = await met.createAction({
+      id: "near::sign_in_and_sign_message",
+      input: {
+        target: {
+          blockchain: "near",
+          network: data?.network ?? window.selector.network,
+        },
+        contract:
+          data?.contractId != null
+            ? {
+              id: data.contractId,
+              methods: data.methodNames ?? [],
+            }
+            : undefined,
+        messageParams: data.messageParams,
+      },
+    });
+
+    const response = await promptActionForResponse(action);
+
+    const account = meteorConnectToNearConnectAccount(response);
+
+    await setMeteorData({
+      account,
+      identifier: response.identifier,
+    });
+
+    return [
+      {
+        ...account,
+        signedMessage: meteorConnectSignedMessageToNearConnectSignedMessage(response.signedMessage),
+      },
+    ];
   };
 
   // comment asd
@@ -225,11 +281,7 @@ class NearWallet implements Omit<NearWalletBase, "manifest"> {
 
       logger.log(`Sign message executed for account ${response.accountId}`, response);
 
-      return {
-        accountId: response.accountId,
-        publicKey: response.publicKey.toString(),
-        signature: base64.encode(response.signature),
-      };
+      return meteorConnectSignedMessageToNearConnectSignedMessage(response);
     }
   };
 

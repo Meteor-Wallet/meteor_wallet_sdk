@@ -10,3 +10,7 @@ export interface NearConnectSignedMessage {
   publicKey: string;
   signature: string;
 }
+
+export interface NaerConnectAccountWithSignedMessage extends NearConnectAccount {
+  signedMessage: NearConnectSignedMessage;
+}
