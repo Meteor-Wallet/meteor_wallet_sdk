@@ -60,9 +60,11 @@ async function createMeteorCom(): Promise<IMeteorComInjectedObject> {
 
 async function createMeteorComV2(): Promise<IMeteorComInjectedObjectV2> {
   const version = await window.selector.external("meteorComV2", "version");
+  const featureFlags = await window.selector.external("meteorComV2", "featureFlags");
 
   return {
     version,
+    featureFlags,
     sendMessageDataAndRespond: async (data: any) => {
       return await window.selector.external("meteorComV2", "sendMessageDataAndRespond", data);
     },

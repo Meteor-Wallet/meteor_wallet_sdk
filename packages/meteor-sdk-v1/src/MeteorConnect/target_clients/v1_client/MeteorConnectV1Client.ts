@@ -18,6 +18,7 @@ import type {
 import { isV1ExtensionWithDirectAvailable } from "../../utils/isV1ExtensionAvailable";
 import { MeteorConnectClientBase } from "../base/MeteorConnectClientBase";
 import type { TMeteorConnectV1ExecutionTargetConfig } from "./MeteorConnectV1Client.types";
+import { getExtensionSupportedFeatures } from "./utils/getExtensionSupportedFeatures";
 import { nearActionToSdkV1Action } from "./utils/nearActionToSdkV1Action";
 
 interface IMeteorWalletV1AndKeyStore {
@@ -110,9 +111,21 @@ export class MeteorConnectV1Client extends MeteorConnectClientBase {
     }
 
     if (isV1ExtensionWithDirectAvailable()) {
-      supportedTargets.push({
-        executionTarget: "v1_ext",
-      });
+      if (_request.id === "near::sign_in_and_sign_message") {
+        const features = await getExtensionSupportedFeatures();
+
+        this.logger.log(`Extension supported features: ${features.join(", ")}`);
+
+        if (features.includes(_request.id)) {
+          supportedTargets.push({
+            executionTarget: "v1_ext",
+          });
+        }
+      } else {
+        supportedTargets.push({
+          executionTarget: "v1_ext",
+        });
+      }
     }
 
     return supportedTargets;

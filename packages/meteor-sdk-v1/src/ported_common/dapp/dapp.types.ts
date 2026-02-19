@@ -274,6 +274,7 @@ export interface IMeteorComInjectedObject {
 
 export interface IMeteorComInjectedObjectV2 {
   version: "v2";
+  featureFlags: string[];
   sendMessageDataAndRespond: (data: any) => Promise<TClientPostMessageResponse>;
 }
 
