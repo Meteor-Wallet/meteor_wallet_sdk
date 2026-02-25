@@ -16,6 +16,14 @@ declare global {
   }
 }
 
+function isSafari() {
+  const ua = navigator.userAgent;
+  const isAppleDevice = /Mac|iPhone|iPad|iPod/.test(ua);
+  const isSafariEngine = /Safari/.test(ua);
+  const isWebKitBrowser = /WebKit/.test(ua);
+  return isAppleDevice && isSafariEngine && isWebKitBrowser;
+}
+
 export class ActionUi {
   private container: HTMLElement | null = null;
   private actionUiComponent: MeteorActionUiContainer | null = null;
@@ -34,7 +42,16 @@ export class ActionUi {
     try {
       const responsePromise = input.action.waitForExecutionOutput();
 
-      const knownExecutionTarget = input.action.getActionKnownContextualTarget();
+      let knownExecutionTarget = input.action.getActionKnownContextualTarget();
+      
+      // if user running in Safari
+      // we force user to select platform on execution since Safari has strict window.open rules that require user interaction
+      if(isSafari()){
+        this.logger.log(
+          `User is running Safari, forcing platform selection on execution since Safari has strict window.open rules that require user interaction`,
+        );
+        knownExecutionTarget = undefined
+      }
 
       if (knownExecutionTarget != null) {
         this.logger.log(
