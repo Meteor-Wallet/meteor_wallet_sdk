@@ -20,8 +20,10 @@ function isSafari() {
   const ua = navigator.userAgent;
   const isAppleDevice = /Mac|iPhone|iPad|iPod/.test(ua);
   const isSafariEngine = /Safari/.test(ua);
-  const isWebKitBrowser = /WebKit/.test(ua);
-  return isAppleDevice && isSafariEngine && isWebKitBrowser;
+
+  const isNotOtherWebKitBrowser = !/Chrome|Brave|CriOS/.test(ua);
+
+  return isAppleDevice && isSafariEngine && isNotOtherWebKitBrowser;
 }
 
 export class ActionUi {
