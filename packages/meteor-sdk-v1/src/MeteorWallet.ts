@@ -9,6 +9,7 @@ import {
   createTransaction,
   DelegateAction,
   SCHEMA,
+  Signature,
   SignedDelegate,
 } from "@near-js/transactions";
 import { type AccessKeyInfoView } from "@near-js/types";
@@ -494,12 +495,22 @@ export class MeteorWallet {
     if (response.success) {
       const deserializedSignedDelegates = response.payload.signedDelegatesWithHashes.map(
         (serializedSignedDelegate) => {
+          const signedDelegateData = deserialize(
+            SCHEMA.SignedDelegate,
+            Buffer.from(serializedSignedDelegate.signedDelegateAction, "base64"),
+          ) as SignedDelegate;
+          const delegateAction = new DelegateAction({ ...signedDelegateData.delegateAction });
+          const signedDelegate = new SignedDelegate({
+            delegateAction,
+            signature: new Signature({
+              data: signedDelegateData.signature.data,
+              keyType: signedDelegateData.signature.signatureType,
+            }),
+          });
+
           return {
             delegateHash: Buffer.from(serializedSignedDelegate.delegateHash, "base64"),
-            signedDelegate: deserialize(
-              SCHEMA.SignedDelegate,
-              Buffer.from(serializedSignedDelegate.signedDelegateAction, "base64"),
-            ) as SignedDelegate,
+            signedDelegate,
           } satisfies ISignDelegateActionReturn;
         },
       );

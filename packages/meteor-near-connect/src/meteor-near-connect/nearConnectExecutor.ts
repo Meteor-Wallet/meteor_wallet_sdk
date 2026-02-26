@@ -4,7 +4,11 @@ import {
   type SignAndSendTransactionsParams,
   type SignMessageParams,
 } from "@hot-labs/near-connect";
-import type { Network } from "@hot-labs/near-connect/build/types";
+import type {
+  Network,
+  SignDelegateActionResult,
+  SignDelegateActionsResponse,
+} from "@hot-labs/near-connect/build/types";
 import type {
   IMeteorComInjectedObject,
   IMeteorComInjectedObjectV2,
@@ -19,9 +23,12 @@ import {
   MeteorConnect,
   MeteorLogger,
 } from "@meteorwallet/sdk";
+import { KeyType } from "@near-js/crypto";
 import type { SignedMessage as NearSignedMessage } from "@near-js/signers";
+import { SCHEMA } from "@near-js/transactions";
 import type { FinalExecutionOutcome } from "@near-js/types";
 import { base64 } from "@scure/base";
+import { deserialize } from "borsh";
 import type { TSimpleNearDelegateAction } from "../../../meteor-sdk-v1/src/MeteorConnect/action/mc_action.near";
 import type {
   NaerConnectAccountWithSignedMessage,
@@ -40,6 +47,10 @@ if (process.env.NODE_ENV === "development") {
   console.warn("Enabling debug logging for MeteorConnect");
   meteorConnect.setLoggingLevel("debug");
 }
+
+const nearConnectVersion: string | undefined = window.selector.nearConnectVersion;
+
+console.log(`Near Connect Version: ${nearConnectVersion}`);
 
 async function createMeteorCom(): Promise<IMeteorComInjectedObject> {
   const features = await window.selector.external("meteorCom", "features", []);
@@ -341,7 +352,7 @@ class NearWallet implements Omit<NearWalletBase, "manifest"> {
     network?: Network;
     signerId?: string;
     delegateActions: TSimpleNearDelegateAction[];
-  }) => {
+  }): Promise<SignDelegateActionsResponse> => {
     const meteorData = await getMeteorData();
 
     if (meteorData != null) {
@@ -356,8 +367,28 @@ class NearWallet implements Omit<NearWalletBase, "manifest"> {
 
       const response = await promptActionForResponse(action);
 
+      if (nearConnectVersion == null) {
+        return {
+          signedDelegateActions: response.signedDelegatesWithHashes,
+        } as any;
+      }
+
+      const signedDelegateActions: SignDelegateActionResult[] =
+        response.signedDelegatesWithHashes.map(({ signedDelegate }): SignDelegateActionResult => {
+          return {
+            delegateAction: signedDelegate.delegateAction,
+            signature: {
+              dataBase64: base64.encode(signedDelegate.signature.data),
+              keyType:
+                signedDelegate.signature.signatureType === KeyType.ED25519
+                  ? "ed25519"
+                  : "secp256k1",
+            },
+          };
+        });
+
       return {
-        signedDelegateActions: response.signedDelegatesWithHashes,
+        signedDelegateActions,
       };
     }
   };
