@@ -378,11 +378,8 @@ class NearWallet implements Omit<NearWalletBase, "manifest"> {
           return {
             delegateAction: signedDelegate.delegateAction,
             signature: {
-              dataBase64: base64.encode(signedDelegate.signature.data),
-              keyType:
-                signedDelegate.signature.signatureType === KeyType.ED25519
-                  ? "ed25519"
-                  : "secp256k1",
+              dataBase64: base64.encode(new Uint8Array(signedDelegate.signature.data)),
+              keyType: signedDelegate.signature.ed25519Signature != null ? "ed25519" : "secp256k1",
             },
           };
         });

@@ -1,5 +1,5 @@
 import { Account } from "@near-js/accounts";
-import { KeyPair, PublicKey } from "@near-js/crypto";
+import { KeyPair, KeyType, PublicKey } from "@near-js/crypto";
 import { KeyStore } from "@near-js/keystores";
 import { BrowserLocalStorageKeyStore } from "@near-js/keystores-browser";
 import { JsonRpcProvider } from "@near-js/providers";
@@ -499,13 +499,39 @@ export class MeteorWallet {
             SCHEMA.SignedDelegate,
             Buffer.from(serializedSignedDelegate.signedDelegateAction, "base64"),
           ) as SignedDelegate;
+
+          let signatureData:
+            | {
+                data: Uint8Array;
+                keyType: KeyType;
+              }
+            | undefined;
+
+          if (signedDelegateData.signature.ed25519Signature != null) {
+            signatureData = {
+              data: signedDelegateData.signature.ed25519Signature.data,
+              keyType: KeyType.ED25519,
+            };
+          }
+
+          if (signedDelegateData.signature.secp256k1Signature != null) {
+            signatureData = {
+              data: signedDelegateData.signature.secp256k1Signature.data,
+              keyType: KeyType.SECP256K1,
+            };
+          }
+
+          if (signatureData == null) {
+            console.error("Received signature data in unexpected format", signedDelegateData);
+            throw new Error("Couldn't extract signature data received from Meteor Wallet");
+          }
+
+          const signature = new Signature(signatureData);
+
           const delegateAction = new DelegateAction({ ...signedDelegateData.delegateAction });
           const signedDelegate = new SignedDelegate({
             delegateAction,
-            signature: new Signature({
-              data: signedDelegateData.signature.data,
-              keyType: signedDelegateData.signature.signatureType,
-            }),
+            signature,
           });
 
           return {
