@@ -1,5 +1,7 @@
-import { type SignedDelegate } from "@near-js/transactions";
+import { SCHEMA, type SignedDelegate } from "@near-js/transactions";
 import { type FinalExecutionOutcome } from "@near-js/types";
+import { base64 } from "@scure/base";
+import { deserialize } from "borsh";
 import { useLocalStorage } from "usehooks-ts";
 import { ActionCard } from "./action-builder/ActionCard";
 import { ActionFields } from "./action-builder/ActionFields";
@@ -71,6 +73,21 @@ export const SendTx = ({ wallet, network }: IPropsWalletAction) => {
       });
 
       console.log("send delegate result", result);
+
+      const signedDelegates = result.signedDelegateActions.map((signedDelegateBorshBase64) => {
+        if (typeof signedDelegateBorshBase64 !== "string") {
+          throw new Error("Expected signed delegate in base64 string format");
+        }
+
+        const signedDelegate = deserialize(
+          SCHEMA.SignedDelegate,
+          new Uint8Array(base64.decode(signedDelegateBorshBase64)),
+        );
+
+        return signedDelegate;
+      });
+
+      console.log("signed delegates (decoded)", signedDelegates);
       // setLastDelegateResult(result);
     } catch (e) {
       setLastError(e instanceof Error ? e.message : String(e));

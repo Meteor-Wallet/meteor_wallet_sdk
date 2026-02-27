@@ -4,11 +4,7 @@ import {
   type SignAndSendTransactionsParams,
   type SignMessageParams,
 } from "@hot-labs/near-connect";
-import type {
-  Network,
-  SignDelegateActionResult,
-  SignDelegateActionsResponse,
-} from "@hot-labs/near-connect/build/types";
+import type { Network, SignDelegateActionsResponse } from "@hot-labs/near-connect/build/types";
 import type {
   IMeteorComInjectedObject,
   IMeteorComInjectedObjectV2,
@@ -23,12 +19,11 @@ import {
   MeteorConnect,
   MeteorLogger,
 } from "@meteorwallet/sdk";
-import { KeyType } from "@near-js/crypto";
 import type { SignedMessage as NearSignedMessage } from "@near-js/signers";
 import { SCHEMA } from "@near-js/transactions";
 import type { FinalExecutionOutcome } from "@near-js/types";
 import { base64 } from "@scure/base";
-import { deserialize } from "borsh";
+import { serialize } from "borsh";
 import type { TSimpleNearDelegateAction } from "../../../meteor-sdk-v1/src/MeteorConnect/action/mc_action.near";
 import type {
   NaerConnectAccountWithSignedMessage,
@@ -367,22 +362,26 @@ class NearWallet implements Omit<NearWalletBase, "manifest"> {
 
       const response = await promptActionForResponse(action);
 
+      console.log("NEAR Connect version", nearConnectVersion);
+
       if (nearConnectVersion == null) {
         return {
           signedDelegateActions: response.signedDelegatesWithHashes,
         } as any;
       }
 
-      const signedDelegateActions: SignDelegateActionResult[] =
-        response.signedDelegatesWithHashes.map(({ signedDelegate }): SignDelegateActionResult => {
-          return {
+      const signedDelegateActions: string[] = response.signedDelegatesWithHashes.map(
+        ({ signedDelegate }): string => {
+          return base64.encode(serialize(SCHEMA.SignedDelegate, signedDelegate));
+          /* return {
             delegateAction: signedDelegate.delegateAction,
             signature: {
               dataBase64: base64.encode(new Uint8Array(signedDelegate.signature.data)),
               keyType: signedDelegate.signature.ed25519Signature != null ? "ed25519" : "secp256k1",
             },
-          };
-        });
+          }; */
+        },
+      );
 
       return {
         signedDelegateActions,
