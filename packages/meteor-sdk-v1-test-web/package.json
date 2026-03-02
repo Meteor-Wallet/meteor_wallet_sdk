@@ -4,7 +4,8 @@
   "scripts": {
     "build": "react-router build",
     "clear-vite-cache": "trash '**/.vite'",
-    "dev": "bun run clear-vite-cache && react-router dev --force",
+    "clean-cache-files": "glcl -f glob-list-cache.clean",
+    "dev": "bun run clean-cache-files && react-router dev --force",
     "start": "react-router-serve ./build/server/index.js",
     "type-check": "react-router typegen && tsc",
     "watch-meteor-script": "chokidar \"../../near-connect/meteor-near-connect.js\" -c \"cpy ../../near-connect/meteor-near-connect.js public\""
@@ -36,6 +37,7 @@
     "usehooks-ts": "3.1.1"
   },
   "devDependencies": {
+    "glcl": "1.0.1",
     "@react-router/dev": "^7.8.0",
     "@tailwindcss/vite": "^4.1.4",
     "@types/node": "^20",

@@ -4,7 +4,13 @@ import {
   type SignAndSendTransactionsParams,
   type SignMessageParams,
 } from "@hot-labs/near-connect";
-import type { Network, SignDelegateActionsResponse } from "@hot-labs/near-connect/build/types";
+import type {
+  AddFunctionCallKeyParams,
+  Network,
+  SignDelegateActionsResponse,
+  SignInAndSignMessageParams,
+  SignInParams,
+} from "@hot-labs/near-connect/build/types";
 import type {
   IMeteorComInjectedObject,
   IMeteorComInjectedObjectV2,
@@ -14,6 +20,7 @@ import type {
   TMeteorComListener,
 } from "@meteorwallet/sdk";
 import {
+  convertOldFunctionCallKeyDefToNew,
   convertSelectorActionToNearAction,
   ExecutableAction,
   MeteorConnect,
@@ -25,6 +32,7 @@ import type { FinalExecutionOutcome } from "@near-js/types";
 import { base64 } from "@scure/base";
 import { serialize } from "borsh";
 import type { TSimpleNearDelegateAction } from "../../../meteor-sdk-v1/src/MeteorConnect/action/mc_action.near";
+import type { PartialBy } from "../../../meteor-sdk-v1/src/ported_common/utils/special_typescript_types";
 import type {
   NaerConnectAccountWithSignedMessage,
   NearConnectAccount,
@@ -174,12 +182,22 @@ class NearWallet implements Omit<NearWalletBase, "manifest"> {
     return accounts.map(meteorConnectToNearConnectAccount);
   };
 
-  signIn = async (data?: {
-    network?: NearConnectNetwork;
-    contractId?: string;
-    methodNames?: Array<string>;
-  }): Promise<Array<NearConnectAccount>> => {
-    logger.log(`Signing in to NEAR on network ${data?.network ?? window.selector.network}`);
+  signIn = async (
+    data?: SignInParams & {
+      contractId?: string;
+      methodNames?: Array<string>;
+    },
+  ): Promise<Array<NearConnectAccount>> => {
+    logger.log(`Signing in to NEAR on network ${data?.network ?? window.selector.network}`, data);
+
+    const addFunctionCallKeyParams: PartialBy<AddFunctionCallKeyParams, "publicKey"> | undefined =
+      data.addFunctionCallKey ??
+      (data.contractId != null
+        ? convertOldFunctionCallKeyDefToNew({
+            contractId: data.contractId,
+            methodNames: data.methodNames,
+          })
+        : undefined);
 
     const met = await getMeteorConnect();
     const action = await met.createAction({
@@ -189,13 +207,7 @@ class NearWallet implements Omit<NearWalletBase, "manifest"> {
           blockchain: "near",
           network: data?.network ?? window.selector.network,
         },
-        contract:
-          data?.contractId != null
-            ? {
-                id: data.contractId,
-                methods: data.methodNames ?? [],
-              }
-            : undefined,
+        addFunctionCallKey: addFunctionCallKeyParams,
       },
     });
 
@@ -211,13 +223,22 @@ class NearWallet implements Omit<NearWalletBase, "manifest"> {
     return [account];
   };
 
-  signInAndSignMessage = async (data?: {
-    network?: NearConnectNetwork;
-    contractId?: string;
-    methodNames?: Array<string>;
-    messageParams: SignMessageParams;
-  }): Promise<Array<NaerConnectAccountWithSignedMessage>> => {
+  signInAndSignMessage = async (
+    data?: SignInAndSignMessageParams & {
+      contractId?: string;
+      methodNames?: Array<string>;
+    },
+  ): Promise<Array<NaerConnectAccountWithSignedMessage>> => {
     logger.log(`Signing in to NEAR on network ${data?.network ?? window.selector.network}`);
+
+    const addFunctionCallKeyParams: PartialBy<AddFunctionCallKeyParams, "publicKey"> | undefined =
+      data.addFunctionCallKey ??
+      (data.contractId != null
+        ? convertOldFunctionCallKeyDefToNew({
+            contractId: data.contractId,
+            methodNames: data.methodNames,
+          })
+        : undefined);
 
     const met = await getMeteorConnect();
     const action = await met.createAction({
@@ -227,14 +248,8 @@ class NearWallet implements Omit<NearWalletBase, "manifest"> {
           blockchain: "near",
           network: data?.network ?? window.selector.network,
         },
-        contract:
-          data?.contractId != null
-            ? {
-                id: data.contractId,
-                methods: data.methodNames ?? [],
-              }
-            : undefined,
         messageParams: data.messageParams,
+        addFunctionCallKey: addFunctionCallKeyParams,
       },
     });
 
@@ -385,7 +400,7 @@ class NearWallet implements Omit<NearWalletBase, "manifest"> {
 
       return {
         signedDelegateActions,
-      };
+      } as any;
     }
   };
 }

@@ -21,7 +21,10 @@ import type {
 } from "@near-wallet-selector/core";
 import { deserialize, serialize } from "borsh";
 import { type ConnectConfig, utils } from "near-api-js";
-import type { TSimpleNearDelegateAction } from "./MeteorConnect/action/mc_action.near";
+import type {
+  AddFunctionCallKeyParams,
+  TSimpleNearDelegateAction,
+} from "./MeteorConnect/action/mc_action.near";
 import { MeteorLogger } from "./MeteorConnect/logging/MeteorLogger";
 import type { TMeteorConnectV1ExecutionTargetConfig } from "./MeteorConnect/target_clients/v1_client/MeteorConnectV1Client.types";
 import { isV1ExtensionAvailable } from "./MeteorConnect/utils/isV1ExtensionAvailable";
@@ -74,11 +77,31 @@ const sessionAdapter = new CEnvironmentStorageAdapter_Sync({
   clear: (key: string) => window.sessionStorage.removeItem(key),
 });
 
-interface IMeteorAuthData {
+interface IMeteorAuthDataForAccount_Old {
   allKeys: string[];
   accountId?: string;
   signedInContract?: IOWalletExternalLinkedContract;
 }
+
+interface IMeteorAuthDataForAccount_New {
+  allKeys: string[];
+  accountId: string;
+  signedInContract?: IOWalletExternalLinkedContract;
+}
+
+interface IMeteorAuthData_Old extends IMeteorAuthDataForAccount_Old {
+  version: undefined;
+}
+
+interface IMeteorAuthData_New {
+  version: "v2";
+  accounts: {
+    // In the format "<network>:<account_id>", e.g. "testnet:example.testnet"
+    [key: string]: IMeteorAuthDataForAccount_New;
+  };
+}
+
+type TMeteorAuthData = IMeteorAuthData_Old | IMeteorAuthData_New;
 
 export interface IMeteorWallet_Init_Inputs extends Partial<ConnectConfig> {
   networkId: string;
@@ -128,7 +151,7 @@ export class MeteorWallet {
   _keyStore: KeyStore;
 
   /** @hidden */
-  _authData: IMeteorAuthData;
+  _authData: IMeteorAuthData_New;
 
   /** @hidden */
   _networkId: string;
@@ -194,7 +217,30 @@ export class MeteorWallet {
 
     const authDataKey = appKeyPrefix + LOCAL_STORAGE_KEY_SUFFIX;
     this._authDataKey = authDataKey;
-    this._authData = localStorageAdapter.getJson<IMeteorAuthData>(authDataKey) ?? { allKeys: [] };
+    const oldOrNewAuthData = localStorageAdapter.getJson<TMeteorAuthData>(authDataKey) as
+      | TMeteorAuthData
+      | undefined;
+
+    const oldAuthData: IMeteorAuthData_Old | undefined =
+      oldOrNewAuthData?.version == null && oldOrNewAuthData?.version !== "v2"
+        ? oldOrNewAuthData
+        : undefined;
+
+    let newAuthData: IMeteorAuthData_New = {
+      version: "v2",
+      accounts: {},
+    };
+
+    if (oldAuthData != null && notNullEmpty(oldAuthData.accountId)) {
+      newAuthData.accounts[`${networkId}:${oldAuthData.accountId}`] = {
+        allKeys: oldAuthData.allKeys,
+        accountId: oldAuthData.accountId,
+        signedInContract: oldAuthData.signedInContract,
+      };
+      this.updateAuthData();
+    }
+
+    this._authData = newAuthData;
 
     this._walletBaseUrl = resolveWalletUrl(networkId, walletUrl);
     this._networkId = networkId;
@@ -221,7 +267,7 @@ export class MeteorWallet {
    * ```
    */
   isSignedIn() {
-    return !!this._authData.accountId;
+    return this.getAccountId() != null;
   }
 
   /**
@@ -233,7 +279,26 @@ export class MeteorWallet {
    * ```
    */
   getAccountId(): string | undefined {
-    return this._authData.accountId;
+    const accountIds = Object.keys(this._authData.accounts);
+    return accountIds.length > 0 ? this._authData.accounts[accountIds[0]].accountId : undefined;
+  }
+
+  getAccountInfo(): IMeteorAuthDataForAccount_New | undefined {
+    const accountIds = Object.keys(this._authData.accounts);
+    return accountIds.length > 0 ? this._authData.accounts[accountIds[0]] : undefined;
+  }
+
+  private updateAuthData(newAccountData?: IMeteorAuthDataForAccount_New) {
+    if (newAccountData != null) {
+      this._authData.accounts[`${this._networkId}:${newAccountData.accountId}`] = newAccountData;
+    }
+
+    localStorageAdapter.setJson(this._authDataKey, this._authData);
+  }
+
+  private clearAuthData() {
+    this._authData = { ...this._authData, accounts: {} };
+    localStorageAdapter.clear(this._authDataKey);
   }
 
   /**
@@ -286,22 +351,44 @@ export class MeteorWallet {
   async requestSignIn(
     options: IOMeteorWalletSdk_RequestSignIn_Inputs,
   ): Promise<IMeteorActionResponse_Output<IOMeteorWalletSdk_SignIn_Output>> {
-    const { keyPair, ...restOptions } = options;
+    const { addFunctionCallKey: _addFunctionCallKey, ...restOptions } = options;
 
-    const accessKey: KeyPair = keyPair ?? KeyPair.fromRandom("ed25519");
+    const addFunctionCallKey =
+      _addFunctionCallKey != null
+        ? {
+            ..._addFunctionCallKey,
+          }
+        : undefined;
+
+    let keyPairToAdd: KeyPair | undefined;
+
+    if (addFunctionCallKey != null && addFunctionCallKey.publicKey == null) {
+      // TODO generate key pair and store it for later use in function call transactions
+      keyPairToAdd = KeyPair.fromRandom("ed25519");
+      addFunctionCallKey.publicKey = keyPairToAdd.getPublicKey().toString();
+    }
+
+    const finalFunctionCallKey: AddFunctionCallKeyParams | undefined =
+      addFunctionCallKey != null ? (addFunctionCallKey as AddFunctionCallKeyParams) : undefined;
 
     // console.log(accessKey);
     this.logger.log(
-      `Requesting sign-in for account [${this.getAccountId() ?? "<unknown>"}] with access key [${accessKey.getPublicKey().toString()}]`,
+      `Requesting sign-in for account [${this.getAccountId() ?? "<unknown>"}] with access key [${finalFunctionCallKey?.publicKey ?? "<no public key provided>"}] and options:`,
     );
-
-    const usingPublicKey = accessKey.getPublicKey().toString();
 
     const response =
       await getMeteorPostMessenger().connectAndWaitForResponse<IODappAction_PostMessage_SignIn_Output>(
         {
           actionType: EExternalActionType.login,
-          inputs: { public_key: usingPublicKey, ...restOptions },
+          inputs: {
+            public_key: finalFunctionCallKey?.publicKey,
+            methods:
+              finalFunctionCallKey?.methodTarget.target === "select_methods"
+                ? finalFunctionCallKey?.methodTarget.methodNames
+                : [],
+            contract_id: finalFunctionCallKey?.receiverId,
+            ...restOptions,
+          },
           network: this._networkId as ENearNetwork,
           forceExecutionTargetConfig: this._forceTargetPlatformConfig,
         },
@@ -309,23 +396,45 @@ export class MeteorWallet {
 
     if (response.success) {
       const { allKeys, accountId } = response.payload;
+
       this._authData = {
-        accountId,
-        allKeys,
-        signedInContract: {
-          contract_id: restOptions.contract_id,
-          public_key: usingPublicKey,
+        ...this._authData,
+        accounts: {
+          [`${this._networkId}:${accountId}`]: {
+            allKeys,
+            accountId,
+            signedInContract:
+              finalFunctionCallKey != null
+                ? {
+                    contract_id: finalFunctionCallKey.receiverId,
+                    public_key: finalFunctionCallKey?.publicKey,
+                  }
+                : undefined,
+          },
         },
+        // accountId,
+        // allKeys,
+        // signedInContract:
+        //   finalFunctionCallKey != null
+        //     ? {
+        //         contract_id: finalFunctionCallKey.receiverId,
+        //         public_key: addFunctionCallKey?.publicKey,
+        //       }
+        //     : undefined,
       };
 
-      localStorageAdapter.setJson(this._authDataKey, this._authData);
-      await this._keyStore.setKey(this._networkId, accountId, accessKey);
+      this.updateAuthData();
+      // localStorageAdapter.setJson(this._authDataKey, this._authData);
+
+      if (keyPairToAdd != null) {
+        await this._keyStore.setKey(this._networkId, accountId, keyPairToAdd);
+      }
 
       return {
         success: true,
         endTags: [],
         payload: {
-          accessKey,
+          accessKey: keyPairToAdd,
           accountId,
           signedMessage: response.payload.signedMessage,
         },
@@ -342,15 +451,15 @@ export class MeteorWallet {
    * Sign out from the current account
    */
   async signOut() {
-    const accountId = this.getAccountId();
+    const accountInfo = this.getAccountInfo();
 
-    if (this._authData.signedInContract != null && accountId != null) {
+    if (accountInfo != null && accountInfo.signedInContract != null) {
       const inputs: IDappAction_Logout_Data = {
-        accountId,
-        contractInfo: this._authData.signedInContract,
+        accountId: accountInfo.accountId,
+        contractInfo: accountInfo.signedInContract,
       };
 
-      this.logger.log(`Signing out account [${accountId ?? "<unknown>"}]`, inputs);
+      this.logger.log(`Signing out account [${accountInfo.accountId ?? "<unknown>"}]`, inputs);
 
       const response = await getMeteorPostMessenger().connectAndWaitForResponse({
         actionType: EExternalActionType.logout,
@@ -359,12 +468,11 @@ export class MeteorWallet {
         forceExecutionTargetConfig: this._forceTargetPlatformConfig,
       });
     } else {
-      this.logger.log(`Signing out account [${accountId ?? "<unknown>"}]`);
+      this.logger.log(`Signing out account [${accountInfo?.accountId ?? "<unknown>"}]`);
     }
 
-    this._authData = { allKeys: [] };
-    localStorageAdapter.clear(this._authDataKey);
-    this.logger.log(`Signed out account [${accountId ?? "<unknown>"}]`);
+    this.clearAuthData();
+    this.logger.log(`Signed out account [${accountInfo?.accountId ?? "<unknown>"}]`);
   }
 
   /**
@@ -857,7 +965,13 @@ export class ConnectedMeteorWalletAccount extends Account {
       }
     }
 
-    const walletKeys = this.meteorWallet._authData.allKeys;
+    const accountData = this.meteorWallet.getAccountInfo();
+    if (accountData == null) {
+      return null;
+    }
+
+    const walletKeys = accountData.allKeys;
+
     for (const accessKey of accessKeys) {
       if (walletKeys.indexOf(accessKey.public_key) !== -1) {
         return accessKey;

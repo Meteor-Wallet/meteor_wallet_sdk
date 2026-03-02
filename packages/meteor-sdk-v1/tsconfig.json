@@ -1,7 +1,13 @@
 {
-  "extends": ["../../tsconfig.json"],
+  "extends": [
+    "../../tsconfig.json"
+  ],
   "compilerOptions": {
-    "lib": ["ES2022", "DOM", "ES2022.Error"],
+    "lib": [
+      "ES2022",
+      "DOM",
+      "ES2022.Error"
+    ],
     "experimentalDecorators": true,
     "useDefineForClassFields": false,
     "target": "ES2022",
@@ -19,6 +25,13 @@
     "noImplicitAny": false,
     "jsx": "react-jsx"
   },
-  "include": ["src"],
-  "exclude": ["dist", "node_modules", "../../node_modules"]
+  "include": [
+    "src/**/*",
+    "scripts/**/*"
+  ],
+  "exclude": [
+    "dist",
+    "node_modules",
+    "../../node_modules"
+  ]
 }

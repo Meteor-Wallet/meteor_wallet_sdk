@@ -2,9 +2,8 @@ import { PublicKey } from "@near-js/crypto";
 import type { BrowserLocalStorageKeyStore } from "@near-js/keystores-browser";
 import * as nearAPI from "near-api-js";
 import { MeteorWallet } from "../../../MeteorWallet";
-import { EMeteorWalletSignInType } from "../../../ported_common/dapp/dapp.enums";
+import { convertOldFunctionCallKeyDefToNew } from "../../../near_utils/convertOldFunctionCallKeyDefToNew";
 import type { TMeteorSdkV1Transaction } from "../../../ported_common/dapp/dapp.types";
-import { notNullEmpty } from "../../../utils/nullEmpty";
 import type { TMCActionOutput, TMCActionRegistry } from "../../action/mc_action.combined";
 import type { TMCActionRequestUnionExpandedInput } from "../../action/mc_action.types";
 import { supportsChromeExtension } from "../../action_ui/utils/supportsChromeExtension";
@@ -159,26 +158,17 @@ export class MeteorConnectV1Client extends MeteorConnectClientBase {
         connectionConfig,
       );
 
-      const isContractSignIn = request.expandedInput.contract != null;
-      const isContractWithSelectedMethods =
-        isContractSignIn &&
-        request.expandedInput.contract?.methods != null &&
-        request.expandedInput.contract.methods.length > 0;
+      let addFunctionCallKey = request.expandedInput.addFunctionCallKey;
 
-      let signInType: EMeteorWalletSignInType = EMeteorWalletSignInType.ACCOUNT_ONLY;
-
-      if (isContractSignIn) {
-        if (isContractWithSelectedMethods) {
-          signInType = EMeteorWalletSignInType.SELECTED_METHODS;
-        } else {
-          signInType = EMeteorWalletSignInType.ALL_METHODS;
-        }
+      if (addFunctionCallKey == null && request.expandedInput.contract != null) {
+        addFunctionCallKey = convertOldFunctionCallKeyDefToNew({
+          contractId: request.expandedInput.contract.id,
+          methodNames: request.expandedInput.contract.methods,
+        });
       }
 
       const response = await wallet.requestSignIn({
-        type: signInType,
-        contract_id: request.expandedInput.contract?.id ?? "",
-        methods: request.expandedInput.contract?.methods,
+        addFunctionCallKey: addFunctionCallKey,
         messageParams:
           request.id === "near::sign_in_and_sign_message"
             ? request.expandedInput.messageParams
@@ -188,15 +178,16 @@ export class MeteorConnectV1Client extends MeteorConnectClientBase {
       if (response.success) {
         const signedInAccount = response.payload;
 
+        const addedPublicKey = signedInAccount.accessKey?.getPublicKey().toString();
+
         const publicKeys: TMeteorConnectPublicKey[] = [];
 
-        if (notNullEmpty(request.expandedInput.contract?.id)) {
+        if (addedPublicKey) {
           publicKeys.push({
             type: "ed25519",
-            publicKey: signedInAccount.accessKey.getPublicKey().toString(),
+            publicKey: addedPublicKey,
             meta: {
-              contractId: request.expandedInput.contract.id,
-              methods: request.expandedInput.contract.methods,
+              addFunctionCallKey,
             },
           });
         }

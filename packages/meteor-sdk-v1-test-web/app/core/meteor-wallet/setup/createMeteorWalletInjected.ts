@@ -1,4 +1,3 @@
-import { EMeteorWalletSignInType } from "@meteorwallet/sdk";
 import type { Account, InjectedWallet, WalletBehaviourFactory } from "@near-wallet-selector/core";
 import type { MeteorWalletParams_Injected } from "~/core/meteor-wallet/meteor-wallet-types";
 import { nullEmpty } from "~/core/meteor-wallet/setup/nullEmpty";
@@ -34,18 +33,20 @@ export const createMeteorWalletInjected: WalletBehaviourFactory<
         methodNames,
       });
 
-      if (methodNames.length) {
-        await _state.wallet.requestSignIn({
-          methods: methodNames,
-          type: EMeteorWalletSignInType.SELECTED_METHODS,
-          contract_id: contractId ?? "",
-        });
-      } else {
-        await _state.wallet.requestSignIn({
-          type: EMeteorWalletSignInType.ALL_METHODS,
-          contract_id: contractId ?? "",
-        });
-      }
+      await _state.wallet.requestSignIn({
+        addFunctionCallKey:
+          contractId != null
+            ? {
+                receiverId: contractId,
+                methodTarget:
+                  methodNames.length > 0
+                    ? { target: "select_methods", methodNames }
+                    : {
+                        target: "all_methods",
+                      },
+              }
+            : undefined,
+      });
 
       const accounts = await getAccounts();
 

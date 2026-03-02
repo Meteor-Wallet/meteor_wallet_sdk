@@ -1,0 +1,9 @@
+**/*.tsbuildinfo
+**/*/.cache
+**/*/.mf
+**/*/.vite
+**/*/.vite-temp
+**/*/.vite-child-compiler
+.tamagui
+.react-router
+build

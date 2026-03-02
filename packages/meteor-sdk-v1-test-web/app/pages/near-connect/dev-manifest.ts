@@ -21,6 +21,7 @@ export const devManifest = (useLiveExecutor = false) =>
           signInAndSignMessage: true,
           signAndSendTransaction: true,
           signAndSendTransactions: true,
+          signInWithFunctionCallKey: true,
           signDelegateActions: true,
           mainnet: true,
           testnet: true,

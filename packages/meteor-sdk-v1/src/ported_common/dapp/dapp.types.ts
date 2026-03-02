@@ -7,7 +7,10 @@ import {
 import type { FinalExecutionOutcome } from "@near-js/types";
 import type { Action, Transaction as WalletSelectorTransaction } from "@near-wallet-selector/core";
 import { z } from "zod";
-import type { TSimpleNearDelegateAction } from "../../MeteorConnect/action/mc_action.near";
+import type {
+  AddFunctionCallKeyParams,
+  TSimpleNearDelegateAction,
+} from "../../MeteorConnect/action/mc_action.near";
 import type { TMeteorConnectV1ExecutionTargetConfig } from "../../MeteorConnect/target_clients/v1_client/MeteorConnectV1Client.types";
 import { ENearNetwork } from "../near/near_basic_types";
 import type { PartialBy } from "../utils/special_typescript_types";
@@ -16,7 +19,6 @@ import {
   EDappActionSource,
   EExternalActionType,
   EMeteorInjectedFeature,
-  EMeteorWalletSignInType,
   EWalletExternalActionStatus,
 } from "./dapp.enums";
 import { EDappActionErrorTag, getExternalActionErrorMessageForEndTag } from "./dapp.errors";
@@ -79,10 +81,7 @@ export type TDappAction_SignIn_Data = IMeteorWalletExternalAction_SignIn_Optiona
 // | TMeteorWalletExternalAction_SignIn_AccountAndSignMessage;
 
 export interface IOMeteorWalletSdk_RequestSignIn_Inputs {
-  keyPair?: KeyPair;
-  type: EMeteorWalletSignInType;
-  methods?: string[];
-  contract_id: string;
+  addFunctionCallKey?: PartialBy<AddFunctionCallKeyParams, "publicKey">;
   messageParams?: IODappAction_SignMessage_Input;
 }
 
@@ -116,7 +115,7 @@ export interface IWithCallbackUrl {
 }
 
 export interface IOMeteorWalletSdk_SignIn_Output {
-  accessKey: KeyPair;
+  accessKey?: KeyPair;
   accountId: string;
   signedMessage?: IODappAction_SignMessage_Output;
 }

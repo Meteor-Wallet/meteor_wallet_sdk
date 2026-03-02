@@ -1,14 +1,20 @@
 import { NearConnector, type NearWalletBase } from "@hot-labs/near-connect";
+import type { AddFunctionCallKeyParams } from "@hot-labs/near-connect/build/types";
 import { type NearNep413MessagePayload, serializeMessageNep413 } from "@meteorwallet/sdk";
 import { wait_utils } from "@meteorwallet/utils/javascript_helpers/wait.utils";
-import { PublicKey } from "@near-js/crypto";
+import { KeyPairEd25519, PublicKey } from "@near-js/crypto";
 import { base64 } from "@scure/base";
 import { useMemo, useState } from "react";
+import { useLocalStorage } from "usehooks-ts";
 import { NetworkSelector } from "~/pages/near-connect/NetworkSelector";
 import { WalletActions } from "~/pages/near-connect/WalletActions";
 import { Button } from "~/ui/Button";
 import type { INearSignMessageParams } from "../../../../meteor-sdk-v1/src/MeteorConnect/action/mc_action.near";
-import { createSimpleNonce, GUESTBOOK_CONTRACT_ID } from "../meteor-sdk-test/guestbook";
+import {
+  createSimpleNonce,
+  GUESTBOOK_CONTRACT_ID,
+  GUESTBOOK_CONTRACT_METHODS,
+} from "../meteor-sdk-test/guestbook";
 import { devManifest } from "./dev-manifest";
 
 export const NearConnectTest = () => {
@@ -34,6 +40,11 @@ export const NearConnectTest = () => {
       network: account.accountId.endsWith("testnet") ? "testnet" : "mainnet",
     });
   }
+
+  const [extendedSecretKey, setExtendedSecretKey] = useLocalStorage<string | undefined>(
+    `sdk-test-extendedSecretKey-${network}:${account?.id}`,
+    undefined,
+  );
 
   const [connector] = useState<NearConnector>(() => {
     const connector = new NearConnector({
@@ -94,9 +105,15 @@ export const NearConnectTest = () => {
     [account, network],
   );
 
-  const connectOrDisconnect = async (signMessageParams?: INearSignMessageParams) => {
+  const connectOrDisconnect = async ({
+    signMessageParams,
+    addFunctionCallKey,
+  }: {
+    signMessageParams?: INearSignMessageParams;
+    addFunctionCallKey?: AddFunctionCallKeyParams;
+  } = {}) => {
     if (networkAccount != null) return connector.disconnect();
-    await connector.connect({ signMessageParams });
+    await connector.connect({ signMessageParams, addFunctionCallKey });
   };
 
   return (
@@ -121,7 +138,28 @@ export const NearConnectTest = () => {
           <>
             <Button
               onClick={() => {
-                connectOrDisconnect(messageToSign);
+                const keyPair = KeyPairEd25519.fromRandom();
+                const publicKey = keyPair.publicKey.toString();
+                const secretKey = keyPair.secretKey;
+                setExtendedSecretKey(secretKey);
+
+                connectOrDisconnect({
+                  addFunctionCallKey: {
+                    receiverId: GUESTBOOK_CONTRACT_ID,
+                    methodTarget: {
+                      target: "select_methods",
+                      methodNames: GUESTBOOK_CONTRACT_METHODS,
+                    },
+                    publicKey: publicKey,
+                  },
+                });
+              }}
+            >
+              Connect With Function Call Key (Guestbook)
+            </Button>
+            <Button
+              onClick={() => {
+                connectOrDisconnect({ signMessageParams: messageToSign });
               }}
             >
               Connect And Sign Message

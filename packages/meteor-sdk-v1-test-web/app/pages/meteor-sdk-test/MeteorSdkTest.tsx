@@ -1,11 +1,9 @@
+import "@near-wallet-selector/modal-ui/styles.css";
 import {
   type SetupParams,
   useWalletSelector,
   WalletSelectorProvider,
 } from "@near-wallet-selector/react-hook";
-import { setupMeteorWallet } from "~/core/meteor-wallet/setup/setupMeteorWallet";
-import "@near-wallet-selector/modal-ui/styles.css";
-import { EMeteorWalletSignInType } from "@meteorwallet/sdk";
 import { QueryClient, QueryClientProvider, useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import {
@@ -13,6 +11,7 @@ import {
   type IAddMessageParams,
 } from "~/components/wallet_actions/AddMessageComponent.tsx";
 import { createNativeMeteorWallet } from "~/core/meteor-wallet/setup/createNativeMeteorWallet";
+import { setupMeteorWallet } from "~/core/meteor-wallet/setup/setupMeteorWallet";
 import {
   addMessage,
   createSimpleNonce,
@@ -131,8 +130,12 @@ function MeteorSdkTestInner() {
     if (useMeteorSdkDirectly) {
       nativeMeteorWallet
         .requestSignIn({
-          type: EMeteorWalletSignInType.ALL_METHODS,
-          contract_id: GUESTBOOK_CONTRACT_ID,
+          addFunctionCallKey: {
+            receiverId: GUESTBOOK_CONTRACT_ID,
+            methodTarget: {
+              target: "all_methods",
+            },
+          },
         })
         .then((r) => {
           if (r.success) {

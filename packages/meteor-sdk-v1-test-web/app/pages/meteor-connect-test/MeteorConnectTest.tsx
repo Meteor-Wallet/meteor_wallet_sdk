@@ -108,9 +108,12 @@ const MeteorConnectTestInitialized = ({ meteorConnect }: { meteorConnect: Meteor
                     blockchain: "near",
                     network,
                   },
-                  contract: {
-                    id: GUESTBOOK_CONTRACT_ID,
-                    methods: GUESTBOOK_CONTRACT_METHODS,
+                  addFunctionCallKey: {
+                    receiverId: GUESTBOOK_CONTRACT_ID,
+                    methodTarget: {
+                      target: "select_methods",
+                      methodNames: GUESTBOOK_CONTRACT_METHODS,
+                    },
                   },
                 },
               });
