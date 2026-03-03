@@ -40,11 +40,11 @@ export type AddFunctionCallKey_AllowMethods =
   | FunctionCallAccessKey_AllowMethods_SelectMethods;
 
 export interface FunctionCallAccessKey_GasAllowance_Unlimited {
-  type: "unlimited";
+  kind: "unlimited";
 }
 
 export interface FunctionCallAccessKey_GasAllowance_Limited {
-  type: "limited";
+  kind: "limited";
   /** The amount of gas allowed over the lifetime of the key in yoctoNEAR. */
   amount: string;
 }
