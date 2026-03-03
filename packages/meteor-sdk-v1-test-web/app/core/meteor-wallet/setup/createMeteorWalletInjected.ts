@@ -37,12 +37,12 @@ export const createMeteorWalletInjected: WalletBehaviourFactory<
         addFunctionCallKey:
           contractId != null
             ? {
-                receiverId: contractId,
-                methodTarget:
+                contractId,
+                allowMethods:
                   methodNames.length > 0
-                    ? { target: "select_methods", methodNames }
+                    ? { anyMethod: false, methodNames }
                     : {
-                        target: "all_methods",
+                        anyMethod: true,
                       },
               }
             : undefined,

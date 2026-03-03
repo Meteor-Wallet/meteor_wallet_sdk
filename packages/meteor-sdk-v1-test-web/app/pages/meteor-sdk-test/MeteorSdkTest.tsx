@@ -131,9 +131,9 @@ function MeteorSdkTestInner() {
       nativeMeteorWallet
         .requestSignIn({
           addFunctionCallKey: {
-            receiverId: GUESTBOOK_CONTRACT_ID,
-            methodTarget: {
-              target: "all_methods",
+            contractId: GUESTBOOK_CONTRACT_ID,
+            allowMethods: {
+              anyMethod: true,
             },
           },
         })

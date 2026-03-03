@@ -383,10 +383,10 @@ export class MeteorWallet {
           inputs: {
             public_key: finalFunctionCallKey?.publicKey,
             methods:
-              finalFunctionCallKey?.methodTarget.target === "select_methods"
-                ? finalFunctionCallKey?.methodTarget.methodNames
+              finalFunctionCallKey?.allowMethods.anyMethod === false
+                ? finalFunctionCallKey?.allowMethods.methodNames
                 : [],
-            contract_id: finalFunctionCallKey?.receiverId,
+            contract_id: finalFunctionCallKey?.contractId,
             ...restOptions,
           },
           network: this._networkId as ENearNetwork,
@@ -406,7 +406,7 @@ export class MeteorWallet {
             signedInContract:
               finalFunctionCallKey != null
                 ? {
-                    contract_id: finalFunctionCallKey.receiverId,
+                    contract_id: finalFunctionCallKey.contractId,
                     public_key: finalFunctionCallKey?.publicKey,
                   }
                 : undefined,
@@ -417,7 +417,7 @@ export class MeteorWallet {
         // signedInContract:
         //   finalFunctionCallKey != null
         //     ? {
-        //         contract_id: finalFunctionCallKey.receiverId,
+        //         contract_id: finalFunctionCallKey.contractId,
         //         public_key: addFunctionCallKey?.publicKey,
         //       }
         //     : undefined,

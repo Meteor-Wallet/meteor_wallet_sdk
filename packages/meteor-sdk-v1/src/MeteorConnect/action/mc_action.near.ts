@@ -26,18 +26,18 @@ import type {
 
 // (FUNCTION CALL KEY PARAMS)
 
-export interface FunctionCallAccessKey_MethodTarget_AllMethods {
-  target: "all_methods";
+export interface FunctionCallAccessKey_AllowMethods_AnyMethod {
+  anyMethod: true;
 }
 
-export interface FunctionCallAccessKey_MethodTarget_SelectMethods {
-  target: "select_methods";
+export interface FunctionCallAccessKey_AllowMethods_SelectMethods {
+  anyMethod: false;
   methodNames: string[];
 }
 
-export type AddFunctionCallKey_MethodTarget =
-  | FunctionCallAccessKey_MethodTarget_AllMethods
-  | FunctionCallAccessKey_MethodTarget_SelectMethods;
+export type AddFunctionCallKey_AllowMethods =
+  | FunctionCallAccessKey_AllowMethods_AnyMethod
+  | FunctionCallAccessKey_AllowMethods_SelectMethods;
 
 export interface FunctionCallAccessKey_GasAllowance_Unlimited {
   type: "unlimited";
@@ -55,10 +55,10 @@ export type AddFunctionCallKey_GasAllowance =
 
 export interface AddFunctionCallKeyParams {
   // The contract / account ID which the access key will have access to call methods on.
-  receiverId: string;
+  contractId: string;
   /** Using format "<key_type>:<base58_public_key>" e.g. "ed25519:3N5QmbhVqLh9ZtZs1zj8X9v1u1Z1Z1Z1Z1Z1Z1Z1Z1Z" */
   publicKey: string;
-  methodTarget: AddFunctionCallKey_MethodTarget;
+  allowMethods: AddFunctionCallKey_AllowMethods;
   /** Optional:  The gas allowance for the function call key over its lifetime of executing transactions.
    *  Default to "limited" with 0.25 NEAR (non-Yocto). */
   gasAllowance?: AddFunctionCallKey_GasAllowance;

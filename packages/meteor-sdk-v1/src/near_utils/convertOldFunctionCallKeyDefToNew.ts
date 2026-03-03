@@ -9,15 +9,15 @@ export function convertOldFunctionCallKeyDefToNew({
   methodNames?: Array<string>;
 }): PartialBy<AddFunctionCallKeyParams, "publicKey"> {
   return {
-    receiverId: contractId,
-    methodTarget:
+    contractId,
+    allowMethods:
       methodNames != null && methodNames.length > 0
         ? {
-            target: "select_methods",
+            anyMethod: false,
             methodNames,
           }
         : {
-            target: "all_methods",
+            anyMethod: true,
           },
   };
 }

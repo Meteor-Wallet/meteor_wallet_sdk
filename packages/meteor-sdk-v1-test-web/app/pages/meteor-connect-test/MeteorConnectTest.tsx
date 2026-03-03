@@ -109,9 +109,9 @@ const MeteorConnectTestInitialized = ({ meteorConnect }: { meteorConnect: Meteor
                     network,
                   },
                   addFunctionCallKey: {
-                    receiverId: GUESTBOOK_CONTRACT_ID,
-                    methodTarget: {
-                      target: "select_methods",
+                    contractId: GUESTBOOK_CONTRACT_ID,
+                    allowMethods: {
+                      anyMethod: false,
                       methodNames: GUESTBOOK_CONTRACT_METHODS,
                     },
                   },
