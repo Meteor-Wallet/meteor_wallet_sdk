@@ -7,6 +7,7 @@
     "type-check-watch-all": "bun run --parallel --workspaces --no-exit-on-error type-check-watch",
     "clean-files": "bunx glcl",
     "clean-cache-files": "bunx glcl -f glob-list.caches.clean",
+    "clean-hot-labs-near-connect": "bunx glcl -f glob-list.hot-labs-near-connect.clean",
     "link-local-packages-watch": "bunx local-package-link@0.1.0 --watch",
     "link-local-packages": "bunx local-package-link@0.1.0"
   },
