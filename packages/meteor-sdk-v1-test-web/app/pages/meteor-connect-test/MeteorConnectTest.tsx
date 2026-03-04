@@ -342,6 +342,11 @@ const MeteorConnectWithAccount = ({
           onClick={async () => {
             const response = await mutate_signDelegateAction.mutateAsync(false);
             console.log("Signed delegate action response", response);
+
+            const publicKey =
+              response.signedDelegatesWithHashes[0].signedDelegate.delegateAction.publicKey;
+            const signature = response.signedDelegatesWithHashes[0].signedDelegate.signature;
+            // const messageHash = response.signedDelegatesWithHashes[0].messageHash;
           }}
         >
           Test Signed Delegate Action

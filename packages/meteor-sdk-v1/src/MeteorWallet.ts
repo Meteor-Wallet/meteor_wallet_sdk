@@ -2,7 +2,7 @@ import { Account } from "@near-js/accounts";
 import { KeyPair, KeyType, PublicKey } from "@near-js/crypto";
 import { KeyStore } from "@near-js/keystores";
 import { JsonRpcProvider } from "@near-js/providers";
-import { KeyPairSigner } from "@near-js/signers";
+// import { KeyPairSigner } from "@near-js/signers";
 import {
   buildDelegateAction,
   createTransaction,
@@ -580,16 +580,12 @@ export class MeteorWallet {
     const currentAccountId = meteorConnectAccount.identifier.accountId;
 
     if (this._connectedAccount?.accountId !== currentAccountId) {
-      const keyPair = await this._keyStore.getKey(this._networkId, currentAccountId);
+      // const keyPair = await this._keyStore.getKey(this._networkId, currentAccountId);
 
-      const keyPairSigner =
-        keyPair != null ? KeyPairSigner.fromSecretKey(keyPair.toString()) : undefined;
+      // const keyPairSigner =
+      //   keyPair != null ? KeyPairSigner.fromSecretKey(keyPair.toString()) : undefined;
 
-      this._connectedAccount = new ConnectedMeteorWalletAccount(
-        this,
-        meteorConnectAccount,
-        keyPairSigner,
-      );
+      this._connectedAccount = new ConnectedMeteorWalletAccount(this, meteorConnectAccount);
     }
 
     if (this._connectedAccount == null) {
@@ -712,13 +708,13 @@ export class ConnectedMeteorWalletAccount extends Account {
   constructor(
     walletConnection: MeteorWallet,
     meteorConnectAccount: IMeteorConnectAccount,
-    signer?: KeyPairSigner,
+    // signer?: KeyPairSigner,
   ) {
-    super(meteorConnectAccount.identifier.accountId, walletConnection._provider, signer);
+    super(meteorConnectAccount.identifier.accountId, walletConnection._provider);
 
-    if (signer != null) {
-      this.setSigner(signer);
-    }
+    // if (signer != null) {
+    //   this.setSigner(signer);
+    // }
 
     this.meteorWallet = walletConnection;
     this.meteorConnectAccount = meteorConnectAccount;
