@@ -1,4 +1,4 @@
-import "@near-wallet-selector/modal-ui/styles.css";
+/* import "@near-wallet-selector/modal-ui/styles.css";
 import {
   type SetupParams,
   useWalletSelector,
@@ -251,3 +251,4 @@ function MeteorSdkTestInner() {
     </main>
   );
 }
+ */

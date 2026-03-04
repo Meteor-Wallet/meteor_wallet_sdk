@@ -1,4 +1,4 @@
-import type { Account, InjectedWallet, WalletBehaviourFactory } from "@near-wallet-selector/core";
+/* import type { Account, InjectedWallet, WalletBehaviourFactory } from "@near-wallet-selector/core";
 import type { MeteorWalletParams_Injected } from "~/core/meteor-wallet/meteor-wallet-types";
 import { nullEmpty } from "~/core/meteor-wallet/setup/nullEmpty";
 import { setupMeteorWalletState } from "~/core/meteor-wallet/setup/setupMeteorWalletState";
@@ -193,3 +193,4 @@ export const createMeteorWalletInjected: WalletBehaviourFactory<
     },
   };
 };
+ */

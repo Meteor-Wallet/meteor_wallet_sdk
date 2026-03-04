@@ -241,7 +241,10 @@ export class MeteorConnectV1Client extends MeteorConnectClientBase {
         connectionConfig,
       );
 
-      await wallet.signOut();
+      await wallet.signOut({
+        accountIdentifier: request.expandedInput.account.identifier,
+        functionCallKey: request.expandedInput.account.publicKeys[0]?.meta?.addFunctionCallKey,
+      });
       return request.expandedInput.account.identifier;
     }
 
@@ -284,6 +287,7 @@ export class MeteorConnectV1Client extends MeteorConnectClientBase {
             actions: t.actions.map((action) => nearActionToSdkV1Action(action)),
           };
         }),
+        account: request.expandedInput.account,
       });
     }
 
@@ -313,6 +317,7 @@ export class MeteorConnectV1Client extends MeteorConnectClientBase {
 
       return await wallet.requestSignDelegateActions({
         delegateActions: request.expandedInput.delegateActions,
+        account: request.expandedInput.account,
       });
     }
 

@@ -1,4 +1,4 @@
-import type { InjectedWallet, WalletModuleFactory } from "@near-wallet-selector/core";
+/* import type { InjectedWallet, WalletModuleFactory } from "@near-wallet-selector/core";
 import icon from "~/core/meteor-wallet/icon";
 import type { MeteorWalletParams_Injected } from "~/core/meteor-wallet/meteor-wallet-types";
 import { createMeteorWalletInjected } from "~/core/meteor-wallet/setup/createMeteorWalletInjected";
@@ -31,3 +31,4 @@ export function setupMeteorWallet({
     };
   };
 }
+ */

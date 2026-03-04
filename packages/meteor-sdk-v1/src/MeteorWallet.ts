@@ -581,7 +581,9 @@ export class MeteorWallet {
 
     if (this._connectedAccount?.accountId !== currentAccountId) {
       const keyPair = await this._keyStore.getKey(this._networkId, currentAccountId);
-      const keyPairSigner = KeyPairSigner.fromSecretKey(keyPair.toString());
+
+      const keyPairSigner =
+        keyPair != null ? KeyPairSigner.fromSecretKey(keyPair.toString()) : undefined;
 
       this._connectedAccount = new ConnectedMeteorWalletAccount(
         this,
@@ -610,10 +612,10 @@ export class MeteorWallet {
     meteorConnectAccount: IMeteorConnectAccount;
   }): Promise<DelegateAction[]> {
     const account = await this.getConnectedAccount(meteorConnectAccount);
-    const signer = account.getSigner()!;
+    const signer = account.getSigner();
     const provider = account.provider;
 
-    const localKey = await signer.getPublicKey();
+    const localKey = await signer?.getPublicKey();
 
     const accessKey = await account.accessKeyForTransaction(localKey);
 
@@ -643,10 +645,10 @@ export class MeteorWallet {
     meteorConnectAccount: IMeteorConnectAccount;
   }) {
     const account = await this.getConnectedAccount(meteorConnectAccount);
-    const signer = account.getSigner()!;
+    const signer = account.getSigner();
     const provider = account.provider;
 
-    const localKey = await signer.getPublicKey();
+    const localKey = await signer?.getPublicKey();
 
     return Promise.all(
       transactions.map(async (transaction, index) => {
@@ -710,10 +712,14 @@ export class ConnectedMeteorWalletAccount extends Account {
   constructor(
     walletConnection: MeteorWallet,
     meteorConnectAccount: IMeteorConnectAccount,
-    signer: KeyPairSigner,
+    signer?: KeyPairSigner,
   ) {
     super(meteorConnectAccount.identifier.accountId, walletConnection._provider, signer);
-    this.setSigner(signer);
+
+    if (signer != null) {
+      this.setSigner(signer);
+    }
+
     this.meteorWallet = walletConnection;
     this.meteorConnectAccount = meteorConnectAccount;
   }
@@ -737,7 +743,7 @@ export class ConnectedMeteorWalletAccount extends Account {
     receiverId,
     actions,
   }: IOMeteorWalletSdkAccount_SignAndSendTransaction_Input): Promise<IOTryAndSendTransaction_Output> {
-    const localKey = await this.getSigner()!.getPublicKey();
+    const localKey = await this.getSigner()?.getPublicKey();
 
     const accessKey = await this.accessKeyForTransaction(localKey);
 
