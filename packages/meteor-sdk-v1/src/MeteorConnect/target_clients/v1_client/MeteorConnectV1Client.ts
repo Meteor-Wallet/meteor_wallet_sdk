@@ -67,6 +67,7 @@ export class MeteorConnectV1Client extends MeteorConnectClientBase {
       networkId: network,
       keyStore,
       forceTargetPlatformConfig: executionTargetConfig,
+      meteorConnect: this.meteorConnect,
     });
 
     sdkForNetworkAndTarget[key] = {
@@ -251,7 +252,7 @@ export class MeteorConnectV1Client extends MeteorConnectClientBase {
       );
       const response = await wallet.signMessage({
         ...request.expandedInput.messageParams,
-        accountId: request.expandedInput.account.identifier.accountId,
+        accountIdentifier: request.expandedInput.account.identifier,
       });
 
       if (response.success) {
@@ -293,7 +294,7 @@ export class MeteorConnectV1Client extends MeteorConnectClientBase {
       );
 
       const response = await wallet.verifyOwner({
-        accountId: request.expandedInput.account.identifier.accountId,
+        accountIdentifier: request.expandedInput.account.identifier,
         message: request.expandedInput.message,
       });
 

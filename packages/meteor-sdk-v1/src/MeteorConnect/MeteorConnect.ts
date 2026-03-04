@@ -82,6 +82,10 @@ export class MeteorConnect {
     return this._typedStorageHelper.get();
   }
 
+  get localStorageAdapter() {
+    return this._localStorageAdapter.get();
+  }
+
   private getClients(): MeteorConnectClientBase[] {
     let clients: MeteorConnectClientBase[] = [this.clients.v1, this.clients.v2MessengerClient];
 

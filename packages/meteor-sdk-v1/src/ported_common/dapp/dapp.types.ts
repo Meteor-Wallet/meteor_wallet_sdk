@@ -11,6 +11,10 @@ import type {
   AddFunctionCallKeyParams,
   TSimpleNearDelegateAction,
 } from "../../MeteorConnect/action/mc_action.near";
+import type {
+  IMeteorConnectAccount,
+  IMeteorConnectAccountIdentifier,
+} from "../../MeteorConnect/MeteorConnect.types";
 import type { TMeteorConnectV1ExecutionTargetConfig } from "../../MeteorConnect/target_clients/v1_client/MeteorConnectV1Client.types";
 import { ENearNetwork } from "../near/near_basic_types";
 import type { PartialBy } from "../utils/special_typescript_types";
@@ -83,6 +87,14 @@ export type TDappAction_SignIn_Data = IMeteorWalletExternalAction_SignIn_Optiona
 export interface IOMeteorWalletSdk_RequestSignIn_Inputs {
   addFunctionCallKey?: PartialBy<AddFunctionCallKeyParams, "publicKey">;
   messageParams?: IODappAction_SignMessage_Input;
+}
+
+export interface IWithAccountIdentifier {
+  accountIdentifier: IMeteorConnectAccountIdentifier;
+}
+
+export interface IWithMeteorWalletAccount {
+  account: IMeteorConnectAccount;
 }
 
 export interface IODappAction_SignMessage_Input {
