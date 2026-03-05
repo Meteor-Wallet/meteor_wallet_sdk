@@ -1,0 +1,16 @@
+{
+  "name": "meteor-sdk-backend-test",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy --minify",
+    "cf-typegen": "wrangler types --env-interface CloudflareBindings"
+  },
+  "dependencies": {
+    "hono": "^4.12.5"
+  },
+  "devDependencies": {
+    "@types/node": "^25.3.3",
+    "wrangler": "4.70.0"
+  }
+}
