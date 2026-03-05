@@ -15,6 +15,7 @@ import {
 } from "~/pages/meteor-sdk-test/guestbook";
 import { NetworkSelector } from "~/pages/near-connect/NetworkSelector";
 import { Button } from "~/ui/Button";
+import { SignDelegateActionTest } from "./SignDelegateActionTest";
 
 const meteorConnectClient = new MeteorConnect();
 
@@ -336,30 +337,7 @@ const MeteorConnectWithAccount = ({
       >
         Verify Owner
       </Button>
-      <div className="p-5 flex flex-col gap-2 border border-gray-200 dark:border-gray-700 rounded-lg">
-        <code>Send 0.001 NEAR to pebble.testnet</code>
-        <Button
-          onClick={async () => {
-            const response = await mutate_signDelegateAction.mutateAsync(false);
-            console.log("Signed delegate action response", response);
-
-            const publicKey =
-              response.signedDelegatesWithHashes[0].signedDelegate.delegateAction.publicKey;
-            const signature = response.signedDelegatesWithHashes[0].signedDelegate.signature;
-            // const messageHash = response.signedDelegatesWithHashes[0].messageHash;
-          }}
-        >
-          Test Signed Delegate Action
-        </Button>
-        <Button
-          onClick={async () => {
-            const response = await mutate_signDelegateAction.mutateAsync(true);
-            console.log("Signed (multiple) delegate action response", response);
-          }}
-        >
-          Test Signed Delegate Action (multiple)
-        </Button>
-      </div>
+      <SignDelegateActionTest account={account} meteorConnect={meteorConnect} />
       <AddMessageComponent
         onPressAddMessage={async (params) => {
           console.log("Adding message");

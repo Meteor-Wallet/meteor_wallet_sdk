@@ -7,7 +7,8 @@
     "cf-typegen": "wrangler types --env-interface CloudflareBindings"
   },
   "dependencies": {
-    "hono": "^4.12.5"
+    "hono": "^4.12.5",
+    "near-api-js": "7.1.1"
   },
   "devDependencies": {
     "@types/node": "^25.3.3",
