@@ -104,16 +104,18 @@ export const SignDelegateActionTest = ({
         Test Signed Delegate Action (multiple)
       </Button>
       {signedDelegates && (
-        <div>
-          <code>Signed Delegates:</code>
+        <div className="flex flex-col gap-2">
+          <code>Signed Delegates ({signedDelegates.length}):</code>
           {mutate_testRelayDelegateAction.isPending && <div>Testing relay...</div>}
+          <div className="max-h-60 overflow-auto bg-gray-100 dark:bg-gray-800 p-2 rounded">
+            <pre>{JSON.stringify(signedDelegates, null, 2)}</pre>
+          </div>
           <Button
             disabled={mutate_testRelayDelegateAction.isPending}
             onClick={() => mutate_testRelayDelegateAction.mutateAsync()}
           >
             Test Relaying Signed Delegates
           </Button>
-          <pre>{JSON.stringify(signedDelegates, null, 2)}</pre>
         </div>
       )}
     </div>
