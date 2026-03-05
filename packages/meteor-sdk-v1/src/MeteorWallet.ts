@@ -1,5 +1,5 @@
 import { Account } from "@near-js/accounts";
-import { KeyPair, KeyType, PublicKey } from "@near-js/crypto";
+import { KeyPair, KeyPairEd25519, KeyType, PublicKey } from "@near-js/crypto";
 import { KeyStore } from "@near-js/keystores";
 import { JsonRpcProvider } from "@near-js/providers";
 // import { KeyPairSigner } from "@near-js/signers";
@@ -122,6 +122,8 @@ export class MeteorWallet {
   _connectedAccount: ConnectedMeteorWalletAccount | undefined;
 
   _forceTargetPlatformConfig?: TMeteorConnectV1ExecutionTargetConfig;
+
+  private readonly _fakePublicKey = KeyPairEd25519.fromRandom().getPublicKey();
 
   /** @hidden */
   _initializationPromises: Promise<any>[] = [];
@@ -573,30 +575,30 @@ export class MeteorWallet {
   /**
    * Returns the current connected wallet account
    */
-  async getConnectedAccount(
-    meteorConnectAccount: IMeteorConnectAccount,
-  ): Promise<ConnectedMeteorWalletAccount> {
-    // const currentAccountId = this.getAccountId();
-    const currentAccountId = meteorConnectAccount.identifier.accountId;
+  // async getConnectedAccount(
+  //   meteorConnectAccount: IMeteorConnectAccount,
+  // ): Promise<ConnectedMeteorWalletAccount> {
+  //   // const currentAccountId = this.getAccountId();
+  //   const currentAccountId = meteorConnectAccount.identifier.accountId;
 
-    if (this._connectedAccount?.accountId !== currentAccountId) {
-      // const keyPair = await this._keyStore.getKey(this._networkId, currentAccountId);
+  //   if (this._connectedAccount?.accountId !== currentAccountId) {
+  //     // const keyPair = await this._keyStore.getKey(this._networkId, currentAccountId);
 
-      // const keyPairSigner =
-      //   keyPair != null ? KeyPairSigner.fromSecretKey(keyPair.toString()) : undefined;
+  //     // const keyPairSigner =
+  //     //   keyPair != null ? KeyPairSigner.fromSecretKey(keyPair.toString()) : undefined;
 
-      this._connectedAccount = new ConnectedMeteorWalletAccount(this, meteorConnectAccount);
-    }
+  //     this._connectedAccount = new ConnectedMeteorWalletAccount(this, meteorConnectAccount);
+  //   }
 
-    if (this._connectedAccount == null) {
-      throw new MeteorActionError({
-        endTags: [],
-        message: "No current account connected to Meteor Wallet",
-      });
-    }
+  //   if (this._connectedAccount == null) {
+  //     throw new MeteorActionError({
+  //       endTags: [],
+  //       message: "No current account connected to Meteor Wallet",
+  //     });
+  //   }
 
-    return this._connectedAccount;
-  }
+  //   return this._connectedAccount;
+  // }
 
   async transformDelegateActions({
     delegateActions,
@@ -607,27 +609,28 @@ export class MeteorWallet {
     blockHeightTtl?: number;
     meteorConnectAccount: IMeteorConnectAccount;
   }): Promise<DelegateAction[]> {
-    const account = await this.getConnectedAccount(meteorConnectAccount);
-    const signer = account.getSigner();
-    const provider = account.provider;
+    // const account = await this.getConnectedAccount(meteorConnectAccount);
+    // const signer = account.getSigner();
+    // const provider = account.provider;
 
-    const localKey = await signer?.getPublicKey();
+    // const localKey = await signer?.getPublicKey();
 
-    const accessKey = await account.accessKeyForTransaction(localKey);
+    // const accessKey = await account.accessKeyForTransaction(localKey);
 
-    if (!accessKey) {
-      throw new Error(`Failed to find matching key for delegate actions`);
-    }
+    // if (!accessKey) {
+    // throw new Error(`Failed to find matching key for delegate actions`);
+    // }
 
-    const block = await provider.viewBlock({ finality: "optimistic" });
+    const block = await this._provider.viewBlock({ finality: "optimistic" });
 
     return delegateActions.map((delegateAction, idx) => {
       return buildDelegateAction({
         actions: delegateAction.actions,
         receiverId: delegateAction.receiverId,
-        senderId: account.accountId,
-        publicKey: PublicKey.from(accessKey.public_key),
-        nonce: BigInt(accessKey.access_key.nonce) + BigInt(idx + 1),
+        senderId: meteorConnectAccount.identifier.accountId,
+        publicKey: this._fakePublicKey, // will be replaced wallet-side with the correct account public key
+        // nonce: BigInt(accessKey.access_key.nonce) + BigInt(idx + 1),
+        nonce: BigInt(0 + idx), // will be replace wallet-side with the correct nonce based on the account public key
         maxBlockHeight: BigInt(block.header.height) + BigInt(blockHeightTtl),
       });
     });
@@ -640,34 +643,34 @@ export class MeteorWallet {
     transactions: Array<Optional<Transaction, "signerId">>;
     meteorConnectAccount: IMeteorConnectAccount;
   }) {
-    const account = await this.getConnectedAccount(meteorConnectAccount);
-    const signer = account.getSigner();
-    const provider = account.provider;
+    // const account = await this.getConnectedAccount(meteorConnectAccount);
+    // const signer = account.getSigner();
+    // const provider = account.provider;
 
-    const localKey = await signer?.getPublicKey();
+    // const localKey = await signer?.getPublicKey();
+
+    // const accessKey = await account.accessKeyForTransaction(localKey);
+    const block = await this._provider.viewBlock({ finality: "optimistic" });
+    // const accessKey = await this._provider.viewAccessKey(meteorConnectAccount.identifier.accountId, );
+    // const publicKeyFake =
 
     return Promise.all(
       transactions.map(async (transaction, index) => {
-        const accessKey = await account.accessKeyForTransaction(localKey);
-
-        if (!accessKey) {
-          throw new Error(
-            `Failed to find matching key for transaction sent to ${transaction.receiverId}`,
-          );
-        }
+        // if (!accessKey) {
+        //   throw new Error(
+        //     `Failed to find matching key for transaction sent to ${transaction.receiverId}`,
+        //   );
+        // }
 
         const transformedActions = transaction.actions.map((action) =>
           convertSelectorActionToNearAction(action),
         );
 
-        const block = await provider.viewBlock({ finality: "optimistic" });
-
         return createTransaction(
-          account.accountId,
-          PublicKey.from(accessKey.public_key),
+          meteorConnectAccount.identifier.accountId,
+          this._fakePublicKey, // will be replaced wallet-side with the correct account public key
           transaction.receiverId,
-          BigInt(accessKey.access_key.nonce) + BigInt(index) + BigInt(1),
-          // new BN(accessKey.access_key.nonce).add(new BN(index)).add(new BN(1)),
+          BigInt(0 + index), // will be replace wallet-side with the correct nonce based on the account public key
           transformedActions,
           utils.serialize.base_decode(block.header.hash),
         );
