@@ -7,4 +7,5 @@
 
 wt -w 0 nt -d ".\packages\meteor-near-connect" pwsh -NoExit -Command "bun run build-dev-watch" `; `
       nt -d ".\packages\meteor-sdk-v1-test-web" pwsh -NoExit -Command "bun run watch-meteor-script" `; `
+      nt -d ".\packages\meteor-sdk-backend-test" pwsh -NoExit -Command "bun run dev" `; `
       nt -d ".\packages\meteor-sdk-v1-test-web" pwsh -NoExit -Command "bun dev"
