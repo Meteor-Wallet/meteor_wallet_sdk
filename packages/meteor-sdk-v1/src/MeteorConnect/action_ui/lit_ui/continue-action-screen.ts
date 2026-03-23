@@ -56,7 +56,6 @@ function getPlatformInfo(target: TMeteorConnectionExecutionTarget) {
 export class ContinueActionScreen extends LitElement {
   @property({ type: String }) executionTarget: TMeteorConnectionExecutionTarget = "v1_web";
   @property() onContinue?: () => void;
-  @property() onBack?: () => void;
 
   static styles = css`
     :host {
@@ -73,7 +72,6 @@ export class ContinueActionScreen extends LitElement {
       flex-grow: 1;
       align-items: center;
       justify-content: space-evenly;
-      gap: 1.2rem;
     }
 
     .image-and-text {
@@ -81,12 +79,10 @@ export class ContinueActionScreen extends LitElement {
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 0.75rem;
     }
 
     .continue-action-svg {
       width: 80%;
-      max-width: 20rem;
     }
 
     .continue-action-svg svg {
@@ -95,47 +91,26 @@ export class ContinueActionScreen extends LitElement {
     }
 
     .continue-action-text {
+      margin-top: -3rem;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 0.4rem;
+      gap: 0.3rem;
       text-align: center;
+    }
+
+    .continue-action-title {
+      font-size: 1.2em;
+      font-weight: 700;
+      margin-top: 3rem;
+      color: rgba(255, 255, 255, 1);
     }
 
     .continue-action-subtitle {
       font-size: 1em;
       font-weight: 500;
       color: rgba(255, 255, 255, 0.5);
-      max-width: 24rem;
-      line-height: 1.5;
-    }
-
-    .continue-platform-chip {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 0.45rem;
-      padding: 0.5rem 0.8rem;
-      border-radius: 999px;
-      background: rgba(255, 255, 255, 0.08);
-      color: rgba(255, 255, 255, 0.9);
-      font-size: 0.9rem;
-      font-weight: 700;
-      letter-spacing: 0.02rem;
-    }
-
-    .continue-platform-chip .platform-icon {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      width: 1.1rem;
-      height: 1.1rem;
-    }
-
-    .continue-platform-chip .platform-icon svg {
-      width: 100%;
-      height: 100%;
     }
 
     .app-buttons {
@@ -178,12 +153,6 @@ export class ContinueActionScreen extends LitElement {
   private _handleContinue() {
     if (this.onContinue) {
       this.onContinue();
-    }
-  }
-
-  private _handleBack() {
-    if (this.onBack) {
-      this.onBack();
     }
   }
 }
