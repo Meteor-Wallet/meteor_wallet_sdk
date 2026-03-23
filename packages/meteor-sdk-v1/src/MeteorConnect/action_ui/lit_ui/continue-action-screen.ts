@@ -91,7 +91,6 @@ export class ContinueActionScreen extends LitElement {
     }
 
     .continue-action-text {
-      margin-top: -3rem;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -103,14 +102,7 @@ export class ContinueActionScreen extends LitElement {
     .continue-action-title {
       font-size: 1.2em;
       font-weight: 700;
-      margin-top: 3rem;
       color: rgba(255, 255, 255, 1);
-    }
-
-    .continue-action-subtitle {
-      font-size: 1em;
-      font-weight: 500;
-      color: rgba(255, 255, 255, 0.5);
     }
 
     .app-buttons {
