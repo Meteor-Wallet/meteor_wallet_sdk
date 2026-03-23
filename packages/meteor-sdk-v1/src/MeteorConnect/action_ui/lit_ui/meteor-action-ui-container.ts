@@ -4,12 +4,14 @@ import { unsafeSVG } from "lit/directives/unsafe-svg.js";
 import QRCodeStyling from "qr-code-styling";
 import type { ExecutableAction } from "../../action/ExecutableAction";
 import { MeteorLogger } from "../../logging/MeteorLogger";
+import type { TMeteorConnectionExecutionTarget } from "../../MeteorConnect.types";
 import { ActionUiController } from "./ActionUiController";
 import { customElement } from "./custom-element"; // Your new util
 import { animate_meteor_logo_css } from "./graphical/styles/animate_meteor_logo_css";
 import { svg_icons_text } from "./graphical/svg_icons/svg_icons_text";
 import { svg_meteor_logo_text } from "./graphical/svg_meteor_logo_text";
 import "./meteor-action-button";
+import "./continue-action-screen";
 import "./get-meteor-screen";
 import "./meteor-action-ui-executing";
 import { consume } from "@lit/context";
@@ -21,9 +23,11 @@ export class MeteorActionUiContainer extends LitElement {
   private logger = MeteorLogger.createLogger("MeteorConnect:<meteor-action-ui-container>");
 
   @property({ type: Object }) action!: ExecutableAction<any>;
-  @property({ type: Function }) closeAction: (() => void) | undefined = undefined;
+  @property({ attribute: false }) closeAction: (() => void) | undefined = undefined;
   @property({ type: Boolean })
   showGetMeteor: boolean = false;
+  @property({ attribute: false })
+  pendingKnownExecutionTarget: TMeteorConnectionExecutionTarget | undefined = undefined;
   @property({ type: Object })
   executionState: IMCActionExecutionState = {
     isExecuting: false,
@@ -384,6 +388,10 @@ export class MeteorActionUiContainer extends LitElement {
         animation: fadeInContent 300ms ease-out forwards;
       }
 
+      continue-action-screen {
+        animation: fadeInContent 300ms ease-out forwards;
+      }
+
       .meteor-connect-title-box {
         animation: fadeInContent 280ms ease-out forwards;
         animation-delay: 40ms;
@@ -393,6 +401,7 @@ export class MeteorActionUiContainer extends LitElement {
       :host-context(meteor-action-ui-overlay[closing]) .meteor-connect-content,
       :host-context(meteor-action-ui-overlay[closing]) meteor-action-ui-executing,
       :host-context(meteor-action-ui-overlay[closing]) get-meteor-screen,
+      :host-context(meteor-action-ui-overlay[closing]) continue-action-screen,
       :host-context(meteor-action-ui-overlay[closing]) .meteor-connect-title-box {
         animation: contentFadeOut 200ms ease-in forwards;
       }
@@ -484,6 +493,8 @@ export class MeteorActionUiContainer extends LitElement {
 
     const extensionWalletAvailable = availablePlatformTargets.includes("v1_ext");
     const webWalletAvailable = availablePlatformTargets.includes("v1_web");
+    const showingContinueKnownTarget = this.pendingKnownExecutionTarget != null;
+    const continueExecutionTarget = this.pendingKnownExecutionTarget ?? "v1_web";
 
     this.logger.log(
       "Rendering Meteor Action UI Container with [available platforms], [supported platforms]:",
@@ -495,13 +506,24 @@ export class MeteorActionUiContainer extends LitElement {
         <div class="meteor-connect-title-box">
           <div class="meteor-logo-and-title">
             ${
-              this.showGetMeteor
+              this.showGetMeteor || showingContinueKnownTarget
                 ? html`
-            <div class="close-circle" @click=${() => (this.showGetMeteor = false)}>
+            <div
+              class="close-circle"
+              @click=${() => {
+                if (showingContinueKnownTarget) {
+                  this.pendingKnownExecutionTarget = undefined;
+                } else {
+                  this.showGetMeteor = false;
+                }
+              }}
+            >
               ${unsafeSVG(svg_icons_text.icon_arrow_back)}
             </div>
             <div class="title-text-box">
-              <span class="subsection-title">Get Meteor Wallet</span>
+              <span class="subsection-title">
+                ${showingContinueKnownTarget ? "Execute Action" : "Get Meteor Wallet"}
+              </span>
             </div>`
                 : html`
             <div class="meteor-logo">
@@ -520,9 +542,21 @@ export class MeteorActionUiContainer extends LitElement {
         ${
           this.executionState.isExecuting
             ? html`<meteor-action-ui-executing .executingForPlatform=${this.executionState.targetedPlatform}></meteor-action-ui-executing>`
-            : this.showGetMeteor
-              ? html`<get-meteor-screen .supportedPlatforms=${this.action.meteorConnect.supportedPlatforms}></get-meteor-screen>`
-              : html`
+            : showingContinueKnownTarget
+              ? html`<continue-action-screen
+                  .executionTarget=${continueExecutionTarget}
+                  .onContinue=${() => {
+                    if (this.pendingKnownExecutionTarget) {
+                      this.actionController.executeAction(this.pendingKnownExecutionTarget);
+                    }
+                  }}
+                  .onBack=${() => {
+                    this.pendingKnownExecutionTarget = undefined;
+                  }}
+                ></continue-action-screen>`
+              : this.showGetMeteor
+                ? html`<get-meteor-screen .supportedPlatforms=${this.action.meteorConnect.supportedPlatforms}></get-meteor-screen>`
+                : html`
           <div class="meteor-connect-content">
             <div class="background-graphics-box">
               <img src="https://storage.googleapis.com/meteor-apps-v2/graphics/meteor_connect_ui/star.gif" alt="Meteor Background Stars" class="star-gif" />

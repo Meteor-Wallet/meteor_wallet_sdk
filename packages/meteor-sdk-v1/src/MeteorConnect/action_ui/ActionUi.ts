@@ -1,6 +1,7 @@
 import { wait_utils } from "@meteorwallet/utils/javascript_helpers/wait.utils";
 import type { ExecutableAction } from "../action/ExecutableAction";
 import { MeteorLogger } from "../logging/MeteorLogger";
+import type { TMeteorConnectionExecutionTarget } from "../MeteorConnect.types";
 import { METEOR_ACTION_UI_POPUP_PARENT_ID } from "./action_ui.static";
 import type { IRenderActionUi_Input } from "./action_ui.types";
 import { GILROY_FONT_FAMILY_DATA_URL_STYLESHEET } from "./lit_ui/font/gilroy-font-kit/gilroy_font.static";
@@ -16,14 +17,23 @@ declare global {
   }
 }
 
-function isSafari() {
-  const ua = navigator.userAgent;
-  const isAppleDevice = /Mac|iPhone|iPad|iPod/.test(ua);
-  const isSafariEngine = /Safari/.test(ua);
+// This is mostly for Safari on iOS which requires user interaction to open new tabs/windows,
+// but we can use it as a general flag for whether we should attempt to open windows immediately or
+// show a prompt for the user to click before opening windows, since many browsers are moving towards stricter popup blocking.
+function usingBrowserThatRequiresUserAction() {
+  // Check for mobile browsers
+  const userAgent = navigator.userAgent.toLowerCase();
 
-  const isNotOtherWebKitBrowser = !/Chrome|Brave|CriOS/.test(ua);
+  // Detect mobile devices
+  const isMobile = /mobile|android|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(
+    userAgent,
+  );
 
-  return isAppleDevice && isSafariEngine && isNotOtherWebKitBrowser;
+  // Detect Safari (but exclude Chrome-based browsers that contain 'safari' in UA string)
+  const isSafari =
+    /safari/i.test(userAgent) && !/chrome|chromium|crios|edge|brave/i.test(userAgent);
+
+  return isMobile || isSafari;
 }
 
 export class ActionUi {
@@ -33,6 +43,8 @@ export class ActionUi {
   static shared: ActionUi = new ActionUi();
   private logger = MeteorLogger.createLogger("MeteorConnect:ActionUi");
   // private _onCancelAction: (() => void) | undefined = undefined;
+  private knownExecutionTargetBeforeUiCheck: TMeteorConnectionExecutionTarget | undefined =
+    undefined;
 
   /**
    * Opens the UI and returns a Promise that resolves with the data
@@ -45,11 +57,17 @@ export class ActionUi {
       const responsePromise = input.action.waitForExecutionOutput();
 
       let knownExecutionTarget = input.action.getActionKnownContextualTarget();
-      
+      // Store the original known target before we potentially override it
+      this.knownExecutionTargetBeforeUiCheck = knownExecutionTarget;
+
       // it is better we just force user to click again
       // most browser nowadays block any non-user interaction initiated window/tab opening
       // so if the dapp request multiple action in a row, it is better to just ask user to click again instead of trying to open multiple window/tab and get blocked by browser
-      knownExecutionTarget = undefined
+
+      if (usingBrowserThatRequiresUserAction()) {
+        knownExecutionTarget = undefined;
+      }
+      // knownExecutionTarget = undefined;
 
       if (knownExecutionTarget != null) {
         this.logger.log(
@@ -60,7 +78,7 @@ export class ActionUi {
 
       await wait_utils.waitMillis(10);
 
-      this.renderAction(input);
+      this.renderAction(input, knownExecutionTarget);
 
       const response = await responsePromise;
       this.logger.log("Prompted action finished", response);
@@ -93,7 +111,10 @@ export class ActionUi {
     });*/
   }
 
-  private renderAction(input: IRenderActionUi_Input) {
+  private renderAction(
+    input: IRenderActionUi_Input,
+    executedTarget?: TMeteorConnectionExecutionTarget,
+  ) {
     if (input.strategy?.strategy === "target_element") {
       this.container =
         typeof input.strategy.element === "string"
@@ -112,14 +133,34 @@ export class ActionUi {
       document.head.appendChild(this.styleElement);
     }
 
+    // If there was a known execution target and we didn't execute it due to browser restrictions,
+    // show the continue-action-screen instead of the normal action UI
+    if (
+      this.knownExecutionTargetBeforeUiCheck != null &&
+      executedTarget == null &&
+      usingBrowserThatRequiresUserAction()
+    ) {
+      this._renderNormalActionUI(input, this.knownExecutionTargetBeforeUiCheck);
+    } else {
+      this._renderNormalActionUI(input);
+    }
+  }
+
+  private _renderNormalActionUI(
+    input: IRenderActionUi_Input,
+    pendingKnownExecutionTarget?: TMeteorConnectionExecutionTarget,
+  ) {
     this.actionUiComponent = new MeteorActionUiContainer();
     this.actionUiComponent.action = input.action;
+    this.actionUiComponent.pendingKnownExecutionTarget = pendingKnownExecutionTarget;
     this.actionUiComponent.closeAction = () => {
       this.cleanup();
       input.action.cancelAction();
     };
 
-    this.container.appendChild(this.actionUiComponent);
+    if (this.container) {
+      this.container.appendChild(this.actionUiComponent);
+    }
   }
 
   /**
@@ -137,6 +178,8 @@ export class ActionUi {
       this.container.remove();
       this.container = null;
     }
+
+    this.knownExecutionTargetBeforeUiCheck = undefined;
   }
 
   private createPopupOverlay(action: ExecutableAction<any>): HTMLElement {
