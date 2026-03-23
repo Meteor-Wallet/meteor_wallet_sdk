@@ -46,14 +46,10 @@ export class ActionUi {
 
       let knownExecutionTarget = input.action.getActionKnownContextualTarget();
       
-      // if user running in Safari
-      // we force user to select platform on execution since Safari has strict window.open rules that require user interaction
-      if(isSafari()){
-        this.logger.log(
-          `User is running Safari, forcing platform selection on execution since Safari has strict window.open rules that require user interaction`,
-        );
-        knownExecutionTarget = undefined
-      }
+      // it is better we just force user to click again
+      // most browser nowadays block any non-user interaction initiated window/tab opening
+      // so if the dapp request multiple action in a row, it is better to just ask user to click again instead of trying to open multiple window/tab and get blocked by browser
+      knownExecutionTarget = undefined
 
       if (knownExecutionTarget != null) {
         this.logger.log(
