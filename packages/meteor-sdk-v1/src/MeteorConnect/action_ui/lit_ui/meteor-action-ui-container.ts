@@ -1,22 +1,22 @@
+import { consume } from "@lit/context";
 import { css, html, LitElement, unsafeCSS } from "lit";
 import { property, query } from "lit/decorators.js"; // You MUST import this explicitly
 import { unsafeSVG } from "lit/directives/unsafe-svg.js";
 import QRCodeStyling from "qr-code-styling";
 import type { ExecutableAction } from "../../action/ExecutableAction";
+import type { IMCActionExecutionState } from "../../action/mc_action.types";
 import { MeteorLogger } from "../../logging/MeteorLogger";
 import type { TMeteorConnectionExecutionTarget } from "../../MeteorConnect.types";
 import { ActionUiController } from "./ActionUiController";
+import "./continue-action-screen";
 import { customElement } from "./custom-element"; // Your new util
+import "./get-meteor-screen";
 import { animate_meteor_logo_css } from "./graphical/styles/animate_meteor_logo_css";
 import { svg_icons_text } from "./graphical/svg_icons/svg_icons_text";
 import { svg_meteor_logo_text } from "./graphical/svg_meteor_logo_text";
 import "./meteor-action-button";
-import "./continue-action-screen";
-import "./get-meteor-screen";
-import "./meteor-action-ui-executing";
-import { consume } from "@lit/context";
-import type { IMCActionExecutionState } from "../../action/mc_action.types";
 import { overlayCloseTriggerContext } from "./meteor-action-ui-context";
+import "./meteor-action-ui-executing";
 
 @customElement("meteor-action-ui-container")
 export class MeteorActionUiContainer extends LitElement {
@@ -501,49 +501,12 @@ export class MeteorActionUiContainer extends LitElement {
       [availablePlatformTargets, this.action.meteorConnect.supportedPlatforms],
     );
 
-    return html`
-      <div class="modal">
-        <div class="meteor-connect-title-box">
-          <div class="meteor-logo-and-title">
-            ${
-              this.showGetMeteor || showingContinueKnownTarget
-                ? html`
-            <div
-              class="close-circle"
-              @click=${() => {
-                if (showingContinueKnownTarget) {
-                  this.pendingKnownExecutionTarget = undefined;
-                } else {
-                  this.showGetMeteor = false;
-                }
-              }}
-            >
-              ${unsafeSVG(svg_icons_text.icon_arrow_back)}
-            </div>
-            <div class="title-text-box">
-              <span class="subsection-title">
-                ${showingContinueKnownTarget ? "Execute Action" : "Get Meteor Wallet"}
-              </span>
-            </div>`
-                : html`
-            <div class="meteor-logo">
-              ${unsafeSVG(svg_meteor_logo_text)}
-            </div>
-            <div class="title-text-box">
-              <span class="title">Meteor</span>
-              <span class="subtitle">Connect</span>
-            </div>`
-            }
-          </div>
-          <div class="close-circle" @click=${() => this._handleActionClose()}>
-            ${unsafeSVG(svg_icons_text.icon_close_x)}
-          </div>
-        </div>
-        ${
-          this.executionState.isExecuting
-            ? html`<meteor-action-ui-executing .executingForPlatform=${this.executionState.targetedPlatform}></meteor-action-ui-executing>`
-            : showingContinueKnownTarget
-              ? html`<continue-action-screen
+    let renderedScreen: any;
+
+    if (this.executionState.isExecuting) {
+      renderedScreen = html`<meteor-action-ui-executing .executingForPlatform=${this.executionState.targetedPlatform}></meteor-action-ui-executing>`;
+    } else if (showingContinueKnownTarget) {
+      renderedScreen = html`<continue-action-screen
                   .executionTarget=${continueExecutionTarget}
                   .onContinue=${() => {
                     if (this.pendingKnownExecutionTarget) {
@@ -553,10 +516,12 @@ export class MeteorActionUiContainer extends LitElement {
                   .onBack=${() => {
                     this.pendingKnownExecutionTarget = undefined;
                   }}
-                ></continue-action-screen>`
-              : this.showGetMeteor
-                ? html`<get-meteor-screen .supportedPlatforms=${this.action.meteorConnect.supportedPlatforms}></get-meteor-screen>`
-                : html`
+                ></continue-action-screen>`;
+    } else {
+      if (this.showGetMeteor) {
+        renderedScreen = html`<get-meteor-screen .supportedPlatforms=${this.action.meteorConnect.supportedPlatforms}></get-meteor-screen>`;
+      } else {
+        renderedScreen = html`
           <div class="meteor-connect-content">
             <div class="background-graphics-box">
               <img src="https://storage.googleapis.com/meteor-apps-v2/graphics/meteor_connect_ui/star.gif" alt="Meteor Background Stars" class="star-gif" />
@@ -613,8 +578,49 @@ export class MeteorActionUiContainer extends LitElement {
               </div>
             </div>
           </div>
-            `
-        }
+            `;
+      }
+    }
+
+    return html`
+      <div class="modal">
+        <div class="meteor-connect-title-box">
+          <div class="meteor-logo-and-title">
+            ${
+              this.showGetMeteor || showingContinueKnownTarget
+                ? html`
+            <div
+              class="close-circle"
+              @click=${() => {
+                if (showingContinueKnownTarget) {
+                  this.pendingKnownExecutionTarget = undefined;
+                } else {
+                  this.showGetMeteor = false;
+                }
+              }}
+            >
+              ${unsafeSVG(svg_icons_text.icon_arrow_back)}
+            </div>
+            <div class="title-text-box">
+              <span class="subsection-title">
+                ${showingContinueKnownTarget ? "Execute Action" : "Get Meteor Wallet"}
+              </span>
+            </div>`
+                : html`
+            <div class="meteor-logo">
+              ${unsafeSVG(svg_meteor_logo_text)}
+            </div>
+            <div class="title-text-box">
+              <span class="title">Meteor</span>
+              <span class="subtitle">Connect</span>
+            </div>`
+            }
+          </div>
+          <div class="close-circle" @click=${() => this._handleActionClose()}>
+            ${unsafeSVG(svg_icons_text.icon_close_x)}
+          </div>
+        </div>
+        ${renderedScreen}
       </div>
     `;
   }

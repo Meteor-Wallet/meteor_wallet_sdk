@@ -12,7 +12,7 @@
   },
   "type": "module",
   "dependencies": {
-    "@hot-labs/near-connect": "0.10.0",
+    "@hot-labs/near-connect": "0.11.1",
     "@meteorwallet/sdk": "workspace:*",
     "@meteorwallet/utils": "1.28.0-0",
     "@near-js/crypto": "2.2.5",
