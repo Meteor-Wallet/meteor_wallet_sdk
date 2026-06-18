@@ -57,7 +57,19 @@ export class ExecutableAction<R extends TMCActionRequestUnion<TMCActionRegistry>
   }
 
   getActionKnownContextualTarget(): TMeteorConnectionExecutionTarget | undefined {
-    return this.connectionTargetConfig.contextualExecutionTarget;
+    const knownContextualTarget = this.connectionTargetConfig.contextualExecutionTarget;
+    const knownContextualTargetConfig = this.connectionTargetConfig.allExecutionTargets.find(
+      (config) => config.executionTarget === knownContextualTarget,
+    );
+
+    if(!knownContextualTargetConfig) {
+      this.logger.err(
+        `Known contextual target ${knownContextualTarget} is not in the list of available execution targets`,
+      );
+      return undefined;
+    }
+
+    return knownContextualTarget;
   }
 
   getExecutionState(): IMCActionExecutionState {
@@ -87,7 +99,7 @@ export class ExecutableAction<R extends TMCActionRequestUnion<TMCActionRegistry>
     const request = this.request;
 
     const resolvedExecutionTarget: TMeteorConnectionExecutionTarget | undefined =
-      this.connectionTargetConfig.contextualExecutionTarget ?? executionTarget;
+      this.getActionKnownContextualTarget() ?? executionTarget;
 
     const executionTargetConfig = this.connectionTargetConfig.allExecutionTargets.find(
       (config) => config.executionTarget === resolvedExecutionTarget,
