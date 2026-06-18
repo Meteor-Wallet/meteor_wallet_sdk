@@ -8,6 +8,7 @@
     "dev": "bun run clean-cache-files && react-router dev --force",
     "start": "react-router-serve ./build/server/index.js",
     "type-check": "react-router typegen && tsc",
+    "type-check-watch": "react-router typegen && tsc --watch",
     "watch-meteor-script": "chokidar \"../../near-connect/meteor-near-connect.js\" -c \"cpy ../../near-connect/meteor-near-connect.js public\""
   },
   "type": "module",
