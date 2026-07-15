@@ -1,6 +1,7 @@
 import { PublicKey } from "@near-js/crypto";
 import { actionCreators } from "@near-js/transactions";
 import type { Action, AddKeyPermission } from "@near-wallet-selector/core";
+import {actionCreators as customActionCreators} from './actionCreator/action_creators'
 
 const getAccessKey = (permission: AddKeyPermission) => {
   if (permission === "FullAccess") {
@@ -11,6 +12,24 @@ const getAccessKey = (permission: AddKeyPermission) => {
   const allowance = permission.allowance ? BigInt(permission.allowance) : undefined;
 
   return actionCreators.functionCallAccessKey(receiverId, methodNames, allowance);
+};
+
+const getGasAccessKey = (permission: AddKeyPermission, gasKeyInfo: {
+  balance: string;
+  numNonces: number;
+}) => {
+  const transformedGasKeyInfo = {
+    balance: BigInt(gasKeyInfo.balance),
+    numNonces: gasKeyInfo.numNonces
+  }
+  if (permission === "FullAccess") {
+    return customActionCreators.gasKeyFullAccessKey(transformedGasKeyInfo);
+  }
+
+  const { receiverId, methodNames = [] } = permission;
+  const allowance = permission.allowance ? BigInt(permission.allowance) : undefined;
+
+  return customActionCreators.gasKeyFunctionCallAccessKey(receiverId, methodNames, transformedGasKeyInfo, allowance);
 };
 
 export const parseArgs = (data: Object | string) => {
@@ -43,7 +62,14 @@ export const convertSelectorActionToNearAction = (action: Action) => {
       return actionCreators.stake(BigInt(stake), PublicKey.from(publicKey));
     }
     case "AddKey": {
-      const { publicKey, accessKey } = action.params;
+      const { publicKey, accessKey, gasKeyInfo } = action.params;
+
+      if(gasKeyInfo){
+        return customActionCreators.addKey(
+          PublicKey.from(publicKey), // TODO: Use accessKey.nonce? near-api-js seems to think 0 is fine?
+          getGasAccessKey(accessKey.permission, gasKeyInfo),
+        )
+      }
 
       return actionCreators.addKey(
         PublicKey.from(publicKey), // TODO: Use accessKey.nonce? near-api-js seems to think 0 is fine?
@@ -58,6 +84,16 @@ export const convertSelectorActionToNearAction = (action: Action) => {
     case "DeleteAccount": {
       const { beneficiaryId } = action.params;
       return actionCreators.deleteAccount(beneficiaryId);
+    }
+    case "TransferToGasKey": {
+      const { publicKey, deposit } = action.params;
+
+      return customActionCreators.transferToGasKey(PublicKey.from(publicKey), deposit)
+    }
+    case "WithdrawFromGasKey": {
+      const { publicKey, amount } = action.params;
+
+      return customActionCreators.withdrawFromGasKey(PublicKey.from(publicKey), amount)
     }
     default:
       throw new Error("Invalid action type");

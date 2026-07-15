@@ -1,5 +1,5 @@
-import type { Action } from "@near-js/transactions";
 import type { Action as SdkV1Action } from "@near-wallet-selector/core";
+import type { Action } from "packages/meteor-sdk-v1/src/near_utils/actionCreator/actions";
 
 const deserializeArgs = (args: Uint8Array) => {
   try {
@@ -85,7 +85,58 @@ export const nearActionToSdkV1Action = (action: Action): SdkV1Action => {
     };
   }
 
+  if(action.transferToGasKey){
+    return {
+      type: "TransferToGasKey",
+      params: {
+        publicKey: action.transferToGasKey.publicKey.toString(),
+        deposit: action.transferToGasKey.deposit.toString()
+      }
+    }
+  }
+
+  if(action.withdrawFromGasKey){
+    return {
+      type: "WithdrawFromGasKey",
+      params: {
+        publicKey: action.withdrawFromGasKey.publicKey.toString(),
+        amount: action.withdrawFromGasKey.amount.toString()
+      }
+    }
+  }
+
   if (action.addKey) {
+    if(action.addKey.accessKey.permission.gasKeyFullAccess){
+      return {
+        type: "AddKey",
+        params: {
+          publicKey: action.addKey.publicKey.toString(),
+          gasKeyInfo: action.addKey.accessKey.permission.gasKeyFullAccess.gasKeyInfo,
+          accessKey: {
+            nonce: Number(action.addKey.accessKey.nonce),
+            permission: 'FullAccess'
+          }
+        }
+      }
+    }
+    
+    if(action.addKey.accessKey.permission.gasKeyFunctionCall){
+      return {
+        type: "AddKey",
+        params: {
+          publicKey: action.addKey.publicKey.toString(),
+          gasKeyInfo: action.addKey.accessKey.permission.gasKeyFunctionCall.gasKeyInfo,
+          accessKey: {
+            nonce: Number(action.addKey.accessKey.nonce),
+            permission: {
+              receiverId: action.addKey.accessKey.permission.gasKeyFunctionCall.functionCall.receiverId,
+              allowance: action.addKey.accessKey.permission.gasKeyFunctionCall.functionCall.allowance?.toString(),
+              methodNames: action.addKey.accessKey.permission.gasKeyFunctionCall.functionCall.methodNames,
+            }
+          }
+        }
+      }
+    }
     return {
       type: "AddKey",
       params: {

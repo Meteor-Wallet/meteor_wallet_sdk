@@ -1,0 +1,356 @@
+diff --git a/lib/commonjs/schema.cjs b/lib/commonjs/schema.cjs
+index 73b40de94842661a12992af4d9565d03f883031e..3726271389994e7f12331943a6eae1cc0b51d0c7 100644
+--- a/lib/commonjs/schema.cjs
++++ b/lib/commonjs/schema.cjs
+@@ -96,10 +96,16 @@ const SCHEMA = new class BorshSchema {
+       data: { array: { type: "u8", len: 65 } }
+     }
+   };
++  MlDsa65Signature = {
++      struct: {
++          data: { array: { type: 'u8', len: 3309 } },
++      }
++  };
+   Signature = {
+     enum: [
+       { struct: { ed25519Signature: this.Ed25519Signature } },
+-      { struct: { secp256k1Signature: this.Secp256k1Signature } }
++      { struct: { secp256k1Signature: this.Secp256k1Signature } },
++      { struct: { mlDsa65Signature: this.MlDsa65Signature } },
+     ]
+   };
+   Ed25519Data = {
+@@ -112,10 +118,16 @@ const SCHEMA = new class BorshSchema {
+       data: { array: { type: "u8", len: 64 } }
+     }
+   };
++  MlDsa65Data = {
++      struct: {
++          data: { array: { type: 'u8', len: 1952 } },
++      }
++  };
+   PublicKey = {
+     enum: [
+       { struct: { ed25519Key: this.Ed25519Data } },
+-      { struct: { secp256k1Key: this.Secp256k1Data } }
++      { struct: { secp256k1Key: this.Secp256k1Data } },
++      { struct: { mlDsa65Key: this.MlDsa65Data } },
+     ]
+   };
+   FunctionCallPermission = {
+@@ -128,10 +140,29 @@ const SCHEMA = new class BorshSchema {
+   FullAccessPermission = {
+     struct: {}
+   };
++  GasKeyInfo = {
++      struct: {
++          balance: 'u128',
++          numNonces: 'u16'
++      }
++  };
++  GasKeyFunctionCallPermission = {
++      struct: {
++          gasKeyInfo: this.GasKeyInfo,
++          functionCall: this.FunctionCallPermission
++      }
++  };
++  GasKeyFullAccessPermission = {
++      struct: {
++          gasKeyInfo: this.GasKeyInfo
++      }
++  };
+   AccessKeyPermission = {
+     enum: [
+       { struct: { functionCall: this.FunctionCallPermission } },
+-      { struct: { fullAccess: this.FullAccessPermission } }
++      { struct: { fullAccess: this.FullAccessPermission } },
++      { struct: { gasKeyFunctionCall: this.GasKeyFunctionCallPermission } },
++      { struct: { gasKeyFullAccess: this.GasKeyFullAccessPermission } },
+     ]
+   };
+   AccessKey = {
+@@ -211,6 +242,40 @@ const SCHEMA = new class BorshSchema {
+       prefix: "u32"
+     }
+   };
++  DeterministicAccountStateInitV1 = {
++      struct: {
++          code: this.GlobalContractIdentifier,
++          data: {
++              map: {
++                  key: { array: { type: 'u8' } },
++                  value: { array: { type: 'u8' } },
++              }
++          }
++      }
++  };
++  StateInit = {
++      enum: [
++          { struct: { V1: this.DeterministicAccountStateInitV1 } }
++      ]  
++  };
++  DeterministicStateInit = {
++      struct: {
++          deposit: 'u128',
++          stateInit: this.StateInit
++      }
++  };
++  TransferToGasKey = {
++      struct: {
++          publicKey: this.PublicKey,
++          deposit: 'u128'
++      }
++  };
++  WithdrawFromGasKey = {
++      struct: {
++          publicKey: this.PublicKey,
++          amount: 'u128'
++      }
++  };
+   /** @todo: get rid of "ClassicActions" and keep only "Action" schema to be consistent with "nearcore" */
+   ClassicActions = {
+     enum: [
+@@ -225,9 +290,51 @@ const SCHEMA = new class BorshSchema {
+       { struct: { signedDelegate: "string" } },
+       // placeholder to keep the right enum order, should not be used 
+       { struct: { deployGlobalContract: this.DeployGlobalContract } },
+-      { struct: { useGlobalContract: this.UseGlobalContract } }
++      { struct: { useGlobalContract: this.UseGlobalContract } },
++      { struct: { deterministicStateInit: this.DeterministicStateInit } },
++      { struct: { transferToGasKey: this.TransferToGasKey } },
++      { struct: { withdrawFromGasKey: this.WithdrawFromGasKey } },
++      { struct: { delegateV2: 'string' } },
+     ]
+   };
++  Nonce = {
++      struct: {
++          nonce: 'u64'
++      }
++  };
++  GasKeyNonce = {
++      struct: {
++          nonce: 'u64',
++          nonceIndex: 'u16'
++      }
++  };
++  TransactionNonce = {
++      enum: [
++          {struct: { nonce: this.Nonce } },
++          {struct: { gasKeyNonce: this.GasKeyNonce } }
++      ]
++  };
++  DelegateActionV2 = {
++      struct: {
++          senderId: 'string',
++          receiverId: 'string',
++          actions: { array: { type: this.ClassicActions } },
++          nonce: this.TransactionNonce,
++          maxBlockHeight: 'u64',
++          publicKey: this.PublicKey,
++      }
++  };
++  VersionedDelegateActionPayloadSchema = {
++      enum: [
++          { struct: { v2: this.DelegateActionV2 } },
++      ]
++  };
++  DelegateV2 = {
++      struct: {
++          delegateAction: this.VersionedDelegateActionPayloadSchema,
++          signature: this.Signature
++      }
++  };
+   DelegateAction = {
+     struct: {
+       senderId: "string",
+@@ -256,7 +363,11 @@ const SCHEMA = new class BorshSchema {
+       { struct: { deleteAccount: this.DeleteAccount } },
+       { struct: { signedDelegate: this.SignedDelegate } },
+       { struct: { deployGlobalContract: this.DeployGlobalContract } },
+-      { struct: { useGlobalContract: this.UseGlobalContract } }
++      { struct: { useGlobalContract: this.UseGlobalContract } },
++      { struct: { deterministicStateInit: this.DeterministicStateInit } },
++      { struct: { transferToGasKey: this.TransferToGasKey } },
++      { struct: { withdrawFromGasKey: this.WithdrawFromGasKey } },
++      { struct: { delegateV2: this.DelegateV2 } },
+     ]
+   };
+   Transaction = {
+diff --git a/lib/esm/schema.js b/lib/esm/schema.js
+index ebd268bca2dbd422a516bcc0f04459f09e3d39df..e804b5dd33706fc6991c874e16ca813c5696c374 100644
+--- a/lib/esm/schema.js
++++ b/lib/esm/schema.js
+@@ -66,10 +66,16 @@ const SCHEMA = new class BorshSchema {
+       data: { array: { type: "u8", len: 65 } }
+     }
+   };
++  MlDsa65Signature = {
++      struct: {
++          data: { array: { type: 'u8', len: 3309 } },
++      }
++  };
+   Signature = {
+     enum: [
+       { struct: { ed25519Signature: this.Ed25519Signature } },
+-      { struct: { secp256k1Signature: this.Secp256k1Signature } }
++      { struct: { secp256k1Signature: this.Secp256k1Signature } },
++      { struct: { mlDsa65Signature: this.MlDsa65Signature } },
+     ]
+   };
+   Ed25519Data = {
+@@ -82,10 +88,16 @@ const SCHEMA = new class BorshSchema {
+       data: { array: { type: "u8", len: 64 } }
+     }
+   };
++  MlDsa65Data = {
++      struct: {
++          data: { array: { type: 'u8', len: 1952 } },
++      }
++  };
+   PublicKey = {
+     enum: [
+       { struct: { ed25519Key: this.Ed25519Data } },
+-      { struct: { secp256k1Key: this.Secp256k1Data } }
++      { struct: { secp256k1Key: this.Secp256k1Data } },
++      { struct: { mlDsa65Key: this.MlDsa65Data } },
+     ]
+   };
+   FunctionCallPermission = {
+@@ -98,10 +110,29 @@ const SCHEMA = new class BorshSchema {
+   FullAccessPermission = {
+     struct: {}
+   };
++  GasKeyInfo = {
++      struct: {
++          balance: 'u128',
++          numNonces: 'u16'
++      }
++  };
++  GasKeyFunctionCallPermission = {
++      struct: {
++          gasKeyInfo: this.GasKeyInfo,
++          functionCall: this.FunctionCallPermission
++      }
++  };
++  GasKeyFullAccessPermission = {
++      struct: {
++          gasKeyInfo: this.GasKeyInfo
++      }
++  };
+   AccessKeyPermission = {
+     enum: [
+       { struct: { functionCall: this.FunctionCallPermission } },
+-      { struct: { fullAccess: this.FullAccessPermission } }
++      { struct: { fullAccess: this.FullAccessPermission } },
++      { struct: { gasKeyFunctionCall: this.GasKeyFunctionCallPermission } },
++      { struct: { gasKeyFullAccess: this.GasKeyFullAccessPermission } },
+     ]
+   };
+   AccessKey = {
+@@ -181,6 +212,40 @@ const SCHEMA = new class BorshSchema {
+       prefix: "u32"
+     }
+   };
++  DeterministicAccountStateInitV1 = {
++      struct: {
++          code: this.GlobalContractIdentifier,
++          data: {
++              map: {
++                  key: { array: { type: 'u8' } },
++                  value: { array: { type: 'u8' } },
++              }
++          }
++      }
++  };
++  StateInit = {
++      enum: [
++          { struct: { V1: this.DeterministicAccountStateInitV1 } }
++      ]  
++  };
++  DeterministicStateInit = {
++      struct: {
++          deposit: 'u128',
++          stateInit: this.StateInit
++      }
++  };
++  TransferToGasKey = {
++      struct: {
++          publicKey: this.PublicKey,
++          deposit: 'u128'
++      }
++  };
++  WithdrawFromGasKey = {
++      struct: {
++          publicKey: this.PublicKey,
++          amount: 'u128'
++      }
++  };
+   /** @todo: get rid of "ClassicActions" and keep only "Action" schema to be consistent with "nearcore" */
+   ClassicActions = {
+     enum: [
+@@ -195,9 +260,51 @@ const SCHEMA = new class BorshSchema {
+       { struct: { signedDelegate: "string" } },
+       // placeholder to keep the right enum order, should not be used 
+       { struct: { deployGlobalContract: this.DeployGlobalContract } },
+-      { struct: { useGlobalContract: this.UseGlobalContract } }
++      { struct: { useGlobalContract: this.UseGlobalContract } },
++      { struct: { deterministicStateInit: this.DeterministicStateInit } },
++      { struct: { transferToGasKey: this.TransferToGasKey } },
++      { struct: { withdrawFromGasKey: this.WithdrawFromGasKey } },
++      { struct: { delegateV2: 'string' } },
+     ]
+   };
++  Nonce = {
++      struct: {
++          nonce: 'u64'
++      }
++  };
++  GasKeyNonce = {
++      struct: {
++          nonce: 'u64',
++          nonceIndex: 'u16'
++      }
++  };
++  TransactionNonce = {
++      enum: [
++          {struct: { nonce: this.Nonce } },
++          {struct: { gasKeyNonce: this.GasKeyNonce } }
++      ]
++  };
++  DelegateActionV2 = {
++      struct: {
++          senderId: 'string',
++          receiverId: 'string',
++          actions: { array: { type: this.ClassicActions } },
++          nonce: this.TransactionNonce,
++          maxBlockHeight: 'u64',
++          publicKey: this.PublicKey,
++      }
++  };
++  VersionedDelegateActionPayloadSchema = {
++      enum: [
++          { struct: { v2: this.DelegateActionV2 } },
++      ]
++  };
++  DelegateV2 = {
++      struct: {
++          delegateAction: this.VersionedDelegateActionPayloadSchema,
++          signature: this.Signature
++      }
++  };
+   DelegateAction = {
+     struct: {
+       senderId: "string",
+@@ -226,7 +333,11 @@ const SCHEMA = new class BorshSchema {
+       { struct: { deleteAccount: this.DeleteAccount } },
+       { struct: { signedDelegate: this.SignedDelegate } },
+       { struct: { deployGlobalContract: this.DeployGlobalContract } },
+-      { struct: { useGlobalContract: this.UseGlobalContract } }
++      { struct: { useGlobalContract: this.UseGlobalContract } },
++      { struct: { deterministicStateInit: this.DeterministicStateInit } },
++      { struct: { transferToGasKey: this.TransferToGasKey } },
++      { struct: { withdrawFromGasKey: this.WithdrawFromGasKey } },
++      { struct: { delegateV2: this.DelegateV2 } },
+     ]
+   };
+   Transaction = {
