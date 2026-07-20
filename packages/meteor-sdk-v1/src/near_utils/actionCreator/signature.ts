@@ -1,9 +1,9 @@
-import { KeyType } from '@near-js/crypto';
 import { Enum } from '@near-js/types';
+import { KeyType } from './constants';
 
 class ED25519Signature { keyType: KeyType = KeyType.ED25519; data: Uint8Array; }
 class SECP256K1Signature { keyType: KeyType = KeyType.SECP256K1; data: Uint8Array; }
-class MLDsa65Signature { keyType: number = 2; data: Uint8Array; }
+class MLDsa65Signature { keyType: number = KeyType.MLDSA65; data: Uint8Array; }
 
 function resolveEnumKeyName(keyType: KeyType | number) {
     switch (keyType) {
