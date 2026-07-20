@@ -34,8 +34,8 @@ import {
     VersionedDelegateActionPayloadSchema,
     WithdrawFromGasKey,
 } from './actions';
-import { DelegateAction } from './delegate';
-import { Signature } from './signature';
+import type { DelegateAction } from './delegate';
+import type { Signature } from './signature';
 
 /**
  * Creates a full access key with full access permissions.
