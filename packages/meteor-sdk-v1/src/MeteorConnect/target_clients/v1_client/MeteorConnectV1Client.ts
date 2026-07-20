@@ -19,6 +19,8 @@ import { MeteorConnectClientBase } from "../base/MeteorConnectClientBase";
 import type { TMeteorConnectV1ExecutionTargetConfig } from "./MeteorConnectV1Client.types";
 import { getExtensionSupportedFeatures } from "./utils/getExtensionSupportedFeatures";
 import { nearActionToSdkV1Action } from "./utils/nearActionToSdkV1Action";
+import { PublicKey as CustomPublicKey } from "../../../near_utils/actionCreator/public_key";
+import type { Action as SdkV1Action } from "@near-wallet-selector/core";
 
 interface IMeteorWalletV1AndKeyStore {
   wallet: MeteorWallet;
@@ -208,7 +210,7 @@ export class MeteorConnectV1Client extends MeteorConnectClientBase {
 
           signedMessage = {
             accountId: response.payload.accountId,
-            publicKey: PublicKey.fromString(response.payload.signedMessage.publicKey),
+            publicKey: CustomPublicKey.fromString(response.payload.signedMessage.publicKey) as PublicKey,
             signature: Buffer.from(response.payload.signedMessage.signature, "base64"),
             state: response.payload.signedMessage.state,
           };
@@ -261,7 +263,7 @@ export class MeteorConnectV1Client extends MeteorConnectClientBase {
       if (response.success) {
         const payload = {
           accountId: response.payload.accountId,
-          publicKey: PublicKey.fromString(response.payload.publicKey),
+          publicKey: CustomPublicKey.fromString(response.payload.publicKey) as PublicKey,
           signature: Buffer.from(response.payload.signature, "base64"),
           state: response.payload.state,
         };
@@ -284,7 +286,10 @@ export class MeteorConnectV1Client extends MeteorConnectClientBase {
         transactions: request.expandedInput.transactions.map((t): TMeteorSdkV1Transaction => {
           return {
             receiverId: t.receiverId,
-            actions: t.actions.map((action) => nearActionToSdkV1Action(action)),
+            actions: t.actions.map((action) => nearActionToSdkV1Action(
+              // @ts-expect-error added more actions type
+              action
+            )),
           };
         }),
         account: request.expandedInput.account,
