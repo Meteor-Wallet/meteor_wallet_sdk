@@ -114,8 +114,8 @@ export class MeteorActionUiOverlay extends LitElement {
 
       .modal-container {
         z-index: 2;
-        height: 556px;
-        width: 415px;
+        height: min(556px, calc(100dvh - 2rem));
+        width: min(415px, calc(100vw - 2rem));
         border-radius: 1.2em;
         border: 1px solid #2b2d38;
         overflow: hidden;
@@ -187,7 +187,7 @@ export class MeteorActionUiOverlay extends LitElement {
     return html`
       <div>
         <div class="modal-backdrop"></div>
-        <div class="modal-container" @click=${(e: Event) => e.stopPropagation()}>
+        <div class="modal-container" role="dialog" aria-modal="true" aria-label="Meteor Connect" @click=${(e: Event) => e.stopPropagation()}>
           <slot></slot>
         </div>
       </div>

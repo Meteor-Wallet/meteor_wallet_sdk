@@ -26,24 +26,43 @@ import type {
 import type { MeteorConnectClientBase } from "./target_clients/base/MeteorConnectClientBase";
 import { MeteorConnectTestClient } from "./target_clients/test_client/MeteorConnectTestClient";
 import { MeteorConnectV1Client } from "./target_clients/v1_client/MeteorConnectV1Client";
-import { MeteorConnectV2MessengerClient } from "./target_clients/v2_client/MeteorConnectV2MessengerClient";
+import { MeteorConnectMobileBridgeClient } from "./target_clients/mobile_bridge/MeteorConnectMobileBridgeClient";
+import { normalizeBridgeBackendUrl } from "./target_clients/mobile_bridge/mobileBridgeStorage";
+import { BrowserLocalStorageKeyStore } from "@near-js/keystores-browser";
 import { accountTargetToText } from "./utils/accountTargetToText";
 import { initProp } from "./utils/initProp";
 import { isEqual } from "./utils/isEqual";
+
+const meteorConnectObjectIds = new WeakMap<object, string>();
+function objectFingerprint(value: object | undefined): string | undefined {
+  if (value == null) return undefined;
+  let id = meteorConnectObjectIds.get(value);
+  if (id == null) {
+    id = crypto.randomUUID();
+    meteorConnectObjectIds.set(value, id);
+  }
+  return id;
+}
 
 export class MeteorConnect {
   private _localStorageAdapter = initProp<CEnvironmentStorageAdapter>();
   private _typedStorageHelper = initProp<ITypedStorageHelper<IMeteorConnectTypedStorage>>();
   private isDev: boolean = false;
   private logger = MeteorLogger.createLogger("MeteorConnect");
+  private _storageImplementation = initProp<IMeteorConnect_Initialize_Input["storage"]>();
+  private _nearKeyStoreProvider =
+    initProp<NonNullable<IMeteorConnect_Initialize_Input["nearKeyStoreProvider"]>>();
+  private initializeFingerprint?: string;
+  private initializePromise?: Promise<void>;
+  private browserKeyStore?: BrowserLocalStorageKeyStore;
   private clients: {
     test: MeteorConnectTestClient;
     v1: MeteorConnectV1Client;
-    v2MessengerClient: MeteorConnectV2MessengerClient;
+    mobileBridge: MeteorConnectMobileBridgeClient;
   } = {
     test: new MeteorConnectTestClient(this),
     v1: new MeteorConnectV1Client(this),
-    v2MessengerClient: new MeteorConnectV2MessengerClient(this),
+    mobileBridge: new MeteorConnectMobileBridgeClient(this),
   };
   public supportedPlatforms: TMeteorConnectionExecutionTarget[] = [];
 
@@ -59,7 +78,55 @@ export class MeteorConnect {
     return MeteorLogger.getGlobalLoggingLevel();
   }
 
-  async initialize({ storage }: IMeteorConnect_Initialize_Input) {
+  get isDevelopment(): boolean {
+    return this.isDev;
+  }
+
+  get localStorageImplementation() {
+    return this._storageImplementation.get();
+  }
+
+  get nearKeyStoreProvider() {
+    return this._nearKeyStoreProvider.get();
+  }
+
+  get mobileBridgeClient(): MeteorConnectMobileBridgeClient {
+    return this.clients.mobileBridge;
+  }
+
+  async initialize(input: IMeteorConnect_Initialize_Input) {
+    const { storage, mobileBridge, nearKeyStoreProvider } = input;
+    const fingerprint = JSON.stringify(
+      {
+        storage: objectFingerprint(storage),
+        enabled: mobileBridge?.enabled ?? false,
+        backendUrl: normalizeBridgeBackendUrl(
+          mobileBridge?.backendUrl ?? "https://mc.meteorwallet.app",
+        ),
+        meteorAppId:
+          mobileBridge?.meteorAppId ??
+          (this.isDevelopment ? "meteor_wallet_mobile_dev" : "meteor_wallet_mobile"),
+        partnerMetadata: mobileBridge?.partnerMetadata,
+        leaseProvider: objectFingerprint(mobileBridge?.leaseProvider),
+        nativeAppOpener: objectFingerprint(mobileBridge?.nativeAppOpener),
+        nearKeyStoreProvider: objectFingerprint(nearKeyStoreProvider),
+      },
+      (_key, value) => (typeof value === "function" ? "[function]" : value),
+    );
+    if (this.initializeFingerprint != null && this.initializeFingerprint !== fingerprint) {
+      throw new Error("mobile_bridge_config_mismatch");
+    }
+    if (this.initializePromise != null) return this.initializePromise;
+    this.initializeFingerprint = fingerprint;
+    this.initializePromise = this.initializeInternal(storage, mobileBridge, nearKeyStoreProvider);
+    return this.initializePromise;
+  }
+
+  private async initializeInternal(
+    storage: IMeteorConnect_Initialize_Input["storage"],
+    mobileBridge: IMeteorConnect_Initialize_Input["mobileBridge"],
+    nearKeyStoreProvider: IMeteorConnect_Initialize_Input["nearKeyStoreProvider"],
+  ) {
     const storageAdapter = new CEnvironmentStorageAdapter(storage);
     const typedStorageHelper = createTypedStorageHelper<IMeteorConnectTypedStorage>({
       storageAdapter,
@@ -67,7 +134,22 @@ export class MeteorConnect {
     });
 
     this._localStorageAdapter.set(storageAdapter);
+    this._storageImplementation.set(storage);
+    this._nearKeyStoreProvider.set(
+      nearKeyStoreProvider ?? {
+        getKeyStore: () => {
+          if (this.browserKeyStore == null) {
+            this.browserKeyStore = new BrowserLocalStorageKeyStore(
+              window.localStorage,
+              "_meteor_wallet",
+            );
+          }
+          return this.browserKeyStore;
+        },
+      },
+    );
     this._typedStorageHelper.set(typedStorageHelper);
+    this.clients.mobileBridge.configure(mobileBridge);
 
     await typedStorageHelper.setJson("lastInitialized", Date.now());
 
@@ -87,13 +169,31 @@ export class MeteorConnect {
   }
 
   private getClients(): MeteorConnectClientBase[] {
-    let clients: MeteorConnectClientBase[] = [this.clients.v1, this.clients.v2MessengerClient];
+    let clients: MeteorConnectClientBase[] = [this.clients.v1, this.clients.mobileBridge];
 
     if (this.isDev) {
       clients = [this.clients.test];
     }
 
     return clients;
+  }
+
+  async updateSignedInAccountConnection(account: IMeteorConnectAccount): Promise<void> {
+    const accounts = await this.storage.getJsonOrDef("accounts", []);
+    await this.storage.setJson(
+      "accounts",
+      accounts.map((existing) =>
+        isEqual(existing.identifier, account.identifier)
+          ? { ...existing, connection: account.connection }
+          : existing,
+      ),
+    );
+  }
+
+  async disposeMobileBridge(): Promise<void> {
+    await this.clients.mobileBridge.dispose();
+    this.initializeFingerprint = undefined;
+    this.initializePromise = undefined;
   }
 
   getClientByExecutionTargetId(id: TMeteorConnectionExecutionTarget): MeteorConnectClientBase {

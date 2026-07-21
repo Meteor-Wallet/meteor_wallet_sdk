@@ -1,8 +1,7 @@
 import { consume } from "@lit/context";
 import { css, html, LitElement, unsafeCSS } from "lit";
-import { property, query } from "lit/decorators.js"; // You MUST import this explicitly
+import { property } from "lit/decorators.js"; // You MUST import this explicitly
 import { unsafeSVG } from "lit/directives/unsafe-svg.js";
-import QRCodeStyling from "qr-code-styling";
 import type { ExecutableAction } from "../../action/ExecutableAction";
 import type { IMCActionExecutionState } from "../../action/mc_action.types";
 import { MeteorLogger } from "../../logging/MeteorLogger";
@@ -17,6 +16,8 @@ import { svg_meteor_logo_text } from "./graphical/svg_meteor_logo_text";
 import "./meteor-action-button";
 import { overlayCloseTriggerContext } from "./meteor-action-ui-context";
 import "./meteor-action-ui-executing";
+import "./meteor-mobile-bridge-panel";
+import type { MobileBridgeSession } from "../../target_clients/mobile_bridge/MobileBridgeSession";
 
 @customElement("meteor-action-ui-container")
 export class MeteorActionUiContainer extends LitElement {
@@ -218,6 +219,8 @@ export class MeteorActionUiContainer extends LitElement {
         justify-content: space-between;
         flex-grow: 1;
         gap: 1rem;
+        overflow-y: auto;
+        min-height: 0;
       }
 
       .background-graphics-box {
@@ -409,9 +412,8 @@ export class MeteorActionUiContainer extends LitElement {
   ];
 
   private actionController!: ActionUiController;
-  @query("#qr-code-target") private qrCodeTarget?: HTMLDivElement;
-  private qrCode?: QRCodeStyling;
-  private lastQrValue?: string;
+  private removeExecutionListener?: () => void;
+  @property({ attribute: false }) mobileSession?: MobileBridgeSession;
 
   private _handleActionClose() {
     this.logger.log("Close button clicked, calling closeAction");
@@ -428,17 +430,19 @@ export class MeteorActionUiContainer extends LitElement {
   connectedCallback() {
     super.connectedCallback();
     this.actionController = new ActionUiController(this, this.action, this.closeAction);
-    this.action.addExecutionStateListener((executionState) => {
+    this.removeExecutionListener = this.action.addExecutionStateListener((executionState) => {
       this.executionState = executionState;
       this.logger.log("Received execution state update in container", executionState);
     });
 
     this.executionState = this.action.getExecutionState();
+    void this.actionController.prepareMobileBridge().then((session) => {
+      this.mobileSession = session;
+    });
   }
 
   disconnectedCallback(): void {
-    this.qrCode = undefined;
-    this.lastQrValue = undefined;
+    this.removeExecutionListener?.();
     super.disconnectedCallback();
   }
 
@@ -447,36 +451,6 @@ export class MeteorActionUiContainer extends LitElement {
     if (import.meta.hot) {
       import.meta.hot.accept();
     }
-  }
-
-  private queueQrRender(value: string) {
-    void this.updateComplete.then(() => this.drawQrCode(value));
-  }
-
-  private drawQrCode(value: string) {
-    if (!this.qrCodeTarget) return;
-
-    if (!this.qrCode) {
-      this.qrCode = new QRCodeStyling({
-        width: 120,
-        height: 120,
-        type: "svg",
-        data: value,
-        dotsOptions: {
-          color: "#22105f",
-          type: "rounded",
-        },
-        backgroundOptions: {
-          color: "#ffffff",
-        },
-      });
-    } else if (this.lastQrValue !== value) {
-      this.qrCode.update({ data: value });
-    }
-
-    this.lastQrValue = value;
-    this.qrCodeTarget.innerHTML = "";
-    this.qrCode.append(this.qrCodeTarget);
   }
 
   render() {
@@ -493,6 +467,10 @@ export class MeteorActionUiContainer extends LitElement {
 
     const extensionWalletAvailable = availablePlatformTargets.includes("v1_ext");
     const webWalletAvailable = availablePlatformTargets.includes("v1_web");
+    const mobileWalletAvailable = availablePlatformTargets.includes("v2_bridge_mobile");
+    const mobileExecuting =
+      this.executionState.isExecuting &&
+      this.executionState.targetedPlatform === "v2_bridge_mobile";
     const showingContinueKnownTarget = this.pendingKnownExecutionTarget != null;
     const continueExecutionTarget = this.pendingKnownExecutionTarget ?? "v1_web";
 
@@ -503,7 +481,7 @@ export class MeteorActionUiContainer extends LitElement {
 
     let renderedScreen: any;
 
-    if (this.executionState.isExecuting) {
+    if (this.executionState.isExecuting && !mobileExecuting) {
       renderedScreen = html`<meteor-action-ui-executing .executingForPlatform=${this.executionState.targetedPlatform}></meteor-action-ui-executing>`;
     } else if (showingContinueKnownTarget) {
       renderedScreen = html`<continue-action-screen
@@ -527,7 +505,7 @@ export class MeteorActionUiContainer extends LitElement {
               <img src="https://storage.googleapis.com/meteor-apps-v2/graphics/meteor_connect_ui/star.gif" alt="Meteor Background Stars" class="star-gif" />
             </div>
             <div class="options">
-              <span class="section-action-title">Choose your wallet</span>
+              ${extensionWalletAvailable || webWalletAvailable || includeWebDevLocalhost ? html`<span class="section-action-title">Choose your wallet</span>` : ""}
               <div class="option-buttons-row">
               ${
                 extensionWalletAvailable
@@ -560,6 +538,22 @@ export class MeteorActionUiContainer extends LitElement {
                 }
               </div>
             </div>
+            ${
+              mobileWalletAvailable
+                ? html`
+              <meteor-mobile-bridge-panel
+                .session=${this.mobileSession}
+                .openInApp=${() => this.action.meteorConnect.mobileBridgeClient.openCurrentSessionInApp()}
+                .refreshCode=${async () => {
+                  this.mobileSession = await this.actionController.refreshMobileBridge();
+                }}
+                .resetIdentity=${async () => {
+                  this.mobileSession = await this.actionController.resetMobileIdentityAndRePair();
+                }}
+              ></meteor-mobile-bridge-panel>
+            `
+                : ""
+            }
             <div class="no-wallet-bottom-section">
               <div class="divider">
                 <span class="divider-line"></span>

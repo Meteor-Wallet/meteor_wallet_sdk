@@ -40,6 +40,8 @@ export const devManifest = (useLiveExecutor = false) =>
             "https://wallet.meteorwallet.app",
             "https://meteorwallet.app",
             "https://localhost:3001",
+            "meteorwallet://bridge_request",
+            "meteorwalletdev://bridge_request",
           ],
           external: ["meteorCom", "meteorComV2"],
         },

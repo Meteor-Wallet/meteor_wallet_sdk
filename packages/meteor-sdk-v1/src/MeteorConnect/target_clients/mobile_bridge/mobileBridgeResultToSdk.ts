@@ -1,0 +1,202 @@
+import { act_impl_near } from "@meteorwallet/connect-shared";
+import { isActionPayload_Result_JsonObject } from "@nice-code/action";
+import { KeyType, PublicKey } from "@near-js/crypto";
+import { DelegateAction, SCHEMA, Signature, SignedDelegate } from "@near-js/transactions";
+import { sha256 } from "@noble/hashes/sha2.js";
+import { base64 } from "@scure/base";
+import { deserialize, serialize } from "borsh";
+import type { IPartnerActionResult } from "@meteorwallet/connect";
+import type { IMeteorConnectAccount, TMeteorConnectPublicKey } from "../../MeteorConnect.types";
+import type {
+  IMobileBridgePreparedAction,
+  IMobileBridgeResultContext,
+} from "./MeteorConnectMobileBridgeClient.types";
+
+function requireTargetAccount(prepared: IMobileBridgePreparedAction): string {
+  const accountId = (prepared.sdkRequest.expandedInput as any).account?.identifier?.accountId;
+  if (typeof accountId !== "string") throw new Error("mobile_bridge_missing_target_account");
+  return accountId;
+}
+
+function requireMatchingAccount(actual: unknown, expected: string): void {
+  if (typeof actual !== "string" || actual !== expected) {
+    throw new Error("mobile_bridge_result_account_mismatch");
+  }
+}
+
+function signatureFromWire(
+  publicKey: string,
+  signature: string,
+  accountId: string,
+  state?: string,
+) {
+  return {
+    accountId,
+    publicKey: PublicKey.fromString(publicKey),
+    signature: base64.decode(signature),
+    state,
+  };
+}
+
+function decodeSignedDelegate(encoded: string): SignedDelegate {
+  const decoded: any = deserialize(SCHEMA.SignedDelegate, base64.decode(encoded));
+  let signature: Signature;
+  if (decoded.signature.ed25519Signature != null) {
+    signature = new Signature({
+      keyType: KeyType.ED25519,
+      data: decoded.signature.ed25519Signature.data,
+    });
+  } else if (decoded.signature.secp256k1Signature != null) {
+    signature = new Signature({
+      keyType: KeyType.SECP256K1,
+      data: decoded.signature.secp256k1Signature.data,
+    });
+  } else {
+    throw new Error("mobile_bridge_invalid_delegate_signature");
+  }
+  return new SignedDelegate({
+    delegateAction: new DelegateAction({ ...decoded.delegateAction }),
+    signature,
+  });
+}
+
+export async function mobileBridgeResultToSdk(
+  prepared: IMobileBridgePreparedAction,
+  partnerResult: IPartnerActionResult,
+  context: IMobileBridgeResultContext,
+): Promise<any> {
+  if (partnerResult.signatureVerified !== true) {
+    throw new Error("mobile_bridge_wallet_signature_invalid");
+  }
+  const serialized = partnerResult.result;
+  if (!isActionPayload_Result_JsonObject(serialized)) {
+    throw new Error("mobile_bridge_invalid_action_result");
+  }
+  if (
+    serialized.domain !== prepared.actionRequest.domain ||
+    serialized.id !== prepared.actionRequest.id
+  ) {
+    throw new Error("mobile_bridge_action_result_mismatch");
+  }
+  const hydrated: any = act_impl_near.hydrateResultPayload(serialized as any);
+  if (hydrated.outputHash !== serialized.outputHash) {
+    throw new Error("mobile_bridge_output_hash_mismatch");
+  }
+  if (!hydrated.result.ok) throw hydrated.result.error;
+  const output: any = hydrated.result.output;
+  const input: any = prepared.sdkRequest.expandedInput;
+
+  if (
+    prepared.sharedActionId === "sign_in" ||
+    prepared.sharedActionId === "sign_in_and_sign_message"
+  ) {
+    if (!Array.isArray(output) || output.length === 0) {
+      throw new Error("mobile_bridge_sign_in_returned_no_accounts");
+    }
+    if (prepared.sharedActionId === "sign_in_and_sign_message") {
+      for (const item of output)
+        requireMatchingAccount(item.signedMessage?.accountId, item.accountId);
+    }
+    const selected = output[0];
+    const publicKeys: TMeteorConnectPublicKey[] = [];
+    if (selected.publicKey != null) {
+      publicKeys.push({ type: "ed25519", publicKey: selected.publicKey });
+    }
+    if (prepared.pendingFunctionCallKey != null) {
+      if (context.persistFunctionCallKey == null) {
+        throw new Error("local_key_persistence_failed");
+      }
+      try {
+        await context.persistFunctionCallKey(
+          input.target.network,
+          selected.accountId,
+          prepared.pendingFunctionCallKey,
+        );
+      } catch {
+        throw new Error("local_key_persistence_failed");
+      }
+      publicKeys.push({
+        type: "ed25519",
+        publicKey: prepared.pendingFunctionCallKey.getPublicKey().toString(),
+        meta: { addFunctionCallKey: normalizeFunctionCallKeyForMeta(input) },
+      });
+    }
+    const account: IMeteorConnectAccount = {
+      connection: context.connection,
+      identifier: {
+        blockchain: "near",
+        network: input.target.network,
+        accountId: selected.accountId,
+      },
+      publicKeys,
+    };
+    if (prepared.sharedActionId === "sign_in_and_sign_message") {
+      return {
+        ...account,
+        signedMessage: signatureFromWire(
+          selected.signedMessage.publicKey,
+          selected.signedMessage.signature,
+          selected.signedMessage.accountId,
+          prepared.retainedMessageState,
+        ),
+      };
+    }
+    return account;
+  }
+
+  const expectedAccount = requireTargetAccount(prepared);
+  switch (prepared.sharedActionId) {
+    case "sign_out":
+      requireMatchingAccount(output.accountId, expectedAccount);
+      return input.account.identifier;
+    case "sign_message":
+      requireMatchingAccount(output.accountId, expectedAccount);
+      return signatureFromWire(
+        output.publicKey,
+        output.signature,
+        output.accountId,
+        prepared.retainedMessageState,
+      );
+    case "sign_and_send_transaction":
+      requireMatchingAccount(output?.transaction?.signer_id, expectedAccount);
+      return [output];
+    case "sign_and_send_transactions":
+      if (!Array.isArray(output)) throw new Error("mobile_bridge_invalid_transaction_results");
+      output.forEach((item) =>
+        requireMatchingAccount(item?.transaction?.signer_id, expectedAccount),
+      );
+      return output;
+    case "sign_delegate_actions": {
+      const values = output.signedDelegateActions;
+      if (!Array.isArray(values)) throw new Error("mobile_bridge_invalid_delegate_results");
+      return {
+        signedDelegatesWithHashes: values.map((value: string) => {
+          const signedDelegate = decodeSignedDelegate(value);
+          requireMatchingAccount(signedDelegate.delegateAction.senderId, expectedAccount);
+          return {
+            signedDelegate,
+            delegateHash: sha256(serialize(SCHEMA.DelegateAction, signedDelegate.delegateAction)),
+          };
+        }),
+      };
+    }
+    case "verify_owner":
+      requireMatchingAccount(output.accountId, expectedAccount);
+      return {
+        ...output,
+        keyType: output.publicKey.startsWith("secp256k1:") ? KeyType.SECP256K1 : KeyType.ED25519,
+      };
+  }
+}
+
+function normalizeFunctionCallKeyForMeta(input: any): unknown {
+  if (input.addFunctionCallKey != null) return input.addFunctionCallKey;
+  if (input.contract == null) return undefined;
+  return {
+    contractId: input.contract.id,
+    allowMethods: {
+      anyMethod: input.contract.methods == null,
+      ...(input.contract.methods == null ? {} : { methodNames: input.contract.methods }),
+    },
+  };
+}

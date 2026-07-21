@@ -4,6 +4,7 @@ export * from "./MeteorConnect/action/mc_action.combined";
 export * from "./MeteorConnect/logging/MeteorLogger";
 export * from "./MeteorConnect/MeteorConnect";
 export * from "./MeteorConnect/MeteorConnect.types";
+export * from "./MeteorConnect/target_clients/mobile_bridge/mobileBridgeLease";
 export * from "./MeteorWallet";
 export * from "./MeteorWalletConstants";
 export * from "./near_utils/convertOldFunctionCallKeyDefToNew";

@@ -1,4 +1,6 @@
 import type { ILocalStorageInterface } from "../ported_common/utils/storage/storage.types";
+import type { KeyStore } from "@near-js/keystores";
+import type { EMeteorAppId } from "@meteorwallet/connect-shared";
 
 export type TMCLoggingLevel = "none" | "basic" | "debug";
 
@@ -52,6 +54,7 @@ export type TMeteorConnectionExecutionTarget =
   | "v1_web"
   | "v1_web_localhost"
   | "v1_ext"
+  | "v2_bridge_mobile"
   | "v2_rid_mobile_deep_link"
   | "v2_rid_qr_code"
   | "test"
@@ -74,6 +77,14 @@ export interface IMeteorConnection_V1_Web_Localhost
   baseUrl: string;
 }
 export interface IMeteorConnection_V1_Ext extends IMeteorConnection_Base<"v1_ext"> {}
+export interface IMeteorConnection_V2_BridgeMobile
+  extends IMeteorConnection_Base<"v2_bridge_mobile"> {
+  schemaVersion: 1;
+  bridgeEnvironmentId: string;
+  meteorAppId: EMeteorAppId.meteor_wallet_mobile | EMeteorAppId.meteor_wallet_mobile_dev;
+  partnerClientId: string;
+  walletVerifyPublicKey: string;
+}
 export interface IMeteorConnection_V2_MobileDeepLink
   extends IMeteorConnection_Base<"v2_rid_mobile_deep_link"> {}
 export interface IMeteorConnection_V2_QrCode extends IMeteorConnection_Base<"v2_rid_qr_code"> {}
@@ -82,6 +93,7 @@ export type TMeteorExecutionTargetConfig =
   | IMeteorConnection_V1_Web
   | IMeteorConnection_V1_Web_Localhost
   | IMeteorConnection_V1_Ext
+  | IMeteorConnection_V2_BridgeMobile
   | IMeteorConnection_V2_MobileDeepLink
   | IMeteorConnection_V2_QrCode
   | IMeteorConnection_Test
@@ -110,5 +122,40 @@ export interface IMeteorConnectTypedStorage {
 
 export interface IMeteorConnect_Initialize_Input {
   storage: ILocalStorageInterface;
+  mobileBridge?: IMeteorConnectMobileBridgeConfig;
+  nearKeyStoreProvider?: IMeteorConnectNearKeyStoreProvider;
   // onCancelAction?: () => void;
+}
+
+export interface IMeteorConnectBridgeLeaseHandle {
+  readonly ownerToken: string;
+  assertOwned(): Promise<void>;
+  release(): Promise<void>;
+}
+
+export interface IMeteorConnectBridgeLeaseProvider {
+  acquire(name: string, options?: { timeoutMs?: number }): Promise<IMeteorConnectBridgeLeaseHandle>;
+}
+
+export interface IMeteorConnectNativeAppOpener {
+  /** Must synchronously attempt the opaque custom-scheme link from the originating click. */
+  open(fullLink: string): void;
+}
+
+export interface IMeteorConnectNearKeyStoreProvider {
+  getKeyStore(): KeyStore;
+}
+
+export interface IMeteorConnectMobileBridgeConfig {
+  enabled?: boolean;
+  backendUrl?: string;
+  meteorAppId?: EMeteorAppId.meteor_wallet_mobile | EMeteorAppId.meteor_wallet_mobile_dev;
+  leaseProvider?: IMeteorConnectBridgeLeaseProvider;
+  nativeAppOpener?: IMeteorConnectNativeAppOpener;
+  partnerMetadata?: {
+    name?: string;
+    description?: string;
+    iconUrl?: string;
+    originUrl?: string;
+  };
 }

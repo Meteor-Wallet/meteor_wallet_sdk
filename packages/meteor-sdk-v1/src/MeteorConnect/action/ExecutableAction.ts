@@ -14,6 +14,7 @@ import type {
   TMCActionRequestUnion,
   TMCActionRequestUnionExpandedInput,
 } from "./mc_action.types.ts";
+import type { MobileBridgeSession } from "../target_clients/mobile_bridge/MobileBridgeSession";
 
 export class ExecutableAction<R extends TMCActionRequestUnion<TMCActionRegistry>> {
   readonly id: R["id"];
@@ -29,6 +30,11 @@ export class ExecutableAction<R extends TMCActionRequestUnion<TMCActionRegistry>
 
   private actionResolvers: ((output: TMCActionRegistry[R["id"]]["output"]) => void)[] = [];
   private actionRejecters: ((reason?: any) => void)[] = [];
+  private preparedMobileSession?: MobileBridgeSession;
+  private prepareMobilePromise?: Promise<MobileBridgeSession>;
+  private cancelled = false;
+  private settled = false;
+  private unsubscribeMobile?: () => void;
 
   // private onCancelAction?: () => void;
 
@@ -56,13 +62,75 @@ export class ExecutableAction<R extends TMCActionRequestUnion<TMCActionRegistry>
     return this.connectionTargetConfig.allExecutionTargets;
   }
 
+  getExpandedRequest(): TMCActionRequestUnionExpandedInput<TMCActionRegistry> {
+    return { id: this.id, expandedInput: this.expandedInput } as any;
+  }
+
+  getPreparedMobileSession(): MobileBridgeSession | undefined {
+    return this.preparedMobileSession;
+  }
+
+  async prepareMobileBridge(): Promise<MobileBridgeSession | undefined> {
+    const hasMobile = this.connectionTargetConfig.allExecutionTargets.some(
+      (target) => target.executionTarget === "v2_bridge_mobile",
+    );
+    const contextual = this.connectionTargetConfig.contextualExecutionTarget;
+    if (!hasMobile || (contextual != null && contextual !== "v2_bridge_mobile")) return undefined;
+    if (this.prepareMobilePromise == null) {
+      this.prepareMobilePromise = this.meteorConnect.mobileBridgeClient
+        .prepareRequest(this.getExpandedRequest())
+        .then((session) => {
+          this.preparedMobileSession = session;
+          this.watchMobileSession(session);
+          return session;
+        });
+    }
+    return this.prepareMobilePromise;
+  }
+
+  private watchMobileSession(session: MobileBridgeSession): void {
+    this.unsubscribeMobile?.();
+    this.unsubscribeMobile = session.subscribe((snapshot) => {
+      if (
+        !this.cancelled &&
+        (snapshot.phase === "wallet_verification" || snapshot.phase === "wallet_action") &&
+        this.execute_promise == null
+      ) {
+        void this.execute("v2_bridge_mobile");
+      }
+    });
+  }
+
+  async refreshMobileBridge(): Promise<MobileBridgeSession> {
+    if (this.execute_promise != null) throw new Error("mobile_bridge_refresh_after_commit");
+    const session = await this.meteorConnect.mobileBridgeClient.refreshRequest(
+      this.getExpandedRequest(),
+    );
+    this.preparedMobileSession = session;
+    this.prepareMobilePromise = Promise.resolve(session);
+    this.watchMobileSession(session);
+    return session;
+  }
+
+  async resetMobileIdentityAndRePair(): Promise<MobileBridgeSession> {
+    if (this.execute_promise != null) throw new Error("mobile_bridge_reset_after_commit");
+    await this.meteorConnect.mobileBridgeClient.resetPartnerIdentity();
+    const session = await this.meteorConnect.mobileBridgeClient.prepareRequest(
+      this.getExpandedRequest(),
+    );
+    this.preparedMobileSession = session;
+    this.prepareMobilePromise = Promise.resolve(session);
+    this.watchMobileSession(session);
+    return session;
+  }
+
   getActionKnownContextualTarget(): TMeteorConnectionExecutionTarget | undefined {
     const knownContextualTarget = this.connectionTargetConfig.contextualExecutionTarget;
     const knownContextualTargetConfig = this.connectionTargetConfig.allExecutionTargets.find(
       (config) => config.executionTarget === knownContextualTarget,
     );
 
-    if(!knownContextualTargetConfig) {
+    if (!knownContextualTargetConfig) {
       this.logger.err(
         `Known contextual target ${knownContextualTarget} is not in the list of available execution targets`,
       );
@@ -161,11 +229,15 @@ Available targets: [${this.connectionTargetConfig.allExecutionTargets.map((c) =>
   }
 
   private resolveAction(value: any) {
+    if (this.settled) return;
+    this.settled = true;
     this.actionResolvers.forEach((resolver) => resolver(value));
     this.logger.log(`Action [${this.id}] resolved with value`, value);
   }
 
   private rejectAction(value: any) {
+    if (this.settled) return;
+    this.settled = true;
     this.actionRejecters.forEach((rejecter) => rejecter(value));
     this.logger.err(`Action [${this.id}] rejected with error`, value);
   }
@@ -173,8 +245,9 @@ Available targets: [${this.connectionTargetConfig.allExecutionTargets.map((c) =>
   async execute(
     executionTarget?: TMeteorConnectionExecutionTarget,
   ): Promise<TMCActionRegistry[R["id"]]["output"]> {
+    if (this.cancelled) throw new Error("Action was cancelled");
     if (this.execute_promise == null) {
-      this.execute_promise = this._execute(executionTarget)
+      this.execute_promise = this.commitAndExecute(executionTarget)
         .then((value) => {
           this.resolveAction(value);
           return value;
@@ -187,6 +260,37 @@ Available targets: [${this.connectionTargetConfig.allExecutionTargets.map((c) =>
     }
 
     return this.execute_promise;
+  }
+
+  private async commitAndExecute(
+    executionTarget?: TMeteorConnectionExecutionTarget,
+  ): Promise<TMCActionRegistry[R["id"]]["output"]> {
+    const contextual = this.getActionKnownContextualTarget();
+    const target = contextual ?? executionTarget;
+    if (target !== "v2_bridge_mobile" && this.prepareMobilePromise != null) {
+      const prepared = await this.prepareMobilePromise;
+      const cancellation = await prepared.cancel();
+      if (cancellation === "target_already_committed") {
+        return this._execute("v2_bridge_mobile");
+      }
+    }
+    if (target === "v2_bridge_mobile") await this.prepareMobileBridge();
+    const output = await this._execute(target);
+    if (
+      target === "v2_bridge_mobile" &&
+      this.id !== "near::sign_in" &&
+      this.id !== "near::sign_in_and_sign_message" &&
+      this.id !== "near::sign_out"
+    ) {
+      const account = this.expandedInput.account as IMeteorConnectAccount | undefined;
+      const active = this.meteorConnect.mobileBridgeClient.getCurrentSession();
+      const connection =
+        active == null ? undefined : this.meteorConnect.mobileBridgeClient.getActiveConnection();
+      if (account != null && connection != null) {
+        await this.meteorConnect.updateSignedInAccountConnection({ ...account, connection });
+      }
+    }
+    return output;
   }
 
   private async _promptForExecution(
@@ -229,9 +333,42 @@ Available targets: [${this.connectionTargetConfig.allExecutionTargets.map((c) =>
   }
 
   async cancelAction(): Promise<void> {
-    for (const rejecter of this.actionRejecters) {
-      rejecter(new Error("Action was cancelled"));
+    if (this.cancelled) return;
+    let session = this.preparedMobileSession;
+    if (session == null && this.prepareMobilePromise != null) {
+      try {
+        session = await this.prepareMobilePromise;
+      } catch {
+        // Bridge creation failed before a cancellable bridge was returned. The request
+        // remains terminal from the SDK caller's perspective and will expire server-side
+        // if the network outcome was ambiguous.
+      }
     }
+    if (session?.isCommitted()) {
+      return;
+    }
+    if (session != null) {
+      try {
+        const cancellation = await session.cancel();
+        if (cancellation === "target_already_committed") return;
+      } catch (error) {
+        // An unknown/failed cancellation never authorizes a legacy target. It is still terminal
+        // for this caller and the idempotent bridge remains recoverable/expiring server-side.
+        this.cancelled = true;
+        this.unsubscribeMobile?.();
+        this.rejectAction(error);
+        return;
+      }
+    }
+    this.cancelled = true;
+    this.unsubscribeMobile?.();
+    this.rejectAction(new Error("Action was cancelled"));
+  }
+
+  async disposePreparedMobileSession(): Promise<void> {
+    this.unsubscribeMobile?.();
+    this.unsubscribeMobile = undefined;
+    await this.preparedMobileSession?.dispose();
   }
 
   private async makeTargetedActionRequest<

@@ -24,8 +24,9 @@ function getPlatformInfo(target: TMeteorConnectionExecutionTarget) {
         description: "Use Meteor Wallet on the web",
       };
     case "v2_rid_mobile_deep_link":
+    case "v2_bridge_mobile":
       return {
-        displayName: "Mobile App",
+        displayName: "Meteor Mobile",
         icon: svg_icons_text.icon_android,
         description: "Open Meteor Wallet on your mobile device",
       };

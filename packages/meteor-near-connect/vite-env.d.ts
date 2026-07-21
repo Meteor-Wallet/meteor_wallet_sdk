@@ -37,6 +37,7 @@ interface Window {
       windowIdPromise: Promise<string | null>;
       closed: boolean;
     };
+    openNativeApp?: (url: string) => void;
 
     showContent: () => void;
     storage: {

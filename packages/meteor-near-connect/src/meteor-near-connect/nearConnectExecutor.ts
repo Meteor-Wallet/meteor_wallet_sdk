@@ -25,6 +25,7 @@ import {
   ExecutableAction,
   MeteorConnect,
   MeteorLogger,
+  StorageBakeryBridgeLeaseProvider,
 } from "@meteorwallet/sdk";
 import type { SignedMessage as NearSignedMessage } from "@near-js/signers";
 import { SCHEMA } from "@near-js/transactions";
@@ -40,11 +41,35 @@ import type {
   NearConnectSignedMessage,
 } from "./near-connect.types";
 import { head } from "./view";
+import { SelectorStorageKeyStore } from "../utils/keystore";
 
 const logoImage = new Image();
 logoImage.src = "https://meteorwallet.app/loader.gif";
 
 const meteorConnect = new MeteorConnect();
+const selectorKeyStore = new SelectorStorageKeyStore();
+const SELECTOR_STORAGE_PREFIX = "meteor-wallet:";
+const selectorStorage = {
+  getItem: async (key: string) => (await window.selector.storage.get(key)) ?? null,
+  setItem: async (key: string, value: string) => window.selector.storage.set(key, value),
+  removeItem: async (key: string) => window.selector.storage.remove(key),
+  getKeys: async (prefix?: string) => {
+    const keys = (await window.selector.storage.keys()).map((key) =>
+      key.startsWith(SELECTOR_STORAGE_PREFIX) ? key.slice(SELECTOR_STORAGE_PREFIX.length) : key,
+    );
+    return prefix == null ? keys : keys.filter((key) => key.startsWith(prefix));
+  },
+};
+const selectorBridgeLeaseProvider = new StorageBakeryBridgeLeaseProvider(selectorStorage);
+const selectorNativeAppOpener = {
+  open: (fullLink: string) => {
+    if (typeof window.selector.openNativeApp !== "function") {
+      throw new Error("mobile_bridge_native_opener_unavailable");
+    }
+    window.selector.openNativeApp(fullLink);
+  },
+};
+const selectorKeyStoreProvider = { getKeyStore: () => selectorKeyStore };
 
 if (process.env.NODE_ENV === "development") {
   console.warn("Enabling debug logging for MeteorConnect");
@@ -87,16 +112,14 @@ async function createMeteorComV2(): Promise<IMeteorComInjectedObjectV2> {
 
 async function getMeteorConnect(): Promise<MeteorConnect> {
   await meteorConnect.initialize({
-    storage: {
-      getItem: async (key: string) => {
-        return await window.selector.storage.get(key);
-      },
-      setItem: async (key: string, value: string) => {
-        return await window.selector.storage.set(key, value);
-      },
-      removeItem: async (key: string) => {
-        return await window.selector.storage.remove(key);
-      },
+    storage: selectorStorage,
+    nearKeyStoreProvider: selectorKeyStoreProvider,
+    mobileBridge: {
+      // Production remains gated off until the compatible backend/mobile 0.3 rollout is recorded.
+      enabled: process.env.NODE_ENV === "development",
+      partnerMetadata: { originUrl: window.selector.location },
+      leaseProvider: selectorBridgeLeaseProvider,
+      nativeAppOpener: selectorNativeAppOpener,
     },
   });
 

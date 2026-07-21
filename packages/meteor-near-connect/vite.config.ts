@@ -8,6 +8,9 @@ export default defineConfig(({ mode }) => ({
   plugins: [nodePolyfills()],
   root: "./",
   resolve: {
+    // Local package links must resolve their transitive polyfill imports from this SDK workspace,
+    // not from the linked package's physical repository path.
+    preserveSymlinks: true,
     alias: {
       // This maps the package name directly to the TS source files
       "@meteorwallet/sdk": path.resolve(__dirname, "../meteor-sdk-v1/src"),

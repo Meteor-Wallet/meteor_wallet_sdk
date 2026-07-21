@@ -32,7 +32,9 @@
         "allowsOpen": [
           "https://chromewebstore.google.com",
           "https://wallet.meteorwallet.app",
-          "https://meteorwallet.app"
+          "https://meteorwallet.app",
+          "meteorwallet://bridge_request",
+          "meteorwalletdev://bridge_request"
         ],
         "external": ["meteorCom", "meteorComV2"]
       }

@@ -45,6 +45,7 @@ export class ActionUi {
   // private _onCancelAction: (() => void) | undefined = undefined;
   private knownExecutionTargetBeforeUiCheck: TMeteorConnectionExecutionTarget | undefined =
     undefined;
+  private activeAction?: ExecutableAction<any>;
 
   /**
    * Opens the UI and returns a Promise that resolves with the data
@@ -53,6 +54,10 @@ export class ActionUi {
   public async prompt<A extends ExecutableAction<any>>(
     input: IRenderActionUi_Input<A>,
   ): Promise<A extends ExecutableAction<infer O> ? O : never> {
+    if (this.activeAction != null && this.activeAction !== input.action) {
+      throw new Error("meteor_connect_action_already_active");
+    }
+    this.activeAction = input.action;
     try {
       const responsePromise = input.action.waitForExecutionOutput();
 
@@ -69,7 +74,9 @@ export class ActionUi {
       }
       // knownExecutionTarget = undefined;
 
-      if (knownExecutionTarget != null) {
+      if (knownExecutionTarget === "v2_bridge_mobile") {
+        void input.action.prepareMobileBridge();
+      } else if (knownExecutionTarget != null) {
         this.logger.log(
           `Action has known contextual target ${knownExecutionTarget}, executing with that target`,
         );
@@ -85,6 +92,8 @@ export class ActionUi {
       return response;
     } finally {
       this.cleanup();
+      await input.action.disposePreparedMobileSession();
+      if (this.activeAction === input.action) this.activeAction = undefined;
     }
     /*
     return new Promise((resolve, reject) => {
@@ -154,8 +163,8 @@ export class ActionUi {
     this.actionUiComponent.action = input.action;
     this.actionUiComponent.pendingKnownExecutionTarget = pendingKnownExecutionTarget;
     this.actionUiComponent.closeAction = () => {
-      this.cleanup();
-      input.action.cancelAction();
+      if (!this.confirmCommittedMobileClose(input.action)) return;
+      void input.action.cancelAction().finally(() => this.cleanup());
     };
 
     if (this.container) {
@@ -186,9 +195,16 @@ export class ActionUi {
     const popupOverlay = new MeteorActionUiOverlay();
     this.logger.log("Created popup overlay for action UI", popupOverlay);
     popupOverlay.closeAction = () => {
-      this.cleanup();
-      action.cancelAction();
+      if (!this.confirmCommittedMobileClose(action)) return;
+      void action.cancelAction().finally(() => this.cleanup());
     };
     return popupOverlay;
+  }
+
+  private confirmCommittedMobileClose(action: ExecutableAction<any>): boolean {
+    if (action.getPreparedMobileSession()?.isCommitted() !== true) return true;
+    return window.confirm(
+      "This request has already been handed to Meteor Mobile and may continue on your phone. Close this window?",
+    );
   }
 }

@@ -1,6 +1,5 @@
 import { PublicKey } from "@near-js/crypto";
-import type { BrowserLocalStorageKeyStore } from "@near-js/keystores-browser";
-import * as nearAPI from "near-api-js";
+import type { KeyStore } from "@near-js/keystores";
 import { MeteorWallet } from "../../../MeteorWallet";
 import { convertOldFunctionCallKeyDefToNew } from "../../../near_utils/convertOldFunctionCallKeyDefToNew";
 import type { TMeteorSdkV1Transaction } from "../../../ported_common/dapp/dapp.types";
@@ -22,18 +21,8 @@ import { nearActionToSdkV1Action } from "./utils/nearActionToSdkV1Action";
 
 interface IMeteorWalletV1AndKeyStore {
   wallet: MeteorWallet;
-  keyStore: BrowserLocalStorageKeyStore;
+  keyStore: KeyStore;
 }
-
-const sdkForNetworkAndTarget: Record<
-  `${TMeteorConnectAccountNetwork}::${"v1_web" | "v1_ext"}`,
-  IMeteorWalletV1AndKeyStore | undefined
-> = {
-  "mainnet::v1_web": undefined,
-  "testnet::v1_web": undefined,
-  "mainnet::v1_ext": undefined,
-  "testnet::v1_ext": undefined,
-};
 
 function createKeyForNetworkAndTarget(
   network: TMeteorConnectAccountNetwork,
@@ -46,6 +35,7 @@ export class MeteorConnectV1Client extends MeteorConnectClientBase {
   clientName = "MeteorConnect V1 Client";
   executionTargets: TMeteorConnectionExecutionTarget[] = ["v1_web", "v1_web_localhost", "v1_ext"];
   protected logger = MeteorLogger.createLogger("MeteorConnect:V1Client");
+  private readonly sdkForNetworkAndTarget = new Map<string, IMeteorWalletV1AndKeyStore>();
 
   private getSdkForNetworkAndTarget(
     network: TMeteorConnectAccountNetwork,
@@ -53,15 +43,13 @@ export class MeteorConnectV1Client extends MeteorConnectClientBase {
   ): IMeteorWalletV1AndKeyStore {
     const key = createKeyForNetworkAndTarget(network, executionTargetConfig.executionTarget);
 
-    if (sdkForNetworkAndTarget[key] != null) {
+    const cached = this.sdkForNetworkAndTarget.get(key);
+    if (cached != null) {
       this.logger.log(`Using cached SDK for key ${key}`);
-      return sdkForNetworkAndTarget[key];
+      return cached;
     }
 
-    const keyStore = new nearAPI.keyStores.BrowserLocalStorageKeyStore(
-      window.localStorage,
-      "_meteor_wallet",
-    );
+    const keyStore = this.meteorConnect.nearKeyStoreProvider.getKeyStore();
 
     const wallet = new MeteorWallet({
       networkId: network,
@@ -70,12 +58,13 @@ export class MeteorConnectV1Client extends MeteorConnectClientBase {
       meteorConnect: this.meteorConnect,
     });
 
-    sdkForNetworkAndTarget[key] = {
+    const created = {
       wallet,
       keyStore,
     };
+    this.sdkForNetworkAndTarget.set(key, created);
 
-    return sdkForNetworkAndTarget[key];
+    return created;
   }
 
   async getEnvironmentSupportedPlatforms(): Promise<TMeteorConnectionExecutionTarget[]> {
