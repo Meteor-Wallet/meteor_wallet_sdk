@@ -1,7 +1,7 @@
 # Meteor Connect Mobile Bridge Integration Plan
 
-**Status:** Proposed — implementation has not started  
-**Last reviewed:** 2026-07-21 (revised after source-verification review against `mc_backend` and the SDK)  
+**Status:** Implementation-ready after the Phase 0 upstream release blockers in section 8 are complete<br>
+**Last reviewed:** 2026-07-21 (revised after source-verification and implementation-readiness review against `mc_backend`, the installed packages, and the SDK)<br>
 **Primary scope:** `packages/meteor-sdk-v1/src/MeteorConnect` and its Meteor Connect popup  
 **Reference implementation:** `../mc_backend/packages/demo-partner-web`, `../mc_backend/packages/demo-wallet-expo`, `../mc_backend/packages/meteor-connect-client`, and `../mc_backend/packages/meteor-connect-shared`
 
@@ -50,7 +50,7 @@ This is an SDK integration, not a replacement of the current v1 web or extension
 - Changing the existing Chrome Web Store URL or legacy web wallet URL.
 - Implementing push registration or notification handling in the SDK. Those are wallet responsibilities and already exist in the Expo reference flow.
 - Rebuilding the main mobile wallet action-resolution screens. The SDK will emit the shared `act_impl_near` contract the wallet already consumes.
-- Supporting multiple simultaneous MeteorConnect action popups. The current SDK UI is singleton-based, and `PartnerBridgeStore` is also a package-level singleton.
+- Supporting multiple simultaneous MeteorConnect action popups. The current SDK UI is singleton-based and the coordinated ownership policy deliberately permits one active mobile bridge per storage namespace/environment. Phase 0 still removes the package-global store so separate client instances cannot contaminate state.
 - Publishing the connect packages or SDK. Release commands remain a maintainer action.
 
 ## 4. Source review and current behavior
@@ -107,10 +107,11 @@ The source package is `../mc_backend/packages/meteor-connect-client`; its npm na
 - `disconnect_bridge()` tears down the local bridge session without deleting the persistent partner identity or paired-wallet records.
 - `PartnerBridgeStore` exposes the lifecycle `idle → waiting_for_wallet → wallet_verification → wallet_action → completed|failed`.
 
-Two constraints the SDK design must account for:
+Constraints the SDK design must account for:
 
 - **`PartnerBridgeStore` carries no connection state.** Link drops, redials, realm reconnects, and attach failures surface only through `protected` hooks on `BridgeClientBase` (`onBridgeLinkEvent`, `onBridgeRealmStatus`, `onBridgeRealmAttachError`, `onBridgeRealmDiagnostic`), which `PartnerBridgeClient` leaves as console no-ops. The SDK must subclass `PartnerBridgeClient` to observe them (see 7.4), or an upstream addition must mirror status into the store.
-- **One attach failure is unrecoverable without special handling.** An `identity_pin_mismatch` (the backend has a different verify key pinned for this client identity) permanently parks the redial ladder — retrying can never succeed. Left unhandled it presents as an eternal spinner. Recovery is `reset_client()` (a fresh identity), which loses pairings and requires QR + PIN again.
+- **`PartnerBridgeStore` is a module-global singleton.** Constructing one client per `MeteorConnect` instance does not isolate state: two clients in the same JavaScript realm still overwrite the same store. The upstream client should accept/own an instance-scoped store; until that exists, the SDK must use one process-wide coordinator and may not construct competing partner clients (see 7.3 and 8.5).
+- **One attach failure is unrecoverable without special handling.** An `identity_pin_mismatch` (the backend has a different verify key pinned for this client identity) permanently parks the redial ladder — retrying can never succeed. Left unhandled it presents as an eternal spinner. A plain `reset_client()` is not sufficient: paired wallets are stored in a separately prefixed adapter and can survive the base clear. Recovery requires the dedicated, comprehensive identity reset specified in 8.4, explicit user confirmation, and QR + PIN pairing again.
 
 On completion, the client has already:
 
@@ -118,7 +119,7 @@ On completion, the client has already:
 - verified the wallet identity signature when one is present; and
 - placed the Nice Action result JSON in `bridge.actionResult.result`.
 
-The SDK must still validate that result payload against the expected NEAR action and convert its output to the existing SDK type. Note that there is **no** `hydrateResultPayload` helper in the current packages — the real validation surface is the `isActionPayload_Result_JsonObject` guard plus `act_impl_near.action.<id>.validateOutput(...)` (see section 10).
+The SDK must still validate that the result belongs to the expected NEAR action, hydrate it with the installed `ActionDomain.hydrateResultPayload(...)` API, and convert its typed output to the existing SDK type (see section 10). Hydration performs schema deserialization/validation and reconstructs typed Nice Errors; the SDK must not duplicate that logic manually.
 
 ### 4.3 Demo partner flow
 
@@ -195,12 +196,19 @@ No MeteorConnect source currently imports or uses either package.
 
 A first-time QR scan does not proceed directly to the wallet action. It stops at `wallet_verification`, and the partner must submit the wallet-displayed PIN. A QR-only UI without PIN entry would work only for already-trusted wallets and would leave new users stuck.
 
-Backend facts the PIN UI must model (`PairingBridgeDO.verify_pin`):
+The intended PIN contract is **exactly three submitted attempts**. The current backend does not yet implement that contract correctly: it increments before checking and fails only when the count is greater than three, so a fourth call fails even if correct; ordinary wrong attempts are also thrown without persisting the incremented counter. Phase 0 must correct this before the SDK relies on the attempt limit.
+
+Required backend semantics after the Phase 0 fix:
 
 - the PIN is **4 digits** (`generateClientSecurityPinCode(4)`);
-- the bridge allows **3 verification attempts**; the attempt counter is incremented before checking, so the fourth `verify_pin` call fails the bridge terminally even if the PIN it carries is correct;
-- exceeding the limit transitions the bridge to `failed` (core status failed, "PIN attempts exceeded") — recovery is a brand-new bridge/QR, restarting pairing;
-- both a wrong PIN and an exceeded limit throw the **same `pin_incorrect` error ID**, so the SDK cannot distinguish them from the error alone — it must count attempts locally and/or watch the store flip to the `failed` step.
+- every submitted PIN is counted and persisted atomically before returning;
+- a correct PIN on attempt 1, 2, or 3 succeeds;
+- an incorrect PIN on attempt 1 or 2 remains retryable and returns authoritative `attemptsUsed`/`attemptsRemaining` data, also mirrored in realm/store state;
+- an incorrect PIN on attempt 3 atomically transitions pairing and core status to terminal `failed` with the reason `PIN attempts exceeded`;
+- attempts cannot be reset by Durable Object eviction, hibernation, reconnect, duplicate delivery, or page reload;
+- recovery from the terminal state is a brand-new bridge/QR, restarting pairing.
+
+The error ID may remain `pin_incorrect`, but the authoritative attempt count and terminal bridge state must distinguish retryable and terminal outcomes. The SDK may keep a local optimistic counter for immediate feedback, but it must reconcile it to server state and must never use the local count as the security boundary.
 
 The popup therefore needs a first-pairing state with:
 
@@ -259,7 +267,7 @@ Selection policy — push is driven **only** by the account's stored connection,
 2. Sign-in — and any action without a mobile-connected contextual account — **never pushes**. It creates a QR/deep-link bridge with `create_bridge` only. No "most recently paired wallet" heuristic; `get_paired_wallets` is not used for target selection.
 3. If push to the account's wallet is not delivered, keep that bridge and show its QR/deep link; do not create another bridge automatically.
 
-The preferred library enhancement is to expose the active paired-wallet record after claim, so the SDK can persist the exact verify key on the sign-in result without inference (section 8.2).
+Exposing the active paired-wallet record after claim is a release requirement, not an optional optimization. Without it the SDK cannot persist the exact verify key while also honoring the no-inference policy (section 8.2).
 
 ### 5.6 Push is contextual-only because wallets auto-claim pushes
 
@@ -271,6 +279,35 @@ Restricting push to mobile-connected contextual accounts removes the trap struct
 - for sign-in, a claim can only result from a QR scan or a deep-link tap — both of which **are** user intent, so the 6.3 commitment rules stay sound.
 
 Independently, it remains good product hygiene for the production mobile wallet to require a user tap before acting on a pushed request (the action-approval screen already provides this), but the SDK design no longer depends on wallet-side behavior for correctness.
+
+### 5.7 Mobile account routing records are environment- and identity-bound
+
+A wallet verify key is meaningful only with the backend, Meteor app, and partner identity under which it was paired. A persisted development account must never be pushed through the production backend, and an account created under an old/reset partner identity must not be treated as trusted under the replacement identity.
+
+Every new `v2_bridge_mobile` connection record must therefore contain:
+
+- a connection schema version;
+- a stable environment ID derived from the normalized backend origin;
+- the configured Meteor app ID;
+- the current partner client/identity ID; and
+- the exact active wallet verify-key handle.
+
+Before contextual routing, all four routing values must match the active bridge client. On a legacy/incomplete/mismatched record, do not push. Prepare a QR/deep-link bridge and require pairing again. After a successful authenticated non-sign-out action, update that targeted account's connection record from the current environment/partner identity and exact active wallet; successful sign-out removes the account as usual. Never silently reinterpret a development handle as production or infer a replacement wallet from `get_paired_wallets()`.
+
+### 5.8 Same-page and cross-tab concurrency require an ownership policy
+
+The durable partner identity is intentionally shared by same-origin tabs, but its initialization and active bridge session cannot be concurrently mutated without coordination. A test alone is not a concurrency design.
+
+The implementation policy is:
+
+1. One process-wide SDK coordinator owns partner-client construction for a storage namespace/environment.
+2. Before `initialize_client()` or bridge creation, acquire a cross-context lease named from the normalized storage namespace/environment through an injected `IMeteorConnectBridgeLeaseProvider`.
+3. For direct same-origin SDK consumers, the default provider may use the Web Locks API with `ifAvailable`. The NEAR Connect executor runs in a sandboxed `srcdoc` iframe with an opaque origin (`sandbox="allow-scripts"`), so iframe-local Web Locks, `BroadcastChannel`, and `storage` events cannot coordinate sibling dApp tabs reliably. Its provider must coordinate through `window.selector.storage`, using an adapter-backed mutual-exclusion protocol (for example a Lamport bakery/ticket lock): unique contender keys, choosing/ticket state, deterministic ticket+owner ordering, polling, heartbeat/expiry for crashed contenders, and ownership/fencing revalidation before every identity or bridge mutation. A simple read-then-write lease is insufficient because two tabs can both observe an empty key.
+4. Hold the lease through the active bridge session, then release it on every terminal path. A TTL permits recovery after a crashed tab.
+5. A non-owner tab must not initialize/mutate the partner identity or create a bridge. Show a deterministic “Meteor Mobile request is active in another tab” state with retry/focus guidance; legacy behavior may remain available only if no mobile claim has committed. The implementation must not depend on receiving a cross-tab event; polling/lease expiry is the correctness path.
+6. Same-page `MeteorConnect` instances use the same coordinator/mutex and cannot bypass the lease.
+
+Phase 0 should additionally make `PartnerBridgeStore` instance-scoped so independent clients no longer contaminate each other in one JavaScript realm (8.5). The coordinator and cross-tab lease are still required because instance-scoped stores do not make shared durable identity writes atomic.
 
 ## 6. Recommended user experience
 
@@ -336,12 +373,12 @@ An action targeting an account whose stored connection is `v2_bridge_mobile` sho
 | wallet action | show “Complete this request in Meteor Mobile” |
 | reconnecting | keep current content and show a non-destructive connection warning |
 | identity/attach failure (`identity_pin_mismatch`) | distinct terminal error explaining recovery (reset identity, re-pair); never an endless spinner |
-| nearing expiry | countdown; proactively recreate the bridge (or one-tap refresh) before the 5-minute production TTL lapses |
+| nearing expiry | countdown from server `expiresAt`; offer one-tap refresh without rotating the visible QR mid-scan |
 | completed | resolve the SDK action and let the existing popup cleanup run |
 | failed/expired before claim | keep legacy options; offer “Create a new mobile QR” |
 | failed after mobile commitment | show the mobile error and reject the action |
 
-Expiry is checked lazily by the backend (only when something touches the bridge), so the popup must run its own TTL countdown rather than waiting for a dead QR scan. Note the dev backend TTL is 1 day, so expiry behavior must be forced in testing rather than waited for.
+Expiry is checked lazily by the backend (only when something touches the bridge), so the popup must render its own countdown from the absolute server-provided `expiresAt` rather than waiting for a dead QR scan. Development expiry behavior should be forced with configurable test time/state rather than waiting for the configured TTL.
 
 ### 6.3 Target commitment
 
@@ -383,12 +420,15 @@ Add a connection config containing enough durable routing information for later 
 ```ts
 interface IMeteorConnection_V2_BridgeMobile
   extends IMeteorConnection_Base<"v2_bridge_mobile"> {
+  schemaVersion: 1;
+  bridgeEnvironmentId: string;
   meteorAppId: EMeteorAppId.meteor_wallet_mobile | EMeteorAppId.meteor_wallet_mobile_dev;
-  walletVerifyPublicKey?: string;
+  partnerClientId: string;
+  walletVerifyPublicKey: string;
 }
 ```
 
-The `walletVerifyPublicKey` is an opaque routing handle, not an account key. It must never be presented as the NEAR account public key.
+`bridgeEnvironmentId` is a stable normalized/hash identifier for the configured backend origin, not a user-facing URL. `partnerClientId` binds the record to the crypto identity that established trust. `walletVerifyPublicKey` is an opaque routing handle, not an account key, and must never be presented as the NEAR account public key. All fields are mandatory on newly written records; older incomplete records are migration inputs that may use QR/re-pair but may not push.
 
 Remove `MeteorConnectV2MessengerClient` from the active client map after all references and tests move to the bridge client. The old stub has no working behavior to preserve.
 
@@ -401,6 +441,7 @@ interface IMeteorConnectMobileBridgeConfig {
   enabled?: boolean; // default true in a browser
   backendUrl?: string; // default https://mc.meteorwallet.app
   meteorAppId?: EMeteorAppId.meteor_wallet_mobile | EMeteorAppId.meteor_wallet_mobile_dev;
+  leaseProvider?: IMeteorConnectBridgeLeaseProvider; // advanced host integration; SDK default for direct browsers
   partnerMetadata?: {
     name?: string;
     description?: string;
@@ -409,6 +450,10 @@ interface IMeteorConnectMobileBridgeConfig {
   };
 }
 ```
+
+The lease provider returns either an exclusive handle or a typed contended result. A handle exposes a random owner/fencing token, `assertOwned()` (used before identity/bridge mutations), and idempotent `release()`. The direct-browser default uses Web Locks; the NEAR Connect executor injects the selector-storage ticket provider from 5.8. Lease implementation details are not persisted in account metadata and are not part of the wallet protocol.
+
+The shared NEAR key-store provider from 9.3 is injected through the existing `MeteorConnect`/client construction boundary rather than duplicated inside the mobile config. Direct consumers receive the v1-compatible browser default; NEAR Connect passes its selector-backed implementation.
 
 Recommended defaults:
 
@@ -420,7 +465,7 @@ Recommended defaults:
 
 Do not rely on `frontend_env.METEOR_BRIDGE_BACKEND_URL` inside the distributable SDK. That helper expects build-time/global injection and can be `undefined` for third-party consumers.
 
-Update `packages/meteor-near-connect/src/meteor-near-connect/nearConnectExecutor.ts` to pass the real dApp location from `window.selector.location` rather than identifying the sandboxed executor iframe as the partner origin. If NEAR Connect later exposes dApp manifest name/icon metadata, pass it through as well.
+Update `packages/meteor-near-connect/src/meteor-near-connect/nearConnectExecutor.ts` to pass the real dApp location from `window.selector.location` rather than identifying the sandboxed executor iframe as the partner origin. It must also inject the selector-backed key-store provider and selector-storage ticket lease provider required by 5.8/9.3; the latter may use `window.selector.storage.keys()` plus the known wallet storage namespace to enumerate contender records. If NEAR Connect later exposes dApp manifest name/icon metadata, pass it through as well.
 
 ### 7.3 Storage adaptation
 
@@ -440,11 +485,15 @@ met_bridge_partner::<backend-environment>::
 
 The backend portion must be normalized or hashed so dev and production never share `clientPerId`/crypto identity state by accident.
 
-Initialize the partner client exactly once per `MeteorConnect` instance and coalesce concurrent initialization calls. `getMeteorConnect()` in the NEAR Connect executor currently calls `initialize` repeatedly, so the SDK's initialization must become idempotent rather than recreating the bridge crypto runtime for every wallet API call.
+Route initialization through the process-wide coordinator from 5.8 and coalesce concurrent calls with the same configuration fingerprint. The fingerprint includes the original storage namespace, normalized backend/environment ID, app ID, and security-relevant partner identity configuration. `getMeteorConnect()` in the NEAR Connect executor currently calls `initialize` repeatedly, so an identical call is an idempotent no-op.
+
+If an already initialized `MeteorConnect` or coordinator is called with a different fingerprint, reject with a typed `mobile_bridge_config_mismatch` error; never silently switch backend, storage, app ID, or identity underneath persisted accounts. Reconfiguration requires an explicit `disposeMobileBridge()`/equivalent after there is no active session, followed by a fresh initialize. Partner display metadata may be refreshed only through an explicitly supported metadata update that does not rotate crypto identity.
+
+The SDK must document the storage scoping contract. In NEAR Connect, wallet storage is scoped by wallet manifest ID within the dApp's origin. Direct SDK callers must supply durable storage scoped to their own dApp/origin; sharing one backing namespace between unrelated partner identities is unsupported.
 
 ### 7.4 Mobile bridge session object
 
-`MobileBridgeSession` should isolate the global `PartnerBridgeStore` behind an SDK-local, action-specific state machine.
+`MobileBridgeSession` should isolate the client store behind an SDK-local, action-specific state machine. Once Phase 0 makes the store instance-scoped, subscribe only to the store owned by the coordinator's client; do not import the package-global store directly.
 
 Responsibilities:
 
@@ -453,10 +502,10 @@ Responsibilities:
 - expose a read-only UI snapshot and change listener;
 - create the bridge through QR or push;
 - expose the finalized QR/deep link without logging its secret;
-- submit the PIN, tracking the local attempt count (5.1) and surfacing the terminal attempts-exceeded state distinctly from a retryable wrong PIN;
+- submit the PIN, rendering the authoritative server attempt count from 5.1 and using any local optimistic count only until server state arrives;
 - mark the session committed when the wallet claims;
 - validate the completed Nice Action result and convert it to the existing SDK output type (section 10);
-- run a local expiry countdown from bridge creation (prod TTL 5 minutes, dev 1 day) and proactively recreate the bridge before it lapses while still unclaimed;
+- run an expiry countdown from the server-provided absolute `expiresAt` value and offer the safe refresh flow defined below;
 - support retry after pre-claim failure — always calling `disconnect_bridge()` **before** the replacement `create_bridge()` (the library documents that a leftover bridge connection can route the next bridge's traffic over the previous bridge's socket);
 - cancel/abandon the backend bridge;
 - disconnect the local bridge on teardown while retaining partner identity and pairings.
@@ -464,17 +513,18 @@ Responsibilities:
 Connection-state observation requires subclassing: because `PartnerBridgeStore` has no connection status (4.2), the SDK's client must extend `PartnerBridgeClient` and override the protected hooks —
 
 - `onBridgeRealmStatus` / `onBridgeLinkEvent` → drive the "reconnecting" UI state;
-- `onBridgeRealmAttachError` → surface attach failures; treat `identity_pin_mismatch` as terminal for the identity (parked redial ladder), presenting the recovery path (`reset_client()` → new identity → re-pair) instead of a spinner.
+- `onBridgeRealmAttachError` → surface attach failures; treat `identity_pin_mismatch` as terminal for the identity (parked redial ladder), presenting the user-confirmed comprehensive identity reset from 8.4 followed by re-pairing, instead of a spinner.
 
 For the same-device mobile flow ("Open in App"), the browser tab is backgrounded while the user is in the wallet, and mobile browsers freeze/kill WebSockets in background tabs. On `visibilitychange` back to visible, the session must verify the bridge link and re-dial if needed (`connectBridgeLink()` is idempotent) so the result is not silently missed.
 
-Only one active session is allowed. Starting a new action must finish or cancel the old one before rebinding the singleton partner store.
+Only one active session is allowed per coordinated storage namespace/environment across all same-page instances and tabs. Starting another action must finish/cancel the old one and acquire the ownership lease before creating a bridge. The coordinator, rather than an individual `MeteorConnect` instance, enforces this invariant.
 
 Suggested local phases:
 
 ```ts
 type TMobileBridgePhase =
   | "initializing"
+  | "busy_other_tab"
   | "creating_bridge"
   | "waiting_for_wallet"
   | "wallet_verification"
@@ -486,6 +536,16 @@ type TMobileBridgePhase =
 
 Keep push delivery as orthogonal state (`not_attempted | delivered | not_delivered`) because it does not replace the bridge lifecycle.
 
+Expiry is server-authoritative. Phase 0 adds `expiresAt` to the create response and `IPartnerBridgeInfo` (8.3). Store that absolute timestamp in the session, compute remaining time as `expiresAt - Date.now()`, and recompute on every render/visibility regain rather than decrementing a timer that can pause in a background tab. Never derive production behavior from hard-coded five-minute/one-day constants.
+
+Do not silently rotate a visible QR while a camera may be scanning it. Only while the session is uncommitted in `waiting_for_wallet`, show a near-expiry countdown and explicit **Refresh mobile code** control. Once claim reaches `wallet_verification` or `wallet_action`, hide refresh and keep the claimed session. Safe pre-claim refresh is a state transition:
+
+1. Request authenticated cancellation of the old bridge.
+2. If cancellation succeeds, disconnect the old local link, create the replacement bridge, and then replace the displayed deep link/QR.
+3. If cancellation reports an incompatible status because claim won, keep the old session, mark mobile committed, and do not create/display a replacement.
+4. If cancellation is indeterminate, keep the old QR disabled with a retryable error; do not create a second live bridge for the same action.
+5. After confirmed expiry, the same sequence may automatically prepare a replacement only when the target is still uncommitted and backend state proves the old bridge terminal and unexecutable.
+
 ### 7.5 Bridge preparation algorithm
 
 For a mobile-eligible request:
@@ -493,13 +553,13 @@ For a mobile-eligible request:
 1. Ensure `PartnerBridgeClient` is initialized.
 2. Convert the expanded SDK action to one typed `act_impl_near` request JSON object.
 3. Determine the configured app ID (`meteor_wallet_mobile` or dev).
-4. Determine the push target: the exact `walletVerifyPublicKey` from the targeted account's `v2_bridge_mobile` connection config, or none. Sign-in and non-mobile-contextual actions never have a push target (5.6).
+4. Validate the targeted account's connection schema version, environment ID, app ID, and partner client ID against the active coordinator. Only on a complete match is its exact `walletVerifyPublicKey` a push target. Sign-in, incomplete/mismatched records, and non-mobile-contextual actions have no push target (5.6–5.7).
 5. If there is a target, call `request_action_via_push` with that key, the action request, and `[configuredAppId]`.
 6. If there is no target, call `create_bridge` with the action request and `[configuredAppId]`.
 7. Read `bridge.info.walletLinks` from `PartnerBridgeStore` and select the entry matching the configured app ID.
 8. Append `#partnerSecret=...` using `encodeURIComponent`.
 9. Publish the same full deep link to both presentations — the QR renderer and the same-device **Open in App** button; `isMobile()` decides which is primary (6.1).
-10. Start the local expiry countdown (7.4).
+10. Start the server-authoritative expiry countdown from `bridge.info.expiresAt` (7.4).
 11. Continue watching the store until completion, cancellation, expiry/failure, or UI teardown.
 
 Never call `request_action_via_push` more than once for a single SDK action because each call creates a different bridge.
@@ -533,6 +593,15 @@ Required behavior:
 - ignore late events from a superseded session.
 
 Do not implement this as `Promise.race` between fully active mobile and legacy executions. A race resolves the caller but does not prevent the losing wallet from broadcasting a transaction.
+
+Popup close is phase-dependent:
+
+- before claim (`waiting_for_wallet`), close requests backend cancellation and does not resolve cleanup until cancellation has a terminal answer;
+- during `wallet_verification`, close may cancel because the wallet has not entered action execution; both partner and wallet must receive the terminal cancellation state;
+- during `wallet_action`, mobile is already committed and cancellation cannot guarantee that an on-chain broadcast has not begun. Closing the browser UI must not start a legacy target or report the request as cancelled. Show a confirmation that the request continues on the phone, then detach only the browser listener; alternatively keep the popup non-dismissible until the mobile result arrives;
+- after completion/failure/cancellation, close performs local teardown only.
+
+`ExecutableAction.cancelAction()` must distinguish `cancelled_before_commit` from `target_already_committed`. The latter leaves the execution promise attached to the mobile session unless the caller explicitly abandons observation; it never authorizes a second target.
 
 ### 7.8 UI/controller integration
 
@@ -578,14 +647,15 @@ PIN requirements:
 - 4-digit numeric input without coercing away leading zeroes;
 - explicit submit button rather than verifying on each keystroke;
 - disabled state while verification is running;
-- wrong-PIN errors shown with remaining-attempt count, without discarding the QR/session;
-- a terminal attempts-exceeded state (the backend fails the bridge after 3 attempts — see 5.1) that offers a new QR instead of further submits;
+- wrong-PIN errors shown with the server-authoritative remaining-attempt count, without discarding the QR/session;
+- a terminal attempts-exceeded state after the third incorrect submission (see 5.1) that offers a new QR instead of further submits;
 - no PIN logging.
 
 Expiry/refresh requirements:
 
-- visible countdown or timely refresh as the bridge nears its production 5-minute TTL;
-- proactive bridge re-creation (or a one-tap refresh) for an unclaimed bridge, following the 7.4 retry ordering (`disconnect_bridge()` first).
+- visible countdown computed from server `expiresAt`;
+- explicit one-tap refresh before expiry so a visible QR never rotates mid-scan;
+- cancel-old-first refresh ordering from 7.4, creating a replacement only after terminal cancellation/expiry proves the old bridge cannot execute.
 
 ### 7.9 Partner metadata in the popup/backend
 
@@ -616,34 +686,90 @@ Add a partner-authenticated action such as `cancel_bridge`/`abandon_bridge` to:
 Semantics:
 
 - accepted only from the bridge's authenticated partner;
-- accepted while the bridge is still cancellable;
 - atomically transitions the bridge out of a claimable/executable state;
 - produces a terminal realm update for partner and wallet;
 - idempotent if already cancelled;
-- rejects with an incompatible-status result when a wallet already committed, allowing the SDK to declare mobile the winner;
 - does not delete the durable partner↔wallet pairing or push token.
 
-Add backend race tests for cancel-versus-claim and cancel-versus-complete.
+Required status contract:
 
-### 8.2 Expose the active paired-wallet handle — strongly recommended
+| Current bridge state | Cancellation result | SDK consequence |
+| --- | --- | --- |
+| `waiting_for_wallet` | atomically transition to `cancelled` | legacy target/close may continue after observing success |
+| `wallet_verification` | atomically transition to `cancelled`; wallet must leave PIN flow | popup close may finish; a legacy target is not offered after claim |
+| `wallet_action` | `incompatible_status` / mobile committed | keep/reattach to mobile execution; never start legacy |
+| `completed` | return completed terminal result idempotently | consume existing result |
+| `failed` | return failed terminal result idempotently | surface existing failure |
+| `cancelled` | return cancelled terminal result idempotently | cleanup may finish |
+
+Cancel-versus-claim and cancel-versus-complete are resolved by one Durable Object transaction/state check. A partner must never infer the winner from WebSocket event ordering. Cancellation success is the authorization for legacy execution; a timeout, transport error, or unknown response is not success and must not start another target.
+
+Add backend race tests for cancel-versus-claim, cancel-versus-PIN verification, cancel-versus-wallet-action entry, and cancel-versus-complete.
+
+### 8.2 Expose the active paired-wallet handle — release blocker
 
 After `initializePartnerVerified`, expose the exact current `TPartnerPairedWallet` through a safe getter or the partner store/session state. This lets the SDK store the correct `walletVerifyPublicKey` on the returned mobile account connection.
 
-Do not expose `walletPerId`; the verify key remains the intended partner-facing routing handle.
+The exposed record must be tied to the current authenticated bridge/claim and include the verify key, Meteor app ID, and any exchange-key data already present in `TPartnerPairedWallet`. Do not expose `walletPerId`; the verify key remains the intended partner-facing routing handle. The SDK must not choose from `get_paired_wallets()` by recency or array order.
 
-### 8.3 Optional upstream improvements — nice to have, not blocking
+### 8.3 Expose absolute bridge expiry — release blocker
 
-- **Result-hydration helper.** There is no `hydrateResultPayload` in the current packages; the SDK will validate results with `isActionPayload_Result_JsonObject` + `validateOutput` (section 10). A typed domain-level helper that checks the action ID, branches on `ok`, and returns a validated output or typed Nice Error would remove boilerplate from every partner integration.
-- **Connection status in `PartnerBridgeStore`.** Mirroring link/realm status (connecting, reconnecting, attach-failed with reason) into the store would let partners render reconnect UX without subclassing `PartnerBridgeClient` for the protected hooks (4.2, 7.4).
-- **Wallet-side pushed-claim confirmation.** The production wallet should require a user tap before acting on a pushed request. With push restricted to mobile-connected accounts (5.6) this is no longer load-bearing for the SDK, but it remains the right wallet behavior.
+The backend state already has an absolute `expiresAt`, but the create response and `IPartnerBridgeInfo` omit it. Add `expiresAt` to:
 
-### 8.4 Version and deployment order
+- `vPairing_Create_Output` and generated/inferred types;
+- `PartnerBridgeClient.create_bridge` / `request_action_via_push` results;
+- `IPartnerBridgeInfo` and every relevant store variant; and
+- mocked/demo clients and tests.
 
-1. Implement and test shared/backend/client additions in `mc_backend`.
+The server timestamp is authoritative. Test production/dev TTL configuration without baking those durations into SDK control flow. A recreated bridge must receive a new `expiresAt`; an old session token must not be allowed to update the new countdown.
+
+### 8.4 Comprehensive partner-identity reset — release blocker
+
+Add a partner-specific reset API such as `reset_partner_identity()` that clears every identity-bound namespace, not only the base adapter index:
+
+- base client identity and crypto material;
+- bridge/create-channel identity state;
+- separately prefixed `paired_wallets::` records;
+- current bridge/session bindings and redial state; and
+- instance store state.
+
+The operation must require no active executable bridge (cancel first where possible), be serialized against initialization, and leave the client ready to provision one clean replacement identity. Test that no stale paired wallet can be returned or pushed after reset.
+
+The SDK exposes this only from the explicit `identity_pin_mismatch` recovery UI with confirmation that mobile pairings for this dApp/environment will be reset. It must invalidate the old `partnerClientId` binding in stored mobile connection records. Those accounts may remain visible, but they are QR/re-pair-only until a successful action refreshes their connection record under the new identity.
+
+### 8.5 Instance-scoped partner store — release blocker
+
+Refactor `PartnerBridgeClient` so each client owns or receives a `Store<IPartnerBridgeStore>` instance. Export a factory/default state if useful, but do not force every client to publish to the module-global `PartnerBridgeStore`. Preserve a deprecated global export only if existing demos need a migration window.
+
+All internal client updates must target `this.store`; callers must be able to subscribe to the exact store associated with the client. Add a test with two clients in one JavaScript realm proving that bridge creation, realm patches, completion, reset, and disconnect on one client do not alter the other store.
+
+### 8.6 Correct and persist PIN attempts — release blocker
+
+Update `PairingBridgeDO.verify_pin` and shared/client error/state types to implement 5.1:
+
+- exactly three submitted attempts;
+- correct PIN on the third attempt succeeds;
+- third incorrect PIN fails terminally;
+- every failed attempt is persisted before returning;
+- authoritative `attemptsUsed`/`attemptsRemaining` is observable by the partner; and
+- replay/reconnect/DO eviction cannot restore attempts.
+
+Include unit and Durable Object lifecycle tests, including eviction/rehydration between each wrong submission and concurrent duplicate submissions.
+
+### 8.7 Optional upstream improvements — nice to have, not blocking
+
+- **Connection status in the instance store.** Mirroring link/realm status (connecting, reconnecting, attach-failed with reason) into the client-owned store would let partners render reconnect UX without subclassing `PartnerBridgeClient` for protected hooks (4.2, 7.4).
+- **Wallet-side pushed-claim confirmation.** The production wallet should require a user tap before acting on a pushed request. With push restricted to mobile-connected accounts (5.6) this is no longer load-bearing for SDK correctness, but remains the right wallet behavior.
+
+No new result-hydration helper is required: the installed Nice Action domain already exposes `hydrateResultPayload(...)` and the SDK will use it directly (section 10).
+
+### 8.8 Version and deployment order
+
+1. Implement and test cancellation, active-wallet exposure, `expiresAt`, comprehensive reset, instance-scoped store, and PIN-attempt fixes in `mc_backend`.
 2. Deploy the compatible backend.
 3. Publish new `@meteorwallet/connect-shared` and `@meteorwallet/connect` versions as a maintainer-run release.
-4. Update the SDK dependency range to the first version containing cancellation and active-wallet exposure.
-5. Implement and validate the SDK against those exact APIs.
+4. Update the SDK dependency range to the first versions containing all Phase 0 blockers.
+5. Implement and validate the SDK against those exact APIs; do not carry temporary private patches into the published SDK.
 
 If cancellation is intentionally deferred, eager push/QR and simultaneously active legacy buttons must not ship for transaction-capable actions. The only safe fallback would be to create the bridge after the user explicitly selects Meteor Mobile, which does not satisfy the requested immediate behavior.
 
@@ -663,7 +789,7 @@ Create one exhaustive converter from `TMCActionRequestUnionExpandedInput<TMCActi
 
 Use `act_impl_near.action.<id>.request(...).toJsonObject()` for final serialization. Do not hand-construct the Nice Action envelope.
 
-Use the plural `sign_and_send_transactions` for a single transaction as well: it accepts a one-element array, its output is already the `FinalExecutionOutcome[]` the SDK returns, and it removes a conversion branch plus the singular/plural test seam. Before implementation, confirm the mobile wallet renders a one-element `sign_and_send_transactions` identically to `sign_and_send_transaction`; only reintroduce the split if the wallet UX differs.
+Use the plural `sign_and_send_transactions` for a single transaction as well: it accepts a one-element array, its output is already the `FinalExecutionOutcome[]` the SDK returns, and it removes a conversion branch plus the singular/plural test seam. This is a Phase 2 entry gate: record confirmation from the production mobile-wallet implementation that a one-element plural request has the same approval UX and result semantics as the singular action. The demo already handles both, but it is not the production-app authority. If production differs, restore the one-versus-many split before converter implementation.
 
 ### 9.1 Nonce conversion
 
@@ -702,15 +828,23 @@ For mobile:
 
 This must be covered by a test proving that no private key enters the bridge request or QR/deep link.
 
+Key-store ownership must be explicit. The current v1 client privately constructs `BrowserLocalStorageKeyStore(window.localStorage, "_meteor_wallet")`; the mobile client cannot reach it safely. Extract a shared `MeteorConnectNearKeyStoreProvider`/factory owned by `MeteorConnect` and inject it into both v1 and mobile clients. The default direct-browser implementation must preserve the exact existing `_meteor_wallet` prefix and network/account key format so v1 behavior has no data migration. NEAR Connect may inject its selector-backed key store through the same interface.
+
+Required provider operations are at least `getKey`, `setKey`, and `removeKey` by network/account, plus a testable failure surface. Do not create a second key-store namespace for mobile. The refactor must be behavior-neutral for web/extension and covered by regression tests against pre-existing stored keys.
+
+If the wallet successfully adds the function-call key but local private-key persistence fails, the chain-side operation cannot be rolled back. Reject with a specific `local_key_persistence_failed` partial-success error, do not store a connection record that claims the local key is usable, retain no private key in logs/errors, and tell the caller that sign-in/key setup must be retried or the orphaned key revoked. Do not silently return a successful account with unusable function-call-key metadata.
+
 ## 10. NEAR result conversion design
 
-On `EPartnerBridgeStep.completed`, `bridge.actionResult.result` holds an `IActionPayload_Result_JsonObject`. There is no `hydrateResultPayload` helper in the current packages; the validation sequence uses the real API surface:
+On `EPartnerBridgeStep.completed`, `bridge.actionResult.result` holds an `IActionPayload_Result_JsonObject`. The installed Nice Action `ActionDomain` exposes `hydrateResultPayload(...)`; use it instead of manually deserializing output or reconstructing wire errors:
 
 1. Require `signatureVerified === true`. Treat a missing/invalid wallet signature as a security error, not a warning.
 2. Confirm the payload shape with the `isActionPayload_Result_JsonObject` guard from `@nice-code/action`.
 3. Verify the payload's domain/action ID matches the request the converter produced.
-4. If the result is not `ok`, reject the SDK action with an error mapped from the wire error payload.
-5. Validate the success output with `act_impl_near.action.<id>.validateOutput(...)`, then convert the typed output as follows. (If Phase 0 adds the optional upstream hydration helper from 8.3, use it instead.)
+4. Call `act_impl_near.hydrateResultPayload(...)`. This validates/deserializes the schema output, re-derives expected-error classification, and reconstructs a live Nice Error.
+5. Compare the hydrated payload's recomputed `outputHash` with the signed serialized `outputHash`; reject a mismatch as a security/integrity error. The current hydrator recomputes but does not itself compare the wire value.
+6. If the hydrated result is not `ok`, reject with its hydrated Nice Error while preserving the SDK's established error boundary.
+7. Convert the hydrated typed success output as follows.
 
 | Shared result | Existing SDK result |
 | --- | --- |
@@ -729,7 +863,7 @@ The current `MeteorConnect` model stores one account per sign-in action even tho
 
 `vNearAccount.publicKey` is optional on the wire, while `IMeteorConnectAccount.publicKeys` is required. When the wallet returns no public key: store an empty `publicKeys` array plus any locally generated function-call key (9.3); never fabricate a key. Add a conversion test for this case and confirm downstream callers tolerate an empty array.
 
-The stored connection must be `v2_bridge_mobile` and include the configured app ID plus exact paired-wallet verify key when available. This is what makes later account-targeted actions choose push to the same wallet (5.5).
+The stored connection must be `v2_bridge_mobile` and include all required routing fields from 5.7: schema version, active environment ID, configured app ID, current partner client ID, and exact active paired-wallet verify key. If the active wallet record is unavailable, treat completion as an integration error rather than writing a partially routable mobile connection.
 
 ### 10.2 Signed messages
 
@@ -752,10 +886,14 @@ Do not invent an empty hash or change `IORequestSignDelegateActions_Output`; the
 ### Phase 0 — upstream safety and identity support
 
 - [ ] Add the partner cancel/abandon action to shared schemas/domain.
-- [ ] Implement the backend state transition and authentication.
+- [ ] Implement the authenticated backend cancellation state table and atomic race semantics from 8.1.
 - [ ] Add `PartnerBridgeClient.cancel_bridge`.
 - [ ] Expose the active paired-wallet verify-key handle after claim.
-- [ ] Optional (8.3): result-hydration helper, connection status mirrored into `PartnerBridgeStore`, wallet-side pushed-claim confirmation.
+- [ ] Add server `expiresAt` to bridge-create output and all partner client/store states.
+- [ ] Add `reset_partner_identity()` that clears every identity-bound namespace, including paired wallets.
+- [ ] Make the partner store instance-scoped and client-owned.
+- [ ] Correct PIN attempts to exactly three, persist every failure, and expose authoritative remaining attempts.
+- [ ] Optional (8.7): connection status mirrored into the instance store and wallet-side pushed-claim confirmation.
 - [ ] Add unit/integration/race tests in `mc_backend`.
 - [ ] Deploy backend and publish compatible package versions through the maintainer release process.
 
@@ -766,7 +904,10 @@ Do not invent an empty hash or change `IORequestSignDelegateActions_Output`; the
 - [ ] Add the mobile bridge config types and production constants.
 - [ ] Add partner metadata normalization.
 - [ ] Add storage adaptation with environment-specific prefixing.
-- [ ] Make `MeteorConnect.initialize` idempotent/coalesced.
+- [ ] Add the process-wide coordinator and injected lease provider: Web Locks for direct same-origin use, storage-backed ticket/fencing protocol for the opaque-origin NEAR Connect executor.
+- [ ] Make `MeteorConnect.initialize` fingerprinted/idempotent/coalesced and reject incompatible reconfiguration.
+- [ ] Add explicit bridge disposal/reinitialization behavior.
+- [ ] Extract/inject the shared NEAR key-store provider while preserving the v1 storage format.
 - [ ] Pass actual dApp origin metadata from `meteor-near-connect`.
 
 ### Phase 2 — typed request/result adapters
@@ -775,26 +916,26 @@ Do not invent an empty hash or change `IORequestSignDelegateActions_Output`; the
 - [ ] Add nonce/base64 helpers.
 - [ ] Complete connector-action conversion and unsupported-action errors.
 - [ ] Add function-call-key generation/persistence lifecycle.
-- [ ] Add result validation via `isActionPayload_Result_JsonObject` + domain/action ID check + `validateOutput` (section 10).
+- [ ] Add result validation via shape/domain/action checks, `act_impl_near.hydrateResultPayload(...)`, signed `outputHash` comparison, and hydrated Nice Error handling (section 10).
 - [ ] Add SDK result conversion for all actions, including missing-`publicKey` sign-in accounts (10.1).
 - [ ] Add conversion unit tests before transport integration.
 
 ### Phase 3 — partner bridge client
 
 - [ ] Add `MeteorConnectMobileBridgeClient` and `v2_bridge_mobile` types.
-- [ ] Construct/initialize one durable `PartnerBridgeClient` subclass per MeteorConnect instance, overriding the protected connection hooks (7.4).
-- [ ] Implement push-target resolution from the account's stored `walletVerifyPublicKey` only (5.5); no sign-in push.
+- [ ] Construct/initialize the coordinator-owned durable `PartnerBridgeClient` subclass with its instance store and protected connection hooks (7.3–7.4).
+- [ ] Implement connection-record schema version/environment/app/partner-ID validation and exact-wallet push targeting (5.5–5.7); no sign-in push.
 - [ ] Implement QR/deep-link creation path.
 - [ ] Implement push path for mobile-connected accounts with QR/deep-link fallback.
 - [ ] Append the partner-secret fragment safely.
-- [ ] Implement `MobileBridgeSession` and global-store isolation.
-- [ ] Implement PIN submission with local attempt tracking and the terminal attempts-exceeded state (5.1).
-- [ ] Implement the local expiry countdown and proactive pre-expiry bridge refresh (7.4).
+- [ ] Implement `MobileBridgeSession`, instance-store subscription, session tokens, and coordinated ownership.
+- [ ] Implement PIN submission using authoritative server attempt state and third-wrong terminal behavior (5.1).
+- [ ] Implement server-`expiresAt` countdown and the cancel-old-first explicit refresh flow (7.4).
 - [ ] Implement completion/result conversion.
 - [ ] Implement retry (`disconnect_bridge()` before replacement `create_bridge()`), cancel, disconnect, and stale-event guards.
-- [ ] Implement `identity_pin_mismatch` detection with the reset-and-re-pair recovery path (7.4).
+- [ ] Implement `identity_pin_mismatch` detection, confirmation, comprehensive reset, connection-record invalidation, and re-pair recovery (7.4, 8.4).
 - [ ] Implement visibility-regain link verification for the same-device mobile flow (7.4).
-- [ ] Store the exact mobile wallet routing handle on sign-in results.
+- [ ] Store every mandatory mobile routing field, including the exact active wallet handle, on sign-in results and refresh a mismatched targeted account after successful authenticated non-sign-out completion.
 
 ### Phase 4 — action arbitration
 
@@ -805,7 +946,7 @@ Do not invent an empty hash or change `IORequestSignDelegateActions_Output`; the
 - [ ] Treat cancel/claim conflicts deterministically.
 - [ ] Make cancellation terminal — after `cancelAction`, `execute()` must refuse to run (7.7).
 - [ ] Ensure resolve/reject/account bookkeeping runs once.
-- [ ] Connect popup close/cancel to bridge cancellation and local teardown.
+- [ ] Implement the phase-dependent popup close/cancel contract, including “continues on phone” after `wallet_action` commitment.
 - [ ] Keep contextual v1 account execution unchanged.
 
 ### Phase 5 — popup UI
@@ -815,7 +956,7 @@ Do not invent an empty hash or change `IORequestSignDelegateActions_Output`; the
 - [ ] Implement device-adaptive presentation via `isMobile()` — QR primary on desktop; **Open in App** primary with QR-icon toggle on mobile devices (6.1).
 - [ ] Render only the mobile panel for actions targeting mobile-connected accounts (6.1.1).
 - [ ] Retain the exact current extension/web button handlers and URLs.
-- [ ] Render loading, QR, deep-link, push status, PIN (with attempt count and terminal attempts-exceeded state), action, expiry countdown, reconnect, identity-failure, error, and retry states.
+- [ ] Render loading, other-tab ownership, QR, deep-link, push status, authoritative PIN attempts, action, expiry countdown/refresh, reconnect, identity-reset confirmation, error, and retry states.
 - [ ] Keep mobile UI visible after target commitment.
 - [ ] Add mobile icons to executing/continue screens.
 - [ ] Replace the hard-coded old request-ID QR task.
@@ -847,6 +988,8 @@ Request conversion:
 - every supported NEAR action serializes without bigint, class instance, or raw byte leakage;
 - deprecated contract input normalizes correctly;
 - generated access-key private material never appears in serialized request data.
+- the shared key-store provider reads existing v1 `_meteor_wallet` entries unchanged;
+- key persistence failure produces `local_key_persistence_failed` and no falsely usable connection record.
 
 Result conversion:
 
@@ -857,27 +1000,36 @@ Result conversion:
 - signed delegate Borsh decode and canonical hash;
 - sign-out returns/removes the original account identifier;
 - mismatched domain/action ID is rejected;
-- malformed output is rejected by `validateOutput`;
-- non-`ok` wire results reject the SDK action;
+- malformed output is rejected by `hydrateResultPayload`;
+- mismatched signed wire versus recomputed `outputHash` is rejected;
+- non-`ok` wire results hydrate to Nice Errors and reject the SDK action;
 - invalid wallet result signature is rejected.
 
 Session lifecycle:
 
 - initialization is coalesced;
+- repeated initialization with an identical fingerprint is a no-op, while a different backend/storage/app fingerprint is rejected;
 - storage prefix remains stable across reload;
 - dev/prod backend storage is isolated;
+- incomplete, wrong-environment, wrong-app, or old-partner-identity account records never push and instead require QR/re-pair;
+- successful QR re-pair refreshes the targeted account connection record; sign-out removes rather than refreshes it;
 - sign-in and non-mobile-contextual actions never call `request_action_via_push`;
 - a mobile-connected account uses exactly one `request_action_via_push` call with its stored verify key;
 - every push failure retains QR/deep link;
 - PIN verification progresses to wallet action;
-- wrong PIN within the limit stays retryable with a decrementing attempt count;
-- the attempts-exceeded case surfaces the terminal state (not another retry prompt) even though the backend error ID matches a plain wrong PIN;
-- expiry countdown triggers proactive refresh, and refresh calls `disconnect_bridge()` before `create_bridge()`;
-- `identity_pin_mismatch` produces the reset-and-re-pair recovery state, not a spinner;
-- two tabs sharing the same partner identity storage do not corrupt `clientPerId`/pairings (each tab's bridge remains independent);
+- wrong PIN on attempt 1 or 2 stays retryable using server-authoritative remaining attempts;
+- correct PIN on attempt 3 succeeds; third incorrect PIN is terminal;
+- local optimistic PIN state reconciles to a differing server count;
+- countdown uses absolute server `expiresAt` and recomputes after tab suspension;
+- refresh never replaces a visible QR until cancellation/expiry proves the old bridge non-executable;
+- cancel losing to claim keeps the old session and creates no replacement bridge;
+- `identity_pin_mismatch` produces confirmation, comprehensive reset, routing-record invalidation, and re-pair—not a spinner or stale push;
+- two clients in one JavaScript realm have independent client-owned stores;
+- two dApp tabs—including opaque-origin NEAR Connect executors coordinating through selector storage—cannot simultaneously initialize/mutate the shared identity or create bridges; fencing prevents a stale owner mutation and expiry permits crash recovery;
 - completed state unsubscribes and resolves once;
 - retry ignores prior-session store events;
-- close/cancel tears down safely without clearing pairings.
+- pre-claim and PIN-screen close cancel safely without clearing pairings;
+- close during `wallet_action` never reports cancellation or starts legacy execution and communicates that the request continues on the phone.
 
 Action arbitration:
 
@@ -885,6 +1037,7 @@ Action arbitration:
 - extension click does the same;
 - wallet claim first commits mobile;
 - cancel/claim race never starts both target clients;
+- cancellation timeout/unknown result never authorizes legacy execution;
 - repeated execute calls return the same result;
 - `execute()` after `cancelAction` refuses to run;
 - contextual mobile accounts push immediately;
@@ -900,8 +1053,13 @@ Against a local `mc_backend`:
 - push request creates one bridge and retains its QR metadata;
 - cancel before claim prevents claim;
 - simultaneous cancel/claim has one terminal winner;
-- three failed PIN attempts fail the bridge terminally and the SDK surfaces the re-pair path;
-- expired bridge produces a retryable UI state (force expiry — the dev backend TTL is 1 day, so it will not occur naturally);
+- cancel during wallet verification terminates the wallet PIN flow;
+- cancel after `wallet_action` commitment returns incompatible status and cannot authorize legacy execution;
+- PIN attempt 1/2 failures persist across DO eviction/rehydration, a correct third attempt succeeds, and an incorrect third attempt fails terminally;
+- concurrent/duplicate PIN submissions cannot exceed or reset the authoritative attempt state;
+- create/push outputs expose the configured absolute `expiresAt`;
+- expired bridge produces a retryable UI state using server time (force expiry rather than waiting for the dev TTL);
+- comprehensive identity reset removes separately prefixed paired-wallet data and provisions a clean identity;
 - WebSocket drop/reconnect continues realm state and result delivery.
 
 ### 12.3 Real device tests
@@ -946,7 +1104,7 @@ The SDK's `tsdown` config bundles monorepo/package dependencies except an explic
 Before release:
 
 - inspect output size by module;
-- confirm one bundled copy of `@meteorwallet/connect-shared`/NiceCode domains and one `PartnerBridgeStore` singleton;
+- confirm one bundled copy of `@meteorwallet/connect-shared`/NiceCode domains, no unintended import/use of the deprecated package-global partner store, and one client-owned store per constructed client;
 - confirm Web Crypto and WebSocket references are runtime-safe and not evaluated during SSR import;
 - confirm `frontend_env` is not relied upon for the production URL;
 - build both ESM and CJS outputs;
@@ -979,16 +1137,20 @@ Use the repository's local-package linking workflow while the required connect c
 
 - [ ] Partner secret appears only in the deep-link fragment and in memory required by the bridge client.
 - [ ] Partner secret is absent from query strings, logs, analytics, error text, and persisted account data.
-- [ ] PIN is never logged or persisted.
+- [ ] PIN is never logged or persisted by the SDK/browser. Backend retention is limited to the expiring bridge state required for verification and is deleted with bridge cleanup.
 - [ ] Pending access-key private key never crosses the bridge.
 - [ ] Wallet result must have a valid identity signature.
 - [ ] Nice Action result must hydrate against the expected domain/action schema.
+- [ ] Hydrated recomputed `outputHash` must equal the signed serialized `outputHash`.
 - [ ] The selected wallet is addressed only by its verify-key handle; `walletPerId` remains backend-only.
+- [ ] Push routing requires matching environment, app, partner identity, and exact wallet handle.
 - [ ] Partner origin metadata identifies the real dApp, not the executor iframe.
 - [ ] Deep-link button uses `noopener`/`noreferrer` where browser navigation creates a new context.
 - [ ] No mobile error silently falls through to an unsafe duplicate legacy execution.
 - [ ] Cancel-versus-claim is resolved by backend state, not timing assumptions in the UI.
 - [ ] Development and production identities/backends are storage-isolated.
+- [ ] Cross-tab lease/ticket records contain only random ownership, ordering, heartbeat, and expiry metadata—never partner secrets, PINs, wallet keys, or access-key material.
+- [ ] Identity reset requires confirmation, clears all paired-wallet state, and invalidates old partner-identity bindings.
 
 ## 15. Observability and error handling
 
@@ -997,15 +1159,18 @@ Add bridge logs through `MeteorLogger` using phase and bridge-safe identifiers o
 Useful events:
 
 - partner initialized/restored;
+- ownership lease acquired/contended/recovered (random owner correlation only);
 - bridge creation started/succeeded/failed;
 - push attempted/delivered/not delivered with reason;
 - wallet claimed (without keys/secrets);
-- PIN verification started/succeeded/failed;
+- PIN verification started/succeeded/failed with attempts remaining, never the PIN;
 - mobile target committed;
 - realm reconnect/attach diagnostic;
 - wallet result signature validated;
 - action completed/cancelled/expired;
-- legacy target won and bridge cancellation succeeded.
+- legacy target won and bridge cancellation succeeded;
+- identity reset requested/confirmed/completed;
+- key persistence partial failure (without key/account secrets).
 
 User-facing errors should distinguish:
 
@@ -1013,9 +1178,12 @@ User-facing errors should distinguish:
 - push unavailable but QR usable;
 - invalid PIN, retry in same session, with remaining attempts;
 - PIN attempts exceeded — terminal for this bridge, create a new QR and re-pair;
-- expired bridge, create a new QR (proactive refresh should make this rare);
+- bridge nearing expiry, explicitly refresh the mobile code; or expired bridge, create a new QR;
 - connection reconnecting;
-- identity pin mismatch — terminal for the identity; reset and re-pair (never an indefinite spinner);
+- another tab owns the active Meteor Mobile request;
+- identity pin mismatch — terminal for the identity; confirm comprehensive reset and re-pair (never an indefinite spinner);
+- mobile already committed — closing the popup does not cancel the phone action;
+- local function-call-key persistence failed after wallet success — partial success requiring retry/revocation guidance;
 - security validation failure, terminal;
 - target race resolved to mobile, do not open legacy wallet.
 
@@ -1036,8 +1204,12 @@ Document that:
 - push is best-effort and QR/deep-link is always the fallback;
 - notification delivery is not action approval;
 - first pairing requires a 4-digit PIN with a 3-attempt limit; exceeding it requires a fresh QR;
+- PIN attempts are server-authoritative and the third incorrect submission is terminal;
 - on a mobile-device browser the primary affordance is **Open in App**, with the QR available via a toggle;
 - an account remains associated with the wallet target through which it signed in;
+- mobile routing records are bound to backend environment, app, partner identity, and exact wallet handle;
+- only one same-origin tab/storage namespace may own an active mobile bridge request;
+- a visible QR is never silently rotated near expiry; refresh cancels the old bridge first;
 - clearing site storage resets the durable partner identity and requires re-pairing.
 
 ## 17. Acceptance criteria
@@ -1046,18 +1218,22 @@ Implementation is complete only when all of the following are true:
 
 1. A sign-in prompt immediately displays a **Meteor Mobile** loading state and then, on desktop, a real scannable production/dev QR; on a mobile-device browser, a working **Open in App** deep-link button with the QR reachable via the toggle.
 2. The QR/deep link opens the new mobile app with the bridge ID and partner secret parsed correctly.
-3. First-time pairing reaches a 4-digit PIN UI in the SDK, verifies, executes the wallet action, and resolves the original SDK promise; a wrong PIN shows remaining attempts, and the attempts-exceeded case surfaces the new-QR recovery path.
-4. An action targeting a mobile-connected account attempts push immediately to that account's stored wallet handle and still displays the QR/deep-link fallback; sign-in never triggers a push.
+3. First-time pairing reaches a 4-digit PIN UI and resolves the original SDK promise. Attempts 1/2 can retry, a correct third attempt succeeds, and an incorrect third attempt is terminal using persisted server-authoritative state.
+4. An action targeting a mobile-connected account pushes only when schema version, environment, app, partner identity, and exact wallet handle match; otherwise it uses QR/re-pair. Sign-in never pushes, and every push failure retains the same QR/deep-link bridge.
 5. Foreground, background-tap, and cold-start push flows complete on a real device, and the same-device **Open in App** flow delivers the result after returning to the backgrounded browser tab.
-6. All currently exposed NEAR actions use `act_impl_near` and return the existing SDK public output shapes.
-7. Mobile sign-in stores a mobile connection config, and later account actions route to that wallet's verify-key handle.
-8. Selecting Web App or Chrome Extension cancels the prepared bridge before running the unchanged v1 path.
-9. A wallet claim racing a legacy click has exactly one winner and cannot produce two broadcasts; a cancelled action can never execute afterwards.
-10. Existing web/extension behavior and URLs pass the full regression matrix.
-11. Popup close, retry, expiry (with proactive pre-expiry refresh), network reconnect, and push failure clean up listeners/sockets without deleting pairings.
-12. An `identity_pin_mismatch` presents its reset-and-re-pair recovery instead of hanging.
-13. No secret, PIN, or private key appears in logs, URLs sent to servers, or persisted account metadata.
-14. SDK type check, build, unit tests, connect integration tests, and real-device tests pass.
+6. All currently exposed NEAR actions use `act_impl_near`, hydrate signed results through the domain API, verify the recomputed output hash, and return the existing SDK public output shapes.
+7. Mobile sign-in writes a complete `v2_bridge_mobile` connection record with schema version, environment ID, app ID, partner client ID, and exact active wallet verify key; it never writes a partial push-capable record. A later QR re-pair refreshes the targeted account after successful non-sign-out completion.
+8. Selecting Web App or Chrome Extension waits for confirmed backend cancellation before running unchanged v1 code. Unknown/failed cancellation never authorizes legacy execution.
+9. A claim/cancel/complete race has exactly one backend-authoritative winner, cannot produce two broadcasts, and a cancelled `ExecutableAction` can never execute afterwards.
+10. The partner store is client-owned; two clients in one realm do not contaminate each other, while the coordinator/lease prevents concurrent mutation of one durable identity across instances or tabs and recovers after owner crash.
+11. Popup close follows the phase contract: pre-action states cancel safely, while close after `wallet_action` commitment never claims cancellation or opens legacy and clearly states that the phone request continues.
+12. Countdown uses server `expiresAt`; refresh never rotates a visible QR until old-bridge cancellation/expiry is terminal, and a claim winning refresh keeps the original session.
+13. `identity_pin_mismatch` offers a confirmed comprehensive reset that clears all identity/pairing namespaces, invalidates old routing bindings, provisions a new identity, and requires re-pair instead of hanging or using stale push state.
+14. Generated function-call private keys stay local, use the shared v1-compatible key-store provider, and a post-wallet persistence failure returns the documented partial-success error without a false usable account record.
+15. Existing web/extension behavior, URLs, stored keys, and contextual routing pass the full regression matrix.
+16. Retry, expiry, reconnect, push failure, ownership contention, and terminal cleanup remove listeners/sockets/leases without unintentionally deleting pairings.
+17. No partner secret, PIN, or private key appears in logs, server-visible URLs, analytics, error payloads, or persisted account metadata.
+18. SDK type check, build, unit tests, connect/backend integration tests, packaging checks, and real-device tests all pass against the released compatible packages/backend.
 
 ## 18. Key risks and mitigations
 
@@ -1065,32 +1241,40 @@ Implementation is complete only when all of the following are true:
 | --- | --- | --- |
 | no backend cancel for eager bridge | duplicate transactions | implement Phase 0 cancel action before release |
 | wallet auto-claims pushed bridges without a user tap | involuntary mobile commitment locks the user out of their chosen target | push only for mobile-connected accounts (5.6); sign-in is QR/deep-link only, so a claim always reflects user intent |
-| global `PartnerBridgeStore` | cross-action state contamination | enforce one active session, snapshot/token stale events, deterministic unsubscribe |
+| global `PartnerBridgeStore` | same-page clients overwrite each other | Phase 0 client-owned store; coordinator-owned client; session-token stale-event guards |
+| concurrent tabs/instances share one durable identity | key/client ID corruption or competing bridges | injected lease provider: Web Locks for direct use; selector-storage ticket/fencing protocol for opaque-origin NEAR Connect; hold through initialization/session |
 | multiple paired wallets | push sent to wrong device | route only by the exact verify key stored on the account connection; no heuristics, no fan-out |
-| PIN attempt limit (3) shares an error ID with a plain wrong PIN | user stuck retrying a dead bridge | local attempt counter + store `failed` watch; terminal UI state offering a new QR |
-| lazy 5-minute production expiry | user scans a dead QR | local TTL countdown with proactive pre-expiry bridge refresh |
+| PIN attempts are unpersisted/currently fail on call 4 | limit can reset after DO eviction and UI/server disagree | Phase 0 exactly-three atomic persistence; authoritative remaining-attempt state; eviction/concurrency tests |
+| lazy expiry and client-hard-coded TTL | user scans a dead QR or SDK diverges from backend config | expose absolute server `expiresAt`; recompute after suspension; force time in tests |
+| automatic QR rotation near expiry | camera claims an old bridge while UI displays a new one | explicit refresh; authenticated cancel-old-first; create only after terminal non-executable result |
 | no connection status in `PartnerBridgeStore` | reconnects and attach failures are invisible; `identity_pin_mismatch` hangs forever | subclass the protected hooks (7.4); dedicated reset-and-re-pair recovery state |
 | mobile browser suspends WS while user is in the wallet app | same-device flow appears stuck on return | visibility-regain link verification and idempotent re-dial |
-| unstable partner storage identity | push never becomes available | durable caller storage, stable environment prefix, idempotent initialization |
+| unstable/mismatched partner storage identity | push unavailable or sent using dev/old trust context | durable caller storage, fingerprinted initialization, environment/app/partner-ID account binding |
+| base `reset_client()` leaves prefixed paired wallets | stale local wallet records and `link_not_found` push attempts | comprehensive partner reset clearing all namespaces plus routing-record invalidation |
 | wrong iframe origin metadata | misleading wallet approval screen | pass `window.selector.location`/explicit metadata |
 | omitted access-key public key | invalid shared action or unusable local key | generate locally, send public only, persist private only after success |
+| wallet succeeds but local private-key persistence fails | orphaned on-chain access key and false successful local state | shared injected key store; explicit partial-success error; no connection/key metadata stored as usable |
 | wallet returns accounts without a public key | required `publicKeys` field cannot be populated | defined empty-array conversion (10.1) with tests |
 | delegate result shape mismatch | breaks NEAR Connect callers | decode signed delegates and compute canonical hashes |
 | popup fixed height | clipped QR/PIN controls | responsive container and internal scrolling |
 | bundle growth/duplicate domains | load/runtime problems | bundle analysis, dedupe verification, ESM/CJS smoke tests |
 | push delivery interpreted as approval | premature SDK resolution | resolve only from signed `completed` bridge result |
+| manually rebuilding Nice Action output/errors | schema drift or incorrect Nice Error behavior | use `act_impl_near.hydrateResultPayload`, verify expected ID and recomputed signed output hash |
 | stale push/expired bridge | confusing or unsafe action | backend TTL, terminal failed state, explicit QR retry |
 | cancelled action executes later | duplicate/unwanted broadcast | terminal cancelled state in `ExecutableAction` (7.7) |
+| popup closes after mobile action starts | caller believes action cancelled while phone may broadcast | phase-specific close contract; never authorize legacy; communicate that mobile continues |
 
 ## 19. Recommended implementation order summary
 
-1. Add safe bridge cancellation and active-wallet exposure upstream.
-2. Build and test pure NEAR request/result converters in the SDK.
-3. Add durable partner configuration/storage and the new mobile client.
-4. Add the isolated mobile session state machine.
-5. Add target arbitration to `ExecutableAction`.
-6. Add the device-adaptive Meteor Mobile popup panel (QR-first on desktop, Open-in-App-first on mobile devices) and the PIN flow while leaving v1 controls intact.
-7. Validate local QR/PIN end to end, including PIN attempt limits and expiry refresh.
-8. Validate push for mobile-connected accounts and the same-device deep-link flow on real devices.
-9. Run the complete legacy regression and packaging checks.
-10. Update docs and hand release steps to maintainers.
+1. Complete every Phase 0 upstream blocker: cancellation, active-wallet exposure, `expiresAt`, comprehensive reset, instance-scoped store, and exactly-three persisted PIN attempts.
+2. Deploy/publish the compatible backend and packages, then lock the SDK to those APIs.
+3. Record the production-wallet decision for one-element plural transaction UX.
+4. Build/test pure NEAR request/result converters, domain hydration/output-hash checks, and the shared v1-compatible key-store provider.
+5. Add fingerprinted configuration/storage, environment/identity-bound connection records, the process coordinator, and cross-tab ownership lease.
+6. Add the coordinator-owned mobile client and isolated session state machine with authoritative PIN, expiry, refresh, reset, reconnect, and stale-event handling.
+7. Add backend-authoritative target arbitration and phase-specific cancellation/close behavior to `ExecutableAction`.
+8. Add the device-adaptive Meteor Mobile popup panel (QR-first on desktop, Open-in-App-first on mobile devices) while leaving v1 controls intact.
+9. Validate QR/PIN/cancel/expiry/reset/concurrency end to end against the local backend.
+10. Validate contextual push and same-device deep-link flows on real Android/iOS devices.
+11. Run the complete legacy regression, bundle/package checks, and migration tests.
+12. Update docs and hand release steps to maintainers.
