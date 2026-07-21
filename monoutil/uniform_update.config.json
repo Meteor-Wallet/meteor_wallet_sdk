@@ -1,0 +1,22 @@
+{
+  "targetVersions": [
+    {
+      "version": "0.66.1",
+      "dependencies": [
+        "@nice-code/devtools-vite",
+        "@nice-code/devtools",
+        "@nice-code/error",
+        "@nice-code/common-errors",
+        "@nice-code/action",
+        "@nice-code/util",
+        "@nice-code/state",
+        "@nice-code/realm",
+        "@nice-code/wire"
+      ]
+    },
+    {
+      "version": "0.3.1",
+      "dependencies": ["@meteorwallet/connect", "@meteorwallet/connect-shared"]
+    }
+  ]
+}

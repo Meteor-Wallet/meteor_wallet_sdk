@@ -3,6 +3,7 @@
   "version": "0.0.1",
   "scripts": {
     "format": "bunx biome format --write",
+    "uniform-update": "bunx monoutil@latest uniform_update",
     "type-check-all": "bun run --parallel --workspaces --no-exit-on-error type-check",
     "type-check-watch-all": "bun run --parallel --workspaces --no-exit-on-error type-check-watch",
     "clean-files": "bunx glcl",
