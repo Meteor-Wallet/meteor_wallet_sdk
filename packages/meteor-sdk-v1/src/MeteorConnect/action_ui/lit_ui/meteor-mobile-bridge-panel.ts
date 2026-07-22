@@ -11,6 +11,7 @@ import { customElement } from "./custom-element";
 @customElement("meteor-mobile-bridge-panel")
 export class MeteorMobileBridgePanel extends LitElement {
   @property({ attribute: false }) session?: MobileBridgeSession;
+  @property({ type: Boolean, reflect: true }) contextual = false;
   @property({ attribute: false }) openInApp?: () => void;
   @property({ attribute: false }) refreshCode?: () => Promise<void>;
   @property({ attribute: false }) resetIdentity?: () => Promise<void>;
@@ -32,21 +33,31 @@ export class MeteorMobileBridgePanel extends LitElement {
 
   static styles = css`
     :host { display: block; width: 100%; }
-    .panel { display: flex; flex-direction: column; gap: .75rem; align-items: center; padding: .85rem; border: 1px solid rgba(150,140,255,.2); border-radius: .9rem; background: rgba(15,12,30,.72); box-sizing: border-box; }
-    .title { font-size: .8rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08rem; color: rgb(170,165,235); }
-    .status { margin: 0; font-size: .83rem; color: rgb(215,212,242); }
-    .muted { color: rgb(145,140,180); font-size: .76rem; }
-    .error { color: #ffaaa9; font-size: .8rem; }
-    .success { color: #9ce6bd; font-size: .8rem; }
-    .qr { width: 174px; height: 174px; padding: 8px; box-sizing: border-box; border-radius: 12px; background: white; }
-    .actions { display: flex; gap: .55rem; flex-wrap: wrap; justify-content: center; }
-    button { border: 0; border-radius: .65rem; padding: .65rem .9rem; font: inherit; font-weight: 700; cursor: pointer; background: #6657e8; color: white; }
+    .panel { display: flex; flex-direction: column; gap: .48rem; align-items: center; padding: .7rem; border: 1px solid rgba(150,140,255,.24); border-radius: .9rem; background: linear-gradient(145deg, rgba(22,18,45,.92), rgba(12,10,26,.82)); box-shadow: 0 10px 28px rgba(0,0,0,.18), inset 0 1px rgba(255,255,255,.025); box-sizing: border-box; }
+    :host([contextual]) .panel { padding: .9rem; }
+    .heading { display: flex; flex-direction: column; gap: .22rem; align-items: center; }
+    .title { font-size: .76rem; font-weight: 800; text-transform: uppercase; letter-spacing: .09rem; color: rgb(181,176,246); }
+    .status { margin: 0; font-size: .82rem; line-height: 1.15rem; color: rgb(225,223,247); }
+    .muted { color: rgb(166,162,199); font-size: .73rem; line-height: .95rem; }
+    .error { color: #ffb7b5; font-size: .76rem; line-height: 1rem; }
+    .success { color: #a8ebc5; font-size: .76rem; line-height: 1rem; }
+    .request-access { display: flex; align-items: center; justify-content: center; gap: .75rem; width: 100%; }
+    .request-controls { display: flex; flex: 1; min-width: 0; flex-direction: column; align-items: center; justify-content: center; gap: .5rem; }
+    .qr { width: 150px; height: 150px; flex: 0 0 150px; padding: 7px; box-sizing: border-box; border-radius: 11px; background: white; box-shadow: 0 5px 18px rgba(0,0,0,.24); }
+    .actions { display: flex; gap: .45rem; flex-wrap: wrap; justify-content: center; }
+    button { min-height: 2.35rem; border: 0; border-radius: .65rem; padding: .58rem .78rem; font: inherit; font-size: .78rem; font-weight: 700; cursor: pointer; background: linear-gradient(135deg, #604ce2, #7665f3); color: white; box-shadow: 0 4px 12px rgba(43,29,131,.25); }
     button.secondary { background: rgba(255,255,255,.11); }
     button:disabled { opacity: .55; cursor: default; }
+    button:focus-visible { outline: 2px solid rgba(165,150,255,.95); outline-offset: 2px; }
     .spinner { display: inline-block; width: .9rem; height: .9rem; border: 2px solid rgba(255,255,255,.38); border-top-color: white; border-radius: 50%; animation: spin .7s linear infinite; vertical-align: middle; }
     @keyframes spin { to { transform: rotate(360deg); } }
-    .pin { display: flex; gap: .5rem; justify-content: center; }
-    input { width: 7rem; padding: .6rem; border-radius: .55rem; border: 1px solid rgba(255,255,255,.25); background: rgba(0,0,0,.22); color: white; text-align: center; letter-spacing: .28rem; font-size: 1rem; }
+    .pin { display: flex; gap: .45rem; justify-content: center; }
+    input { width: 7rem; min-height: 2.35rem; box-sizing: border-box; padding: .52rem; border-radius: .6rem; border: 1px solid rgba(255,255,255,.25); outline: none; background: rgba(0,0,0,.24); color: white; text-align: center; letter-spacing: .28rem; font-size: 1rem; }
+    input:focus { border-color: rgba(139,122,255,.9); box-shadow: 0 0 0 3px rgba(112,86,237,.18); }
+    @media (max-width: 370px) {
+      .request-access { flex-direction: column; }
+      .request-controls { flex: none; }
+    }
   `;
 
   connectedCallback(): void {
@@ -94,8 +105,8 @@ export class MeteorMobileBridgePanel extends LitElement {
     if (this.qrTarget == null) return;
     if (this.qr == null) {
       this.qr = new QRCodeStyling({
-        width: 158,
-        height: 158,
+        width: 136,
+        height: 136,
         type: "svg",
         data: link,
         margin: 5,
@@ -125,6 +136,14 @@ export class MeteorMobileBridgePanel extends LitElement {
     } finally {
       this.pinPending = false;
     }
+  }
+
+  private handlePinSubmit(event: SubmitEvent): void {
+    event.preventDefault();
+    if (this.pinPending || this.pin.length !== 4 || (this.snapshot?.pinAttemptsUsed ?? 3) >= 3) {
+      return;
+    }
+    void this.submitPin();
   }
 
   private openMobileApp(): void {
@@ -201,49 +220,62 @@ export class MeteorMobileBridgePanel extends LitElement {
         ? undefined
         : Math.max(0, Math.ceil((snapshot.expiresAt - this.now) / 1000));
     const showPin = snapshot.phase === "wallet_verification";
+    const showRequestAccess = snapshot.deepLink != null && snapshot.phase === "waiting_for_wallet";
+    const showRequestQr = showRequestAccess && this.showQr;
     return html`
       <section class="panel" aria-live="polite" aria-label="Meteor Mobile">
-        <span class="title">Meteor Mobile</span>
-        <p class="status">${this.statusText(snapshot)}</p>
+        <div class="heading">
+          <span class="title">Meteor Mobile</span>
+          <p class="status">${this.statusText(snapshot)}</p>
+        </div>
         ${snapshot.reconnecting ? html`<span class="muted">Reconnecting securely…</span>` : ""}
-        ${snapshot.push === "delivered" ? html`<span class="success">Notification sent. QR remains available as a fallback.</span>` : ""}
-        ${snapshot.push === "not_delivered" ? html`<span class="muted">Notification unavailable${snapshot.pushReason ? ` (${snapshot.pushReason})` : ""}; use the code below.</span>` : ""}
+        ${showRequestAccess && snapshot.push === "delivered" ? html`<span class="success">Notification sent. QR remains available as a fallback.</span>` : ""}
+        ${showRequestAccess && snapshot.push === "not_delivered" ? html`<span class="muted">Notification unavailable${snapshot.pushReason ? ` (${snapshot.pushReason})` : ""}; use the code below.</span>` : ""}
         ${
-          mobile && snapshot.deepLink != null
+          showRequestAccess
             ? html`
-          <div class="actions">
-            <button @click=${() => this.openMobileApp()}>Open in App</button>
-            <button class="secondary" aria-label="Show QR code" @click=${() => (this.showQr = !this.showQr)}>${this.showQr ? "Hide QR" : "Show QR"}</button>
+          <div class="request-access">
+            ${showRequestQr ? html`<div id="mobile-bridge-qr" class="qr" role="img" aria-label="Scan with Meteor Mobile"></div>` : ""}
+            <div class="request-controls">
+              <div class="actions">
+                <button @click=${() => this.openMobileApp()}>Open in App</button>
+                ${
+                  mobile
+                    ? html`<button class="secondary" aria-label="Show QR code" @click=${() => (this.showQr = !this.showQr)}>${this.showQr ? "Hide QR" : "Show QR"}</button>`
+                    : ""
+                }
+              </div>
+              ${
+                secondsLeft != null
+                  ? html`<span class="muted">Code expires in ${Math.floor(secondsLeft / 60)}:${String(secondsLeft % 60).padStart(2, "0")}</span>`
+                  : ""
+              }
+              ${
+                secondsLeft != null && secondsLeft <= 60
+                  ? html`<button class="secondary" @click=${() => void this.refreshMobileCode()}>Refresh code</button>`
+                  : ""
+              }
+            </div>
           </div>`
-            : ""
-        }
-        ${this.showQr && snapshot.deepLink != null ? html`<div id="mobile-bridge-qr" class="qr" role="img" aria-label="Scan with Meteor Mobile"></div>` : ""}
-        ${!mobile && snapshot.deepLink != null ? html`<div class="actions"><button class="secondary" @click=${() => this.openMobileApp()}>Open in App</button></div>` : ""}
-        ${
-          secondsLeft != null && snapshot.phase === "waiting_for_wallet"
-            ? html`
-          <span class="muted">Code expires in ${Math.floor(secondsLeft / 60)}:${String(secondsLeft % 60).padStart(2, "0")}</span>
-          ${secondsLeft <= 60 ? html`<button class="secondary" @click=${() => void this.refreshMobileCode()}>Refresh mobile code</button>` : ""}
-        `
             : ""
         }
         ${
           showPin
             ? html`
-          <div class="pin">
+          <form class="pin" @submit=${(event: SubmitEvent) => this.handlePinSubmit(event)}>
             <input aria-label="4-digit Meteor Mobile PIN" inputmode="numeric" maxlength="4" .value=${this.pin}
               @input=${(event: InputEvent) => (this.pin = (event.target as HTMLInputElement).value.replace(/\D/g, "").slice(0, 4))} />
-            <button aria-label=${this.pinPending ? "Verifying PIN" : "Verify PIN"}
+            <button type="submit" aria-label=${this.pinPending ? "Verifying PIN" : "Verify PIN"}
               ?disabled=${this.pinPending || this.pin.length !== 4 || snapshot.pinAttemptsUsed >= 3}
-              @click=${() => void this.submitPin()}>
+            >
               ${this.pinPending ? html`<span class="spinner" role="status" aria-label="Verifying PIN"></span>` : "Verify"}
             </button>
-          </div>
+          </form>
           ${snapshot.pinError && !this.pinPending ? html`<span class="muted">${Math.max(0, 3 - snapshot.pinAttemptsUsed)} attempts remaining</span>` : ""}
         `
             : ""
         }
-        ${snapshot.pinError ? html`<span class="error">${snapshot.pinError}</span>` : ""}
+        ${snapshot.pinError && !this.pinPending ? html`<span class="error">${snapshot.pinError}</span>` : ""}
         ${this.interactionError ? html`<span class="error">${this.interactionError}</span>` : ""}
         ${
           snapshot.identityResetRequired

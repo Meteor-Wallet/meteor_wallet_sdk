@@ -171,6 +171,8 @@ function meteorConnectSignedMessageToNearConnectSignedMessage(
 interface IMeteorStoredData {
   account: NearConnectAccount;
   identifier: IMeteorConnectAccountIdentifier;
+  /** Present on new sessions; omitted legacy records fall back to the SDK account's key list. */
+  hasAddedPublicKey?: boolean;
 }
 
 async function setMeteorData(data: IMeteorStoredData): Promise<void> {
@@ -182,6 +184,10 @@ async function getMeteorData(): Promise<IMeteorStoredData | undefined> {
   if (str != null) {
     return JSON.parse(str);
   }
+}
+
+async function clearMeteorData(): Promise<void> {
+  await selectorStorage.removeItem("meteor-account-data");
 }
 
 const logger = MeteorLogger.createLogger("NearConnect:MeteorWallet");
@@ -257,6 +263,7 @@ class NearWallet implements Omit<NearWalletBase, "manifest"> {
     await setMeteorData({
       account,
       identifier: response.identifier,
+      hasAddedPublicKey: addFunctionCallKeyParams != null,
     });
 
     return [account];
@@ -299,6 +306,7 @@ class NearWallet implements Omit<NearWalletBase, "manifest"> {
     await setMeteorData({
       account,
       identifier: response.identifier,
+      hasAddedPublicKey: addFunctionCallKeyParams != null,
     });
 
     return [
@@ -309,13 +317,25 @@ class NearWallet implements Omit<NearWalletBase, "manifest"> {
     ];
   };
 
-  // comment asd
-
-  signOut = async (data?: { network?: NearConnectNetwork }): Promise<void> => {
+  signOut = async (_data?: { network?: NearConnectNetwork }): Promise<void> => {
     const meteorData = await getMeteorData();
 
     if (meteorData != null) {
       const met = await getMeteorConnect();
+      const connectedAccount = await met.getAccount(meteorData.identifier);
+      if (connectedAccount == null) {
+        await clearMeteorData();
+        return;
+      }
+
+      const hasAddedPublicKey =
+        meteorData.hasAddedPublicKey ?? connectedAccount.publicKeys.length > 0;
+      if (!hasAddedPublicKey) {
+        await met.removeSignedInAccount(meteorData.identifier);
+        await clearMeteorData();
+        return;
+      }
+
       const action = await met.createAction({
         id: "near::sign_out",
         input: {
@@ -323,6 +343,7 @@ class NearWallet implements Omit<NearWalletBase, "manifest"> {
         },
       });
       await promptActionForResponse(action);
+      await clearMeteorData();
     }
   };
 

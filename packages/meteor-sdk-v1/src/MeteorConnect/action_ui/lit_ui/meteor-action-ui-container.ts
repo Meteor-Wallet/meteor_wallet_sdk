@@ -18,6 +18,7 @@ import { overlayCloseTriggerContext } from "./meteor-action-ui-context";
 import "./meteor-action-ui-executing";
 import "./meteor-mobile-bridge-panel";
 import type { MobileBridgeSession } from "../../target_clients/mobile_bridge/MobileBridgeSession";
+import { getVisibleActionTargets } from "../action-ui-targets";
 
 @customElement("meteor-action-ui-container")
 export class MeteorActionUiContainer extends LitElement {
@@ -49,7 +50,10 @@ export class MeteorActionUiContainer extends LitElement {
 
         --meteor-text-on-dark-light: 220, 220, 255;
         --meteor-text-on-dark-standard: 190, 190, 230;
-        --meteor-text-on-dark-dark: 100, 100, 140;
+        --meteor-text-on-dark-dark: 154, 151, 190;
+        display: block;
+        width: 100%;
+        height: 100%;
       }
 
       /* Add your styles here */
@@ -82,20 +86,23 @@ export class MeteorActionUiContainer extends LitElement {
       .meteor-connect-title-box {
         display: flex;
         flex-direction: row;
-        gap: 0.7rem;
-        padding: 0.7rem;
+        gap: 0.65rem;
+        min-height: 4rem;
+        padding: 0.55rem 0.75rem;
+        box-sizing: border-box;
         /* background: rgba(255, 255, 255, 0.3); */
         /* background: linear-gradient(140deg, rgba(var(--meteor-topbar-blue-lightest), 0.8) 0%, rgba(var(--meteor-topbar-blue-standard), 0.5) 100%); */
         border-bottom: 1px solid rgb(var(--meteor-dark-gray-lightest));
         /* border-radius: 0.75rem; */
         align-items: center;
-        justify-content: space-between
+        justify-content: space-between;
       }
 
       .meteor-logo-and-title {
         display: flex;
         flex-direction: row;
-        gap: 0.85rem;
+        gap: 0.7rem;
+        align-items: center;
       }
 
       #meteor_svg_logo {
@@ -104,9 +111,9 @@ export class MeteorActionUiContainer extends LitElement {
       }
 
       .meteor-logo {
-        width: 3.6em;
-        height: 3.6em;
-        margin: -0.2em;
+        width: 2.85rem;
+        height: 2.85rem;
+        margin: -0.1rem;
         /* padding: 0em 0.2em 0.7em 0.7rem; */
         border-radius: 100%;
         /* background: rgba(255, 255, 255, 0.5); */
@@ -121,9 +128,9 @@ export class MeteorActionUiContainer extends LitElement {
       }
 
       .close-circle {
-        width: 3.6em;
-        height: 3.6em;
-        margin: -0.2em;
+        width: 2.75rem;
+        height: 2.75rem;
+        margin: 0;
         display: flex;
         flex-direction: column;
         align-items: center;  
@@ -133,15 +140,24 @@ export class MeteorActionUiContainer extends LitElement {
         filter: drop-shadow(0 0.05rem 0.07rem rgba(0, 0, 0, 0.5));
         cursor: pointer;
         transition: background 150ms ease;
+        border: 0;
+        padding: 0;
+        color: inherit;
+        font: inherit;
       }
 
       .close-circle:hover {
-        background: rgba(255, 255, 255, 0.03);
+        background: rgba(255, 255, 255, 0.07);
+      }
+
+      .close-circle:focus-visible {
+        outline: 2px solid rgba(155, 140, 255, 0.9);
+        outline-offset: 1px;
       }
 
       .close-circle svg {
-        width: 30%;
-        height: 30%;
+        width: 34%;
+        height: 34%;
         color: rgba(var(--meteor-text-on-dark-light), 1);
         /* color: rgba(0, 0, 0, 0.2); */
         /* box-shadow: 0 0 15px 6px inset rgba(0,0,0, 1); */
@@ -151,14 +167,14 @@ export class MeteorActionUiContainer extends LitElement {
       .title-text-box {
         display: flex;
         flex-direction: column;
-        gap: 0.35rem;
+        gap: 0.22rem;
         justify-content: center;
         align-items: flex-start;
       }
 
       .title-text-box .title {
         margin: 0;
-        font-size: 1.65rem;
+        font-size: 1.35rem;
         font-weight: 700;
         line-height: 0.9em;
         letter-spacing: 0.03rem;
@@ -168,17 +184,17 @@ export class MeteorActionUiContainer extends LitElement {
 
       .title-text-box .subtitle {
         margin: 0;
-        font-size: 0.8rem;
+        font-size: 0.68rem;
         font-weight: 700;
         line-height: 0.9em;
-        letter-spacing: 0.3rem;
+        letter-spacing: 0.24rem;
         text-transform: uppercase;
         color: rgba(180, 180, 255, 1);
       }
 
       .title-text-box .subsection-title {
         margin: 0;
-        font-size: 1.2rem;
+        font-size: 1.05rem;
         font-weight: 500;
         letter-spacing: 0.02rem;
         color: rgba(255, 255, 255, 0.9);
@@ -199,12 +215,11 @@ export class MeteorActionUiContainer extends LitElement {
       }
 
       .options {
-        flex-grow: 1;
-        padding: 0.5rem;
+        padding: 0;
         display: flex;
         flex-direction: column;
         justify-content: center;
-        gap: 1.3rem;
+        gap: 0.55rem;
         align-items: center;
         /* justify-content: space-between; */
         /* justify-content: space-evenly; */
@@ -212,15 +227,28 @@ export class MeteorActionUiContainer extends LitElement {
 
       .meteor-connect-content {
         position: relative;
-        padding: 1.5rem;
+        padding: 0.85rem 1rem 1rem;
         display: flex;
         flex-direction: column;
         /* justify-content: space-evenly; */
-        justify-content: space-between;
+        justify-content: flex-start;
         flex-grow: 1;
-        gap: 1rem;
+        gap: 0.75rem;
         overflow-y: auto;
         min-height: 0;
+      }
+
+      .meteor-connect-content.contextual {
+        justify-content: center;
+      }
+
+      .meteor-connect-content::-webkit-scrollbar {
+        width: 0.35rem;
+      }
+
+      .meteor-connect-content::-webkit-scrollbar-thumb {
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.14);
       }
 
       .background-graphics-box {
@@ -244,7 +272,7 @@ export class MeteorActionUiContainer extends LitElement {
       }
 
       .section-action-title {
-        font-size: 0.8rem;
+        font-size: 0.72rem;
         font-weight: 700;
         text-transform: uppercase;
         color: rgba(var(--meteor-text-on-dark-dark), 1);
@@ -259,7 +287,7 @@ export class MeteorActionUiContainer extends LitElement {
         justify-content: center;
         align-items: center;
         flex-wrap: wrap;
-        gap: 1rem;
+        gap: 0.55rem;
       }
 
       .option-buttons-row button {
@@ -291,7 +319,7 @@ export class MeteorActionUiContainer extends LitElement {
 
       .divider .section-action-title {
         flex-shrink: 0;
-        margin: 0 1rem;
+        margin: 0 0.7rem;
       }
 
       .divider .divider-line {
@@ -304,7 +332,8 @@ export class MeteorActionUiContainer extends LitElement {
         display: flex;
         flex-direction: column;
         align-items: stretch;
-        gap: 1.3rem;
+        gap: 0.55rem;
+        margin-top: auto;
       }
 
       .qr-section {
@@ -456,21 +485,25 @@ export class MeteorActionUiContainer extends LitElement {
   render() {
     this.registerHmrBoundary();
 
-    const includeWebDevLocalhost =
-      this.action
-        .getAllExecutionTargetConfigs()
-        .find((t) => t.executionTarget === "v1_web_localhost") != null;
-
-    const availablePlatformTargets = this.action
+    const allPlatformTargets = this.action
       .getAllExecutionTargetConfigs()
-      .map((t) => t.executionTarget);
+      .map((target) => target.executionTarget);
+    const contextualExecutionTarget = this.action.getActionKnownContextualTarget();
+    const mobileExecuting =
+      this.executionState.isExecuting &&
+      this.executionState.targetedPlatform === "v2_bridge_mobile";
+    const lockedExecutionTarget =
+      contextualExecutionTarget ?? (mobileExecuting ? "v2_bridge_mobile" : undefined);
+    const availablePlatformTargets = getVisibleActionTargets(
+      allPlatformTargets,
+      lockedExecutionTarget,
+    );
+    const isPlatformLocked = lockedExecutionTarget != null;
+    const includeWebDevLocalhost = availablePlatformTargets.includes("v1_web_localhost");
 
     const extensionWalletAvailable = availablePlatformTargets.includes("v1_ext");
     const webWalletAvailable = availablePlatformTargets.includes("v1_web");
     const mobileWalletAvailable = availablePlatformTargets.includes("v2_bridge_mobile");
-    const mobileExecuting =
-      this.executionState.isExecuting &&
-      this.executionState.targetedPlatform === "v2_bridge_mobile";
     const showingContinueKnownTarget = this.pendingKnownExecutionTarget != null;
     const continueExecutionTarget = this.pendingKnownExecutionTarget ?? "v1_web";
 
@@ -500,12 +533,16 @@ export class MeteorActionUiContainer extends LitElement {
         renderedScreen = html`<get-meteor-screen .supportedPlatforms=${this.action.meteorConnect.supportedPlatforms}></get-meteor-screen>`;
       } else {
         renderedScreen = html`
-          <div class="meteor-connect-content">
+          <div class=${`meteor-connect-content${isPlatformLocked ? " contextual" : ""}`}>
             <div class="background-graphics-box">
               <img src="https://storage.googleapis.com/meteor-apps-v2/graphics/meteor_connect_ui/star.gif" alt="Meteor Background Stars" class="star-gif" />
             </div>
-            <div class="options">
-              ${extensionWalletAvailable || webWalletAvailable || includeWebDevLocalhost ? html`<span class="section-action-title">Choose your wallet</span>` : ""}
+            ${
+              !isPlatformLocked &&
+              (extensionWalletAvailable || webWalletAvailable || includeWebDevLocalhost)
+                ? html`
+            <div class="options" aria-label="Wallet choices">
+              <span class="section-action-title">Choose your wallet</span>
               <div class="option-buttons-row">
               ${
                 extensionWalletAvailable
@@ -537,12 +574,15 @@ export class MeteorActionUiContainer extends LitElement {
                     : ""
                 }
               </div>
-            </div>
+            </div>`
+                : ""
+            }
             ${
               mobileWalletAvailable
                 ? html`
               <meteor-mobile-bridge-panel
                 .session=${this.mobileSession}
+                .contextual=${isPlatformLocked}
                 .openInApp=${() => this.action.meteorConnect.mobileBridgeClient.openCurrentSessionInApp()}
                 .refreshCode=${async () => {
                   this.mobileSession = await this.actionController.refreshMobileBridge();
@@ -554,7 +594,9 @@ export class MeteorActionUiContainer extends LitElement {
             `
                 : ""
             }
-            <div class="no-wallet-bottom-section">
+            ${
+              !isPlatformLocked
+                ? html`<div class="no-wallet-bottom-section">
               <div class="divider">
                 <span class="divider-line"></span>
                 <span class="section-action-title">Don't have a wallet?</span>
@@ -570,7 +612,9 @@ export class MeteorActionUiContainer extends LitElement {
                   }}
                 ></meteor-action-button>
               </div>
-            </div>
+            </div>`
+                : ""
+            }
           </div>
             `;
       }
@@ -581,23 +625,21 @@ export class MeteorActionUiContainer extends LitElement {
         <div class="meteor-connect-title-box">
           <div class="meteor-logo-and-title">
             ${
-              this.showGetMeteor || showingContinueKnownTarget
+              this.showGetMeteor
                 ? html`
-            <div
+            <button
+              type="button"
               class="close-circle"
+              aria-label="Back to wallet choices"
               @click=${() => {
-                if (showingContinueKnownTarget) {
-                  this.pendingKnownExecutionTarget = undefined;
-                } else {
-                  this.showGetMeteor = false;
-                }
+                this.showGetMeteor = false;
               }}
             >
               ${unsafeSVG(svg_icons_text.icon_arrow_back)}
-            </div>
+            </button>
             <div class="title-text-box">
               <span class="subsection-title">
-                ${showingContinueKnownTarget ? "Execute Action" : "Get Meteor Wallet"}
+                Get Meteor Wallet
               </span>
             </div>`
                 : html`
@@ -610,9 +652,9 @@ export class MeteorActionUiContainer extends LitElement {
             </div>`
             }
           </div>
-          <div class="close-circle" @click=${() => this._handleActionClose()}>
+          <button type="button" class="close-circle" aria-label="Close Meteor Connect" @click=${() => this._handleActionClose()}>
             ${unsafeSVG(svg_icons_text.icon_close_x)}
-          </div>
+          </button>
         </div>
         ${renderedScreen}
       </div>

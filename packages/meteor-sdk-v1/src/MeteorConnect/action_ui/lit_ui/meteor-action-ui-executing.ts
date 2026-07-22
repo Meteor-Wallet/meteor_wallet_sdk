@@ -21,6 +21,7 @@ export class MeteorActionUiExecuting extends LitElement {
       align-items: stretch;
       justify-content: stretch;
       flex-grow: 1;
+      min-height: 0;
     }
 
     .execution-action-container {
@@ -29,7 +30,7 @@ export class MeteorActionUiExecuting extends LitElement {
       flex-direction: column;
       flex-grow: 1;
       align-items: center;
-      justify-content: space-evenly;
+      justify-content: center;
       overflow: hidden;
     }
 
@@ -57,10 +58,12 @@ export class MeteorActionUiExecuting extends LitElement {
       align-items: center;
       justify-content: center;
       gap: 0.7rem;
+      z-index: 1;
     }
 
     .execution-action-text {
       color: rgba(255, 255, 255, 1);
+      font-size: 0.9rem;
     }
 
     .execution-target-icon {

@@ -7,6 +7,7 @@ import type {
   TMeteorConnectionExecutionTarget,
   TMeteorExecutionTargetConfig,
 } from "../MeteorConnect.types.ts";
+import type { MobileBridgeSession } from "../target_clients/mobile_bridge/MobileBridgeSession";
 import { MCActionRegistryMap, type TMCActionRegistry } from "./mc_action.combined";
 import type {
   IMCActionExecutionState,
@@ -14,7 +15,6 @@ import type {
   TMCActionRequestUnion,
   TMCActionRequestUnionExpandedInput,
 } from "./mc_action.types.ts";
-import type { MobileBridgeSession } from "../target_clients/mobile_bridge/MobileBridgeSession";
 
 export class ExecutableAction<R extends TMCActionRequestUnion<TMCActionRegistry>> {
   readonly id: R["id"];
@@ -126,6 +126,8 @@ export class ExecutableAction<R extends TMCActionRequestUnion<TMCActionRegistry>
 
   getActionKnownContextualTarget(): TMeteorConnectionExecutionTarget | undefined {
     const knownContextualTarget = this.connectionTargetConfig.contextualExecutionTarget;
+    if (knownContextualTarget == null) return undefined;
+
     const knownContextualTargetConfig = this.connectionTargetConfig.allExecutionTargets.find(
       (config) => config.executionTarget === knownContextualTarget,
     );
@@ -262,9 +264,22 @@ Available targets: [${this.connectionTargetConfig.allExecutionTargets.map((c) =>
     return this.execute_promise;
   }
 
+  private isLocalOnlySignOut(): boolean {
+    if (this.id !== "near::sign_out") return false;
+    const account = this.expandedInput.account as IMeteorConnectAccount | undefined;
+    return account != null && (account.publicKeys == null || account.publicKeys.length === 0);
+  }
+
+  private async executeLocalSignOut(): Promise<TMCActionRegistry[R["id"]]["output"]> {
+    const account = this.expandedInput.account as IMeteorConnectAccount;
+    await this.meteorConnect.removeSignedInAccount(account.identifier);
+    return account.identifier as TMCActionRegistry[R["id"]]["output"];
+  }
+
   private async commitAndExecute(
     executionTarget?: TMeteorConnectionExecutionTarget,
   ): Promise<TMCActionRegistry[R["id"]]["output"]> {
+    if (this.isLocalOnlySignOut()) return this.executeLocalSignOut();
     const contextual = this.getActionKnownContextualTarget();
     const target = contextual ?? executionTarget;
     if (target !== "v2_bridge_mobile" && this.prepareMobilePromise != null) {
@@ -306,7 +321,9 @@ Available targets: [${this.connectionTargetConfig.allExecutionTargets.map((c) =>
     input?: Omit<IRenderActionUi_Input<this>, "action">,
   ): Promise<TMCActionRegistry[R["id"]]["output"]> {
     if (this.executeWithUi_promise == null) {
-      this.executeWithUi_promise = this._promptForExecution(input);
+      this.executeWithUi_promise = this.isLocalOnlySignOut()
+        ? this.execute()
+        : this._promptForExecution(input);
     }
 
     return this.executeWithUi_promise;

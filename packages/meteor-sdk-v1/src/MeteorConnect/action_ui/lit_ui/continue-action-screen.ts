@@ -65,6 +65,7 @@ export class ContinueActionScreen extends LitElement {
       align-items: stretch;
       justify-content: stretch;
       flex-grow: 1;
+      min-height: 0;
     }
 
     .continue-action-container {
@@ -72,7 +73,10 @@ export class ContinueActionScreen extends LitElement {
       flex-direction: column;
       flex-grow: 1;
       align-items: center;
-      justify-content: space-evenly;
+      justify-content: center;
+      gap: 1.25rem;
+      padding: 1rem;
+      box-sizing: border-box;
     }
 
     .image-and-text {
@@ -83,7 +87,7 @@ export class ContinueActionScreen extends LitElement {
     }
 
     .continue-action-svg {
-      width: 80%;
+      width: min(68%, 220px);
     }
 
     .continue-action-svg svg {
@@ -98,10 +102,11 @@ export class ContinueActionScreen extends LitElement {
       justify-content: center;
       gap: 0.3rem;
       text-align: center;
+      margin-top: -1.8rem;
     }
 
     .continue-action-title {
-      font-size: 1.2em;
+      font-size: 1.05rem;
       font-weight: 700;
       color: rgba(255, 255, 255, 1);
     }
@@ -111,7 +116,7 @@ export class ContinueActionScreen extends LitElement {
       flex-direction: row;
       align-items: center;
       justify-content: center;
-      gap: 1.2rem;
+      gap: 0.6rem;
       flex-wrap: wrap;
     }
   `;

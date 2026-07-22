@@ -190,6 +190,58 @@ describe("MeteorConnect", () => {
       expect(accountsFromStorage.length).toEqual(0);
     });
 
+    it("signs out locally without opening action UI when no dApp key was added", async () => {
+      const { meteorConnect } = await initializeMeteorConnectTest();
+      const account: IMeteorConnectAccount = {
+        identifier: {
+          blockchain: "near",
+          network: "testnet",
+          accountId: "local-only.testnet",
+        },
+        connection: { executionTarget: "v1_web" },
+        publicKeys: [],
+      };
+      await meteorConnect.addSignedInAccount(account);
+
+      const action = await meteorConnect.createAction({
+        id: "near::sign_out",
+        input: { target: account.identifier },
+      });
+      const result = await action.promptForExecution();
+
+      expect(result).toEqual(account.identifier);
+      expect(action.getPreparedMobileSession()).toBeUndefined();
+      expect(await meteorConnect.getAccount(account.identifier)).toBeUndefined();
+    });
+
+    it("does not fall back to a different wallet for an account-bound action", async () => {
+      const { meteorConnect } = await initializeMeteorConnectTest();
+      const account: IMeteorConnectAccount = {
+        identifier: {
+          blockchain: "near",
+          network: "testnet",
+          accountId: "web-bound.testnet",
+        },
+        connection: { executionTarget: "v1_web" },
+        publicKeys: [{ type: "ed25519", publicKey: "ed25519:11111111111111111111111111111111" }],
+      };
+      await meteorConnect.addSignedInAccount(account);
+
+      await expect(
+        meteorConnect.createAction({
+          id: "near::sign_message",
+          input: {
+            messageParams: {
+              message: "hello",
+              nonce: test_createSimpleNonce(),
+              recipient: GUESTBOOK_CONTRACT_ID,
+            },
+            target: account.identifier,
+          },
+        }),
+      ).rejects.toThrow("connected through [v1_web]");
+    });
+
     it("should be able to sign a NEAR message", async () => {
       const { meteorConnect, addedAccounts } = await initializeMeteorConnectTest({
         addTestnetAccount: true,
@@ -208,6 +260,8 @@ describe("MeteorConnect", () => {
           target: account.identifier,
         },
       });
+
+      expect(action.getActionKnownContextualTarget()).toBe("test");
 
       const response = await action.execute();
 

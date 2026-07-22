@@ -23,13 +23,13 @@ export class MeteorActionButton extends LitElement {
       
       --meteor-button-text-color: 255, 255, 255;
 
-      --border-radius: 0.5rem;
-      --padding: 0.9rem 1.2rem;
+      --border-radius: 0.65rem;
+      --padding: 0.68rem 0.85rem;
       --gap: 0.4rem;
       --transition: transform 120ms ease, background 120ms ease;
     }
 
-    button {
+      button {
       display: flex;
       align-items: center;
       justify-content: center;
@@ -38,7 +38,8 @@ export class MeteorActionButton extends LitElement {
       /* border: none; */
       border-radius: var(--border-radius);
       border-width: 0;
-      box-sizing: content-box;
+      box-sizing: border-box;
+      min-height: 2.55rem;
       background: linear-gradient(135deg, rgba(var(--meteor-button-secondary-light), 0.8) 0%, rgba(var(--meteor-button-secondary-accent), 0.7) 100%);
       filter: drop-shadow(0 3px 10px rgba(0, 0, 0, 0.2));
       color: rgba(var(--meteor-button-text-color), 1);
@@ -46,7 +47,7 @@ export class MeteorActionButton extends LitElement {
       letter-spacing: 0.035rem;
       line-height: 1em;
       font-family: inherit;
-      font-size: 0.9rem;
+      font-size: 0.84rem;
       cursor: pointer;
       transition: var(--transition);
       white-space: nowrap;
@@ -60,6 +61,11 @@ export class MeteorActionButton extends LitElement {
     button:active:not(:disabled) {
       background: linear-gradient(135deg, rgba(var(--meteor-button-secondary-light), 1) 0%, rgba(var(--meteor-button-secondary-accent), 1) 100%);
       transform: translateY(0);
+    }
+
+    button:focus-visible {
+      outline: 2px solid rgba(155, 140, 255, 0.95);
+      outline-offset: 2px;
     }
 
     button:disabled {

@@ -352,6 +352,20 @@ export class MeteorConnect {
       );
     }
 
+    const targetClientAvailable =
+      selectedExecutionTarget == null ||
+      executionConfigs.some((config) => config.executionTarget === selectedExecutionTarget);
+    const canSignOutLocally =
+      request.id === "near::sign_out" && targetedAccount?.publicKeys.length === 0;
+
+    if (!targetClientAvailable && !canSignOutLocally) {
+      throw new Error(
+        this.logger.formatMsg(
+          `The account for action [${request.id}] is connected through [${selectedExecutionTarget}], but that platform is not available in this Meteor Connect configuration`,
+        ),
+      );
+    }
+
     this.logger.log(
       `Created action [${request.id}] with possible targets: [${executionConfigs
         .map((c) => c.executionTarget)

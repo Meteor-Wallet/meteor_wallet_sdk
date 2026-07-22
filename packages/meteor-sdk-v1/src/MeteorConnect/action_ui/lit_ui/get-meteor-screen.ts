@@ -17,6 +17,7 @@ export class GetMeteorScreen extends LitElement {
       align-items: stretch;
       justify-content: stretch;
       flex-grow: 1;
+      min-height: 0;
     }
 
     .get-meteor-container {
@@ -24,7 +25,10 @@ export class GetMeteorScreen extends LitElement {
       flex-direction: column;
       flex-grow: 1;
       align-items: center;
-      justify-content: space-evenly;
+      justify-content: center;
+      gap: 1rem;
+      padding: 1rem;
+      box-sizing: border-box;
     }
 
     .image-and-text {
@@ -35,7 +39,7 @@ export class GetMeteorScreen extends LitElement {
     }
 
     .get-meteor-svg {
-      width: 80%;
+      width: min(68%, 220px);
     }
 
     .get-meteor-svg svg {
@@ -44,22 +48,25 @@ export class GetMeteorScreen extends LitElement {
     }
 
     .get-meteor-text {
-      margin-top: -3rem;
+      margin-top: -2.2rem;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 0.3rem;
+      gap: 0.35rem;
+      text-align: center;
     }
 
     .get-meteor-text .get-meteor-title {
-      font-size: 2rem;
+      font-size: 1.5rem;
       font-weight: 700;
       color: rgba(255, 255, 255, 1);
     }
 
     .get-meteor-text .get-meteor-subtitle {
-      font-size: 1em;
+      max-width: 18rem;
+      font-size: 0.84rem;
+      line-height: 1.15rem;
       font-weight: 500;
       color: rgba(255, 255, 255, 0.5);
     }
@@ -69,18 +76,14 @@ export class GetMeteorScreen extends LitElement {
       flex-direction: row;
       align-items: center;
       justify-content: center;
-      gap: 1.2rem;
+      gap: 0.6rem;
       flex-wrap: wrap;
     }
   `;
 
   render() {
-    console.log(this.supportedPlatforms);
     const supportsWeb = this.supportedPlatforms.includes("v1_web");
     const supportsExtension = this.supportedPlatforms.includes("v1_ext");
-    const supportsMobile =
-      this.supportedPlatforms.includes("v2_rid_mobile_deep_link") ||
-      this.supportedPlatforms.includes("v2_rid_qr_code");
 
     return html`
       <div

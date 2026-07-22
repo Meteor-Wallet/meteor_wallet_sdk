@@ -111,7 +111,12 @@ describe("Meteor mobile bridge NEAR adapters", () => {
     });
     const result = act_impl_near.action.sign_in
       .request({ network: "testnet" })
-      .successResult([{ accountId: "alice.testnet" }])
+      .successResult([
+        {
+          accountId: "alice.testnet",
+          publicKey: KeyPair.fromRandom("ed25519").getPublicKey().toString(),
+        },
+      ])
       .toJsonObject();
     const converted = await mobileBridgeResultToSdk(
       prepared,
@@ -121,6 +126,41 @@ describe("Meteor mobile bridge NEAR adapters", () => {
     expect(converted.identifier.accountId).toBe("alice.testnet");
     expect(converted.publicKeys).toEqual([]);
     expect(converted.connection).toEqual(mobileConnection);
+  });
+
+  it("records only the function-call key added for the dApp", async () => {
+    const addedPublicKey = KeyPair.fromRandom("ed25519").getPublicKey().toString();
+    const walletPrimaryKey = KeyPair.fromRandom("ed25519").getPublicKey().toString();
+    const addFunctionCallKey = {
+      contractId: "guestbook.testnet",
+      publicKey: addedPublicKey,
+      allowMethods: { anyMethod: false as const, methodNames: ["addMessage"] },
+    };
+    const prepared = await nearActionToMobileBridge({
+      id: "near::sign_in",
+      expandedInput: {
+        target: { blockchain: "near", network: "testnet" },
+        addFunctionCallKey,
+      },
+    });
+    const result = act_impl_near.action.sign_in
+      .request({ network: "testnet", addFunctionCallKey })
+      .successResult([{ accountId: "alice.testnet", publicKey: walletPrimaryKey }])
+      .toJsonObject();
+
+    const converted = await mobileBridgeResultToSdk(
+      prepared,
+      { result, signatureVerified: true, timestamp: Date.now() },
+      { connection: mobileConnection },
+    );
+
+    expect(converted.publicKeys).toEqual([
+      {
+        type: "ed25519",
+        publicKey: addedPublicKey,
+        meta: { addFunctionCallKey },
+      },
+    ]);
   });
 
   it("rejects a tampered signed output hash", async () => {

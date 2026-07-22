@@ -1,11 +1,11 @@
+import type { IPartnerActionResult } from "@meteorwallet/connect";
 import { act_impl_near } from "@meteorwallet/connect-shared";
-import { isActionPayload_Result_JsonObject } from "@nice-code/action";
 import { KeyType, PublicKey } from "@near-js/crypto";
 import { DelegateAction, SCHEMA, Signature, SignedDelegate } from "@near-js/transactions";
+import { isActionPayload_Result_JsonObject } from "@nice-code/action";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { base64 } from "@scure/base";
 import { deserialize, serialize } from "borsh";
-import type { IPartnerActionResult } from "@meteorwallet/connect";
 import type { IMeteorConnectAccount, TMeteorConnectPublicKey } from "../../MeteorConnect.types";
 import type {
   IMobileBridgePreparedAction,
@@ -99,9 +99,9 @@ export async function mobileBridgeResultToSdk(
     }
     const selected = output[0];
     const publicKeys: TMeteorConnectPublicKey[] = [];
-    if (selected.publicKey != null) {
-      publicKeys.push({ type: "ed25519", publicKey: selected.publicKey });
-    }
+    const functionCallKey = normalizeFunctionCallKeyForMeta(input) as
+      | Record<string, unknown>
+      | undefined;
     if (prepared.pendingFunctionCallKey != null) {
       if (context.persistFunctionCallKey == null) {
         throw new Error("local_key_persistence_failed");
@@ -118,7 +118,20 @@ export async function mobileBridgeResultToSdk(
       publicKeys.push({
         type: "ed25519",
         publicKey: prepared.pendingFunctionCallKey.getPublicKey().toString(),
-        meta: { addFunctionCallKey: normalizeFunctionCallKeyForMeta(input) },
+        meta: {
+          addFunctionCallKey: {
+            ...functionCallKey,
+            publicKey: prepared.pendingFunctionCallKey.getPublicKey().toString(),
+          },
+        },
+      });
+    } else if (typeof functionCallKey?.publicKey === "string") {
+      // Only keys explicitly added for this dApp belong in the connected-account key list. The
+      // wallet may also return its primary signing key, but sign-out must never try to remove it.
+      publicKeys.push({
+        type: "ed25519",
+        publicKey: functionCallKey.publicKey,
+        meta: { addFunctionCallKey: functionCallKey },
       });
     }
     const account: IMeteorConnectAccount = {
