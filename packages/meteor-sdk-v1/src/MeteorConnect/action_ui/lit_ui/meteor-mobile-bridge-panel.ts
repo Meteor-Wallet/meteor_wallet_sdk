@@ -49,10 +49,13 @@ export class MeteorMobileBridgePanel extends LitElement {
       --mc-primary-b: 89, 47, 254;
       --mc-secondary-a: 30, 30, 61;
       --mc-secondary-b: 30, 32, 65;
-      --mc-ink: #f5f3ff;
-      --mc-body: rgb(225, 223, 247);
-      --mc-muted: rgb(166, 162, 199);
-      --mc-kicker: rgb(176, 168, 244);
+      /* Text/surface tokens follow the surrounding Meteor Connect modal palette
+         (--meteor-text-on-dark-* / --meteor-dark-gray-* come from meteor-action-ui-container). */
+      --mc-ink: rgb(var(--meteor-text-on-dark-light, 245, 243, 255));
+      --mc-body: rgb(var(--meteor-text-on-dark-standard, 190, 190, 230));
+      --mc-muted: rgb(var(--meteor-text-on-dark-dark, 154, 151, 190));
+      --mc-kicker: rgb(var(--meteor-text-on-dark-dark, 154, 151, 190));
+      --mc-hairline: rgba(255, 255, 255, 0.08);
       --mc-green: 105, 215, 169;
       --mc-red: 255, 138, 134;
       --mc-amber: 255, 200, 130;
@@ -61,10 +64,12 @@ export class MeteorMobileBridgePanel extends LitElement {
     }
 
     /* ---------- Card shell ---------- */
-    .panel { position: relative; overflow: hidden; display: flex; flex-direction: column; gap: .5rem; align-items: center; padding: .8rem; border: 1px solid rgba(150,140,255,.24); border-radius: .9rem; background: linear-gradient(145deg, rgba(22,18,45,.92), rgba(12,10,26,.82)); box-shadow: 0 10px 28px rgba(0,0,0,.18), inset 0 1px rgba(255,255,255,.025); box-sizing: border-box; }
+    .panel { position: relative; isolation: isolate; overflow: hidden; display: flex; flex-direction: column; gap: .55rem; align-items: center; padding: .85rem .8rem .8rem; border: 1px solid rgba(150,140,255,.13); border-radius: .9rem; background: linear-gradient(155deg, rgba(var(--meteor-dark-gray-lightest, 34,34,41), .32), rgba(var(--meteor-dark-gray-darkest, 14,14,23), .55) 70%); box-shadow: inset 0 2px 16px rgba(0,0,0,.22), inset 0 1px rgba(255,255,255,.035); box-sizing: border-box; }
+    .panel::before { content: ""; position: absolute; width: 240px; height: 240px; left: -90px; top: -110px; z-index: -1; border-radius: 50%; background: radial-gradient(circle, rgba(105,79,244,.12), transparent 68%); pointer-events: none; }
+    .panel::after { content: ""; position: absolute; width: 200px; height: 200px; right: -90px; bottom: -120px; z-index: -1; border-radius: 50%; background: radial-gradient(circle, rgba(69,193,255,.07), transparent 70%); pointer-events: none; }
     :host([contextual]) .panel { padding: .9rem; }
     .heading { display: flex; flex-direction: column; gap: .26rem; align-items: center; }
-    .title { font-size: .72rem; font-weight: 800; text-transform: uppercase; letter-spacing: .1rem; color: var(--mc-kicker); }
+    .title { font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08rem; color: var(--mc-kicker); }
     .status { margin: 0; font-size: .82rem; line-height: 1.15rem; color: var(--mc-body); }
     .muted { color: var(--mc-muted); font-size: .73rem; line-height: .95rem; }
     .error { color: rgb(var(--mc-red)); font-size: .76rem; line-height: 1rem; }
@@ -87,7 +92,7 @@ export class MeteorMobileBridgePanel extends LitElement {
     @keyframes spin { to { transform: rotate(360deg); } }
 
     /* ---------- Status pills ---------- */
-    .pill { display: inline-flex; align-items: center; gap: .42rem; padding: .38rem .68rem; border-radius: 999px; font-size: .7rem; line-height: 1; border: 1px solid rgba(150,140,255,.18); color: var(--mc-muted); background: rgba(255,255,255,.05); }
+    .pill { display: inline-flex; align-items: center; gap: .42rem; padding: .38rem .68rem; border-radius: 999px; font-size: .7rem; line-height: 1; border: 1px solid var(--mc-hairline); color: var(--mc-muted); background: rgba(255,255,255,.05); }
     .pill.good { border-color: rgba(var(--mc-green), .22); color: rgb(174,229,207); background: rgba(58,172,129,.09); }
     .pill.warn { border-color: rgba(var(--mc-amber), .25); color: rgb(var(--mc-amber)); background: rgba(255,187,105,.08); }
     .pill.bad { border-color: rgba(var(--mc-red), .25); color: rgb(var(--mc-red)); background: rgba(255,120,120,.08); }
@@ -107,16 +112,14 @@ export class MeteorMobileBridgePanel extends LitElement {
     .countdown-ring { width: .58rem; height: .58rem; border-radius: 50%; border: 2px solid currentColor; border-top-color: transparent; opacity: .75; animation: spin 2.4s linear infinite; }
 
     /* ---------- Stage cards (push / review / pin / status) ---------- */
-    .stage-panel { height: 292px; justify-content: center; isolation: isolate; }
+    .stage-panel { height: 292px; justify-content: center; }
     .stage-panel.auto { height: auto; min-height: 292px; padding: 1rem .9rem; }
     .stage-panel.slim { height: auto; min-height: 190px; }
-    .stage-panel::before { content: ""; position: absolute; width: 260px; height: 260px; left: -95px; top: -120px; z-index: -1; border-radius: 50%; background: radial-gradient(circle, rgba(105,79,244,.2), transparent 68%); pointer-events: none; }
-    .stage-panel::after { content: ""; position: absolute; width: 220px; height: 220px; right: -100px; bottom: -130px; z-index: -1; border-radius: 50%; background: radial-gradient(circle, rgba(69,193,255,.11), transparent 70%); pointer-events: none; }
     .stage { width: 100%; min-height: 258px; display: flex; align-items: center; justify-content: center; animation: stage-in .42s cubic-bezier(.16,1,.3,1) both; }
     .stage.compact { min-height: 0; flex-direction: column; gap: .6rem; text-align: center; padding: .35rem 0; }
     .push-layout { width: 100%; display: grid; grid-template-columns: minmax(0,1fr) 150px; align-items: center; gap: .85rem; }
     .stage-primary { min-width: 0; min-height: 220px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .55rem; text-align: center; }
-    .stage-kicker { color: var(--mc-kicker); font-size: .67rem; font-weight: 800; letter-spacing: .1rem; text-transform: uppercase; }
+    .stage-kicker { color: var(--mc-kicker); font-size: .72rem; font-weight: 700; letter-spacing: .08rem; text-transform: uppercase; }
     .stage-title { min-height: 2.44rem; max-width: 12rem; margin: 0; display: flex; align-items: center; justify-content: center; color: var(--mc-ink); font-size: 1.03rem; line-height: 1.22rem; font-weight: 750; text-wrap: balance; }
     .stage-subtitle { min-height: 2rem; max-width: 12rem; margin: 0; display: flex; align-items: center; color: var(--mc-muted); font-size: .74rem; line-height: 1rem; text-wrap: balance; }
     .stage-icon { position: relative; width: 66px; height: 66px; display: grid; place-items: center; border-radius: 21px; color: white; background: linear-gradient(145deg, rgba(112,88,248,.95), rgba(63,44,165,.9)); box-shadow: 0 12px 34px rgba(62,38,184,.35), inset 0 1px rgba(255,255,255,.2); }
@@ -127,12 +130,12 @@ export class MeteorMobileBridgePanel extends LitElement {
     .stage-icon.sending::after { animation-delay: .65s; }
     .stage-icon.sent, .stage-icon.good { background: linear-gradient(145deg, #40bc86, #227a61); box-shadow: 0 12px 34px rgba(32,157,109,.27), inset 0 1px rgba(255,255,255,.2); }
     .stage-icon.unavailable, .stage-icon.neutral { background: linear-gradient(145deg, #8a718f, #51425e); }
-    .status-line { min-height: 1rem; display: flex; align-items: center; justify-content: center; gap: .4rem; color: rgb(190,185,222); font-size: .7rem; }
+    .status-line { min-height: 1rem; display: flex; align-items: center; justify-content: center; gap: .4rem; color: var(--mc-body); font-size: .7rem; }
     .fallback-slot { width: 150px; min-height: 220px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .38rem; }
-    .fallback-label { min-height: .85rem; color: rgb(151,146,187); font-size: .66rem; font-weight: 700; letter-spacing: .045rem; text-transform: uppercase; }
+    .fallback-label { min-height: .85rem; color: var(--mc-kicker); font-size: .66rem; font-weight: 700; letter-spacing: .06rem; text-transform: uppercase; }
     .fallback-slot .qr-frame { padding: 3px; }
     .fallback-slot .qr { width: 144px; height: 144px; }
-    .qr-placeholder { width: 150px; height: 150px; display: grid; place-items: center; box-sizing: border-box; border: 1px solid rgba(162,151,231,.16); border-radius: 11px; overflow: hidden; color: rgb(145,139,181); font-size: .68rem; background: linear-gradient(110deg, rgba(255,255,255,.035) 20%, rgba(255,255,255,.08) 38%, rgba(255,255,255,.035) 56%); background-size: 220% 100%; animation: qr-shimmer 1.8s linear infinite; }
+    .qr-placeholder { width: 150px; height: 150px; display: grid; place-items: center; box-sizing: border-box; border: 1px solid var(--mc-hairline); border-radius: 11px; overflow: hidden; color: var(--mc-muted); font-size: .68rem; background: linear-gradient(110deg, rgba(255,255,255,.035) 20%, rgba(255,255,255,.08) 38%, rgba(255,255,255,.035) 56%); background-size: 220% 100%; animation: qr-shimmer 1.8s linear infinite; }
 
     /* ---------- Review stage ---------- */
     .review-stage { flex-direction: column; gap: .65rem; text-align: center; }
@@ -149,13 +152,13 @@ export class MeteorMobileBridgePanel extends LitElement {
     .phone-pin-dots span:nth-child(3) { animation-delay: .36s; }
     .phone-pin-dots span:nth-child(4) { animation-delay: .54s; }
     .review-title { max-width: 18rem; margin: 0; color: var(--mc-ink); font-size: 1.18rem; line-height: 1.35rem; font-weight: 760; text-wrap: balance; }
-    .review-subtitle { max-width: 17rem; margin: 0; color: rgb(173,169,205); font-size: .78rem; line-height: 1.05rem; }
+    .review-subtitle { max-width: 17rem; margin: 0; color: var(--mc-muted); font-size: .78rem; line-height: 1.05rem; }
 
     /* ---------- PIN stage ---------- */
     .pin-stage { flex-direction: column; gap: .55rem; text-align: center; min-height: 0; }
     .pin-row { position: relative; display: flex; gap: .55rem; justify-content: center; padding: .2rem 0; }
     .pin-row.shake { animation: pin-shake .45s cubic-bezier(.36,.07,.19,.97) both; }
-    .pin-cell { width: 50px; height: 58px; display: grid; place-items: center; font-size: 1.45rem; font-weight: 800; color: var(--mc-ink); border-radius: .8rem; border: 1px solid rgba(150,140,255,.28); background: linear-gradient(160deg, rgba(30,26,64,.9), rgba(16,13,38,.92)); box-shadow: inset 0 1px rgba(255,255,255,.04), 0 4px 14px rgba(0,0,0,.25); transition: border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease; }
+    .pin-cell { width: 50px; height: 58px; display: grid; place-items: center; font-size: 1.45rem; font-weight: 800; color: var(--mc-ink); border-radius: .8rem; border: 1px solid var(--mc-hairline); background: linear-gradient(160deg, rgba(255,255,255,.05), rgba(255,255,255,.015)); box-shadow: inset 0 1px rgba(255,255,255,.04), 0 4px 14px rgba(0,0,0,.25); transition: border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease; }
     .pin-cell.filled { border-color: rgba(139,122,255,.7); transform: translateY(-1px); }
     .pin-cell.active { border-color: rgba(160,140,255,.95); box-shadow: inset 0 1px rgba(255,255,255,.06), 0 0 0 3px rgba(112,86,237,.22), 0 4px 16px rgba(52,30,150,.35); }
     .pin-row.error .pin-cell { border-color: rgba(var(--mc-red), .65); }

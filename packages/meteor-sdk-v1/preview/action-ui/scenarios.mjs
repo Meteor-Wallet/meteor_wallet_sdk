@@ -1,0 +1,195 @@
+/**
+ * Shared scenario definitions for the Meteor Connect action-UI preview.
+ *
+ * Each scenario is plain data so it can be consumed from both sides:
+ * - `action-ui-preview.entry.ts` (browser) builds mock action/session objects from it.
+ * - `screenshot.mjs` (node) iterates the same list to capture every state.
+ *
+ * Scenario fields:
+ * - `name`        — used as `?scenario=<name>` and as the screenshot filename prefix.
+ * - `description` — shown in the CLI link list.
+ * - `targets`     — execution targets offered by the mock action (default: all).
+ * - `knownTarget` — when set, simulates a contextual (locked) execution target.
+ * - `pendingTarget` — when set, shows the "continue on your platform" screen.
+ * - `view`        — set to "get-meteor" to open on the Get Meteor Wallet screen.
+ * - `mobileUa`    — screenshot.mjs uses a mobile user agent for this scenario.
+ * - `settleMs`    — how long screenshot.mjs waits before capturing (default 900).
+ * - `snapshot`    — IMobileBridgeSnapshot fields the mock mobile session emits.
+ */
+
+const ALL_TARGETS = ["v1_ext", "v1_web", "v1_web_localhost", "v2_bridge_mobile"];
+const DEEP_LINK = "https://link.meteorwallet.app/bridge?requestId=abc123xyz";
+const EXPIRES_SOON = () => Date.now() + 4 * 60_000 + 48_000;
+
+/** @type {Array<Record<string, any>>} */
+export const SCENARIOS = [
+  {
+    name: "main",
+    description: "Wallet picker + Meteor Mobile panel with QR (most common state)",
+    targets: ALL_TARGETS,
+    snapshot: {
+      phase: "waiting_for_wallet",
+      push: "not_attempted",
+      deepLink: DEEP_LINK,
+      expiresAt: EXPIRES_SOON(),
+      pinAttemptsUsed: 0,
+      reconnecting: false,
+    },
+  },
+  {
+    name: "mobile-main",
+    description: "Same as main, but with a mobile user agent (stacked layout)",
+    targets: ALL_TARGETS,
+    mobileUa: true,
+    snapshot: {
+      phase: "waiting_for_wallet",
+      push: "not_attempted",
+      deepLink: DEEP_LINK,
+      expiresAt: EXPIRES_SOON(),
+      pinAttemptsUsed: 0,
+      reconnecting: false,
+    },
+  },
+  {
+    name: "push",
+    description: "Contextual (logged-in) push notification stage",
+    targets: ALL_TARGETS,
+    knownTarget: "v2_bridge_mobile",
+    settleMs: 1400,
+    snapshot: {
+      phase: "waiting_for_wallet",
+      push: "delivered",
+      deepLink: DEEP_LINK,
+      expiresAt: EXPIRES_SOON(),
+      pinAttemptsUsed: 0,
+      reconnecting: false,
+    },
+  },
+  {
+    name: "push-unavailable",
+    description: "Push notification unavailable, QR fallback",
+    targets: ALL_TARGETS,
+    knownTarget: "v2_bridge_mobile",
+    snapshot: {
+      phase: "waiting_for_wallet",
+      push: "not_delivered",
+      deepLink: DEEP_LINK,
+      expiresAt: EXPIRES_SOON(),
+      pinAttemptsUsed: 0,
+      reconnecting: false,
+    },
+  },
+  {
+    name: "review",
+    description: "Review & approve stage (wallet received the request)",
+    targets: ALL_TARGETS,
+    knownTarget: "v2_bridge_mobile",
+    snapshot: {
+      phase: "wallet_action",
+      push: "delivered",
+      deepLink: DEEP_LINK,
+      expiresAt: EXPIRES_SOON(),
+      pinAttemptsUsed: 0,
+      reconnecting: false,
+    },
+  },
+  {
+    name: "pin",
+    description: "First-pairing PIN entry stage",
+    targets: ALL_TARGETS,
+    knownTarget: "v2_bridge_mobile",
+    snapshot: {
+      phase: "wallet_verification",
+      push: "delivered",
+      deepLink: DEEP_LINK,
+      expiresAt: EXPIRES_SOON(),
+      pinAttemptsUsed: 0,
+      reconnecting: false,
+    },
+  },
+  {
+    name: "pin-error",
+    description: "PIN entry with an error and 1 attempt used",
+    targets: ALL_TARGETS,
+    knownTarget: "v2_bridge_mobile",
+    snapshot: {
+      phase: "wallet_verification",
+      push: "delivered",
+      deepLink: DEEP_LINK,
+      expiresAt: EXPIRES_SOON(),
+      pinAttemptsUsed: 1,
+      pinError: "Incorrect PIN",
+      reconnecting: false,
+    },
+  },
+  {
+    name: "completed",
+    description: "Request completed in Meteor Mobile",
+    targets: ALL_TARGETS,
+    knownTarget: "v2_bridge_mobile",
+    snapshot: {
+      phase: "completed",
+      push: "delivered",
+      pinAttemptsUsed: 0,
+      reconnecting: false,
+    },
+  },
+  {
+    name: "failed",
+    description: "Request failed / rejected",
+    targets: ALL_TARGETS,
+    knownTarget: "v2_bridge_mobile",
+    snapshot: {
+      phase: "failed",
+      push: "delivered",
+      pinAttemptsUsed: 0,
+      reconnecting: false,
+      error: "The request was rejected in Meteor Mobile.",
+    },
+  },
+  {
+    name: "reset",
+    description: "Identity reset required (stale pairing)",
+    targets: ALL_TARGETS,
+    knownTarget: "v2_bridge_mobile",
+    snapshot: {
+      phase: "waiting_for_wallet",
+      push: "not_attempted",
+      deepLink: DEEP_LINK,
+      expiresAt: EXPIRES_SOON(),
+      pinAttemptsUsed: 0,
+      reconnecting: false,
+      identityResetRequired: true,
+    },
+  },
+  {
+    name: "continue-web",
+    description: "Continue-on-your-platform screen (returning user)",
+    targets: ALL_TARGETS,
+    pendingTarget: "v1_web",
+    snapshot: {
+      phase: "waiting_for_wallet",
+      push: "not_attempted",
+      deepLink: DEEP_LINK,
+      expiresAt: EXPIRES_SOON(),
+      pinAttemptsUsed: 0,
+      reconnecting: false,
+    },
+  },
+  {
+    name: "get-meteor",
+    description: "Get Meteor Wallet screen",
+    targets: ALL_TARGETS,
+    view: "get-meteor",
+    snapshot: {
+      phase: "waiting_for_wallet",
+      push: "not_attempted",
+      deepLink: DEEP_LINK,
+      expiresAt: EXPIRES_SOON(),
+      pinAttemptsUsed: 0,
+      reconnecting: false,
+    },
+  },
+];
+
+export const SCENARIO_NAMES = SCENARIOS.map((s) => s.name);

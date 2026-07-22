@@ -7,9 +7,9 @@
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
+      "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
-      "require": "./dist/index.cjs",
-      "types": "./dist/index.d.ts"
+      "require": "./dist/index.cjs"
     },
     "./package.json": "./package.json"
   },
@@ -32,6 +32,8 @@
     "docs:build_serve": "npm run docs:build && cd ./docs && serve",
     "docs:deploy": "CLOUDFLARE_ACCOUNT_ID=06f0b83df3d52d4d6ddc6512618dca88 npx wrangler pages publish ./docs",
     "prettier": "prettier --write  src/**/*.{js,ts}",
+    "preview:action-ui": "node ./preview/action-ui/preview.mjs --open",
+    "preview:action-ui:shots": "node ./preview/action-ui/screenshot.mjs",
     "type-check": "tsc --noEmit",
     "type-check-watch": "tsc --noEmit --watch"
   },
@@ -68,7 +70,9 @@
     "near-api-js": "^6.0.0"
   },
   "devDependencies": {
+    "esbuild": "0.27.2",
     "near-api-js": "6.2.5",
+    "playwright-core": "1.61.1",
     "typedoc": "0.28.16",
     "tsdown": "0.20.1"
   }

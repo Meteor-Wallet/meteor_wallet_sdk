@@ -27,7 +27,8 @@
   },
   "include": [
     "src/**/*",
-    "scripts/**/*"
+    "scripts/**/*",
+    "preview/**/*.ts"
   ],
   "exclude": [
     "dist",
