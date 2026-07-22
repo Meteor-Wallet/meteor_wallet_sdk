@@ -42,6 +42,7 @@ const initializedMeteorConnect = async (): Promise<MeteorConnect> => {
       partnerMetadata: {
         name: "Meteor SDK test web",
         description: "Development harness for the Meteor Connect mobile bridge",
+        iconUrl: `${window.location.origin}/favicon.ico`,
         originUrl: window.location.origin,
       },
     },
