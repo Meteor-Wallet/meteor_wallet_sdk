@@ -302,7 +302,10 @@ export class MeteorMobileBridgePanel extends LitElement {
         type: "svg",
         data: link,
         margin: 5,
-        dotsOptions: { color: "#22105f", type: "rounded" },
+        // roundSize must stay false: when true (the default) the module size is
+        // floored to whole pixels, which shrinks dense QR codes (long bridge links)
+        // to as little as ~50% of the intended size.
+        dotsOptions: { color: "#22105f", type: "rounded", roundSize: false },
         backgroundOptions: { color: "#ffffff" },
       });
     } else if (this.qrValue !== link) {

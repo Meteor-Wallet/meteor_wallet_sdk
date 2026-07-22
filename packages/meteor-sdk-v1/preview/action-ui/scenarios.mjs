@@ -18,7 +18,11 @@
  */
 
 const ALL_TARGETS = ["v1_ext", "v1_web", "v1_web_localhost", "v2_bridge_mobile"];
-const DEEP_LINK = "https://link.meteorwallet.app/bridge?requestId=abc123xyz";
+// Realistic-length bridge link so the QR density matches the real app
+// (short links produce unrealistically sparse QR codes).
+const DEEP_LINK =
+  "https://link.meteorwallet.app/bridge?requestId=8f3a9c2e-1b4d-4e7a-9c5f-2d6e8a0b1c3d" +
+  "&version=2&origin=https%3A%2F%2Fdemo-dapp.example.com";
 const EXPIRES_SOON = () => Date.now() + 4 * 60_000 + 48_000;
 
 /** @type {Array<Record<string, any>>} */
