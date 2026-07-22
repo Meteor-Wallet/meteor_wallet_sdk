@@ -224,12 +224,22 @@ export class MeteorMobileBridgePanel extends LitElement {
     }
   }
 
-  private handlePinSubmit(event: SubmitEvent): void {
-    event.preventDefault();
+  private requestPinSubmission(): void {
     if (this.pinPending || this.pin.length !== 4 || (this.snapshot?.pinAttemptsUsed ?? 3) >= 3) {
       return;
     }
     void this.submitPin();
+  }
+
+  private handlePinKeyDown(event: KeyboardEvent): void {
+    if (event.key !== "Enter") return;
+
+    // This UI can run in a sandboxed iframe without `allow-forms`. Never let
+    // Enter fall through to native form submission (including a host form).
+    event.preventDefault();
+    event.stopPropagation();
+    if (event.repeat || event.isComposing) return;
+    this.requestPinSubmission();
   }
 
   private openMobileApp(): void {
@@ -476,15 +486,17 @@ export class MeteorMobileBridgePanel extends LitElement {
         ${
           showPin
             ? html`
-          <form class="pin" @submit=${(event: SubmitEvent) => this.handlePinSubmit(event)}>
+          <div class="pin" role="group" aria-label="Meteor Mobile PIN verification">
             <input aria-label="4-digit Meteor Mobile PIN" inputmode="numeric" maxlength="4" .value=${this.pin}
-              @input=${(event: InputEvent) => (this.pin = (event.target as HTMLInputElement).value.replace(/\D/g, "").slice(0, 4))} />
-            <button type="submit" aria-label=${this.pinPending ? "Verifying PIN" : "Verify PIN"}
+              @input=${(event: InputEvent) => (this.pin = (event.target as HTMLInputElement).value.replace(/\D/g, "").slice(0, 4))}
+              @keydown=${(event: KeyboardEvent) => this.handlePinKeyDown(event)} />
+            <button type="button" aria-label=${this.pinPending ? "Verifying PIN" : "Verify PIN"}
               ?disabled=${this.pinPending || this.pin.length !== 4 || snapshot.pinAttemptsUsed >= 3}
+              @click=${() => this.requestPinSubmission()}
             >
               ${this.pinPending ? html`<span class="spinner" role="status" aria-label="Verifying PIN"></span>` : "Verify"}
             </button>
-          </form>
+          </div>
           ${snapshot.pinError && !this.pinPending ? html`<span class="muted">${Math.max(0, 3 - snapshot.pinAttemptsUsed)} attempts remaining</span>` : ""}
         `
             : ""
