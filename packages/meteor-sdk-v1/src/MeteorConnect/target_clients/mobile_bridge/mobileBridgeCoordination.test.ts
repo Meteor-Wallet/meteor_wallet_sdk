@@ -15,6 +15,35 @@ function memoryStorage(): IEnumerableLocalStorageInterface {
 }
 
 describe("Meteor mobile bridge coordination", () => {
+  it("preserves the receiver context of an injected async storage API", async () => {
+    const values = new Map<string, string>();
+    const storage = {
+      async getItem(this: IEnumerableLocalStorageInterface, key: string) {
+        expect(this).toBe(storage);
+        return values.get(key) ?? null;
+      },
+      async setItem(this: IEnumerableLocalStorageInterface, key: string, value: string) {
+        expect(this).toBe(storage);
+        values.set(key, value);
+      },
+      async removeItem(this: IEnumerableLocalStorageInterface, key: string) {
+        expect(this).toBe(storage);
+        values.delete(key);
+      },
+      async getKeys(this: IEnumerableLocalStorageInterface, prefix?: string) {
+        expect(this).toBe(storage);
+        return [...values.keys()].filter((key) => prefix == null || key.startsWith(prefix));
+      },
+    } satisfies IEnumerableLocalStorageInterface;
+    const context = createMobileBridgeStorage(storage, "https://bridge.example");
+
+    await context.storageAdapter.setJson("identity", { ready: true });
+    const identity: unknown = await context.storageAdapter.getJson("identity");
+    expect(identity).toEqual({ ready: true });
+    await context.clearIdentityStorage();
+    expect(await storage.getKeys(context.rootPrefix)).toEqual([]);
+  });
+
   it("serializes contenders with unique bakery registers", async () => {
     const storage = memoryStorage();
     const firstProvider = new StorageBakeryBridgeLeaseProvider(storage);

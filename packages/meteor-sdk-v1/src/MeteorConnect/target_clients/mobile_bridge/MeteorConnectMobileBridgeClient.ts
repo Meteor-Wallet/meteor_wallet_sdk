@@ -11,28 +11,28 @@ import {
 } from "@meteorwallet/connect-shared";
 import type { TLinkEvent } from "@nice-code/action";
 import type { TRealmDiagnosticEvent, TRealmStatus } from "@nice-code/realm";
+import type { ILocalStorageInterface } from "../../../ported_common/utils/storage/storage.types";
 import type { TMCActionOutput, TMCActionRegistry } from "../../action/mc_action.combined";
 import type { TMCActionRequestUnionExpandedInput } from "../../action/mc_action.types";
 import { MeteorLogger } from "../../logging/MeteorLogger";
-import type { MeteorConnect } from "../../MeteorConnect";
 import type {
-  IMeteorConnectMobileBridgeConfig,
   IMeteorConnectBridgeLeaseProvider,
   IMeteorConnection_V2_BridgeMobile,
+  IMeteorConnectMobileBridgeConfig,
   TMeteorConnectionExecutionTarget,
   TMeteorExecutionTargetConfig,
 } from "../../MeteorConnect.types";
 import { MeteorConnectClientBase } from "../base/MeteorConnectClientBase";
 import { MobileBridgeSession } from "./MobileBridgeSession";
 import {
+  directBrowserNativeAppOpener,
   StorageBakeryBridgeLeaseProvider,
   WebLockBridgeLeaseProvider,
-  directBrowserNativeAppOpener,
 } from "./mobileBridgeLease";
 import {
   createMobileBridgeStorage,
-  normalizePartnerMetadata,
   type IMobileBridgeStorageContext,
+  normalizePartnerMetadata,
 } from "./mobileBridgeStorage";
 import { nearActionToMobileBridge } from "./nearActionToMobileBridge";
 
@@ -74,9 +74,26 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
   private coordinatorKey?: string;
   private leaseProvider?: IMeteorConnectBridgeLeaseProvider;
   private fencingGeneration?: number;
+  private storageImplementation?: ILocalStorageInterface;
+  private storageIdentity?: object;
 
-  configure(config: IMeteorConnectMobileBridgeConfig | undefined): void {
+  configure(
+    config: IMeteorConnectMobileBridgeConfig | undefined,
+    storage: ILocalStorageInterface,
+  ): void {
     const enabled = config?.enabled ?? false;
+    const storageGetKeys = storage.getKeys;
+    this.storageIdentity = storage;
+    this.storageImplementation = {
+      getItem: (key) => storage.getItem(key),
+      setItem: (key, value) => storage.setItem(key, value),
+      removeItem: (key) => storage.removeItem(key),
+      ...(storageGetKeys == null
+        ? {}
+        : {
+            getKeys: (prefix?: string) => storageGetKeys.call(storage, prefix),
+          }),
+    };
     this.config = {
       ...config,
       enabled,
@@ -93,13 +110,14 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
     if (!this.config?.enabled) throw new Error("mobile_bridge_disabled");
     if (this.initializePromise != null) return this.initializePromise;
     this.initializePromise = (async () => {
-      this.storage = createMobileBridgeStorage(
-        this.meteorConnect.localStorageImplementation,
-        this.config!.backendUrl,
-      );
-      const storageImplementation = this.meteorConnect.localStorageImplementation;
-      const activeClients = activeClientsByStorage.get(storageImplementation) ?? new Map();
-      activeClientsByStorage.set(storageImplementation, activeClients);
+      const storageImplementation = this.storageImplementation;
+      const storageIdentity = this.storageIdentity;
+      if (storageImplementation == null || storageIdentity == null) {
+        throw new Error("mobile_bridge_storage_not_configured");
+      }
+      this.storage = createMobileBridgeStorage(storageImplementation, this.config!.backendUrl);
+      const activeClients = activeClientsByStorage.get(storageIdentity) ?? new Map();
+      activeClientsByStorage.set(storageIdentity, activeClients);
       this.coordinatorKey = `${this.storage.environmentId}:${this.storage.backendUrl}`;
       const existingClient = activeClients.get(this.coordinatorKey);
       if (existingClient != null && existingClient !== this) {
@@ -110,14 +128,7 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
         this.config!.leaseProvider ??
         (typeof navigator !== "undefined" && navigator.locks != null
           ? new WebLockBridgeLeaseProvider()
-          : storageImplementation.getKeys != null
-            ? new StorageBakeryBridgeLeaseProvider({
-                getItem: (key) => storageImplementation.getItem(key),
-                setItem: (key, value) => storageImplementation.setItem(key, value),
-                removeItem: (key) => storageImplementation.removeItem(key),
-                getKeys: (prefix) => storageImplementation.getKeys!(prefix),
-              })
-            : undefined);
+          : this.createStorageLeaseProvider(storageImplementation));
       if (leaseProvider == null) throw new Error("mobile_bridge_coordination_unsupported");
       this.leaseProvider = leaseProvider;
       const maintenanceGate = await leaseProvider.acquire(
@@ -168,6 +179,19 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
     return this.initializePromise;
   }
 
+  private createStorageLeaseProvider(
+    storage: ILocalStorageInterface,
+  ): StorageBakeryBridgeLeaseProvider | undefined {
+    const getKeys = storage.getKeys;
+    if (getKeys == null) return undefined;
+    return new StorageBakeryBridgeLeaseProvider({
+      getItem: (key) => storage.getItem(key),
+      setItem: (key, value) => storage.setItem(key, value),
+      removeItem: (key) => storage.removeItem(key),
+      getKeys: (prefix) => getKeys.call(storage, prefix),
+    });
+  }
+
   private async assertCurrentGeneration(): Promise<void> {
     if (this.storage == null || this.fencingGeneration == null) return;
     if ((await this.storage.getFencingGeneration()) !== this.fencingGeneration) {
@@ -176,11 +200,12 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
   }
 
   private releaseCoordinatorOwnership(): void {
-    const storageImplementation = this.meteorConnect.localStorageImplementation;
-    const activeClients = activeClientsByStorage.get(storageImplementation);
+    const storageIdentity = this.storageIdentity;
+    if (storageIdentity == null) return;
+    const activeClients = activeClientsByStorage.get(storageIdentity);
     if (this.coordinatorKey != null && activeClients?.get(this.coordinatorKey) === this) {
       activeClients.delete(this.coordinatorKey);
-      if (activeClients.size === 0) activeClientsByStorage.delete(storageImplementation);
+      if (activeClients.size === 0) activeClientsByStorage.delete(storageIdentity);
     }
     this.coordinatorKey = undefined;
   }
@@ -402,6 +427,8 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
     this.releaseCoordinatorOwnership();
     this.leaseProvider = undefined;
     this.fencingGeneration = undefined;
+    this.storageImplementation = undefined;
+    this.storageIdentity = undefined;
     PartnerBridgeStore.replace({ client: { status: EPartnerClientStatus.uninitialized } });
   }
 }

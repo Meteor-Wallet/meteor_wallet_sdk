@@ -14,6 +14,7 @@ import type {
 import type {
   IMeteorComInjectedObject,
   IMeteorComInjectedObjectV2,
+  IMeteorConnect_Initialize_Input,
   IMeteorConnectAccount,
   IMeteorConnectAccountIdentifier,
   TMCActionRegistry,
@@ -34,6 +35,7 @@ import { base64 } from "@scure/base";
 import { serialize } from "borsh";
 import type { TSimpleNearDelegateAction } from "../../../meteor-sdk-v1/src/MeteorConnect/action/mc_action.near";
 import type { PartialBy } from "../../../meteor-sdk-v1/src/ported_common/utils/special_typescript_types";
+import { SelectorStorageKeyStore } from "../utils/keystore";
 import type {
   NaerConnectAccountWithSignedMessage,
   NearConnectAccount,
@@ -41,7 +43,6 @@ import type {
   NearConnectSignedMessage,
 } from "./near-connect.types";
 import { head } from "./view";
-import { SelectorStorageKeyStore } from "../utils/keystore";
 
 const logoImage = new Image();
 logoImage.src = "https://meteorwallet.app/loader.gif";
@@ -49,12 +50,22 @@ logoImage.src = "https://meteorwallet.app/loader.gif";
 const meteorConnect = new MeteorConnect();
 const selectorKeyStore = new SelectorStorageKeyStore();
 const SELECTOR_STORAGE_PREFIX = "meteor-wallet:";
-const selectorStorage = {
-  getItem: async (key: string) => (await window.selector.storage.get(key)) ?? null,
-  setItem: async (key: string, value: string) => window.selector.storage.set(key, value),
-  removeItem: async (key: string) => window.selector.storage.remove(key),
+
+const getSelectorStorage = () => {
+  const storage = window.selector?.storage;
+  if (storage == null) throw new Error("near_connect_selector_storage_unavailable");
+  return storage;
+};
+
+type TSelectorStorage = IMeteorConnect_Initialize_Input["storage"] &
+  Required<Pick<IMeteorConnect_Initialize_Input["storage"], "getKeys">>;
+
+const selectorStorage: TSelectorStorage = {
+  getItem: async (key) => (await getSelectorStorage().get(key)) ?? null,
+  setItem: async (key, value) => getSelectorStorage().set(key, value),
+  removeItem: async (key) => getSelectorStorage().remove(key),
   getKeys: async (prefix?: string) => {
-    const keys = (await window.selector.storage.keys()).map((key) =>
+    const keys = (await getSelectorStorage().keys()).map((key) =>
       key.startsWith(SELECTOR_STORAGE_PREFIX) ? key.slice(SELECTOR_STORAGE_PREFIX.length) : key,
     );
     return prefix == null ? keys : keys.filter((key) => key.startsWith(prefix));
@@ -158,11 +169,11 @@ interface IMeteorStoredData {
 }
 
 async function setMeteorData(data: IMeteorStoredData): Promise<void> {
-  await window.selector.storage.set("meteor-account-data", JSON.stringify(data));
+  await selectorStorage.setItem("meteor-account-data", JSON.stringify(data));
 }
 
 async function getMeteorData(): Promise<IMeteorStoredData | undefined> {
-  const str = await window.selector.storage.get("meteor-account-data");
+  const str = await selectorStorage.getItem("meteor-account-data");
   if (str != null) {
     return JSON.parse(str);
   }

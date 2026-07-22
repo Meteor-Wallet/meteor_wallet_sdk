@@ -1,3 +1,4 @@
+import { BrowserLocalStorageKeyStore } from "@near-js/keystores-browser";
 import { jsonStringifyCompat } from "../ported_common/utils/jsonStringifyCompat";
 import type { PartialBy } from "../ported_common/utils/special_typescript_types";
 import { CEnvironmentStorageAdapter } from "../ported_common/utils/storage/EnvironmentStorageAdapter";
@@ -24,11 +25,10 @@ import type {
   TMeteorConnectionExecutionTarget,
 } from "./MeteorConnect.types.ts";
 import type { MeteorConnectClientBase } from "./target_clients/base/MeteorConnectClientBase";
-import { MeteorConnectTestClient } from "./target_clients/test_client/MeteorConnectTestClient";
-import { MeteorConnectV1Client } from "./target_clients/v1_client/MeteorConnectV1Client";
 import { MeteorConnectMobileBridgeClient } from "./target_clients/mobile_bridge/MeteorConnectMobileBridgeClient";
 import { normalizeBridgeBackendUrl } from "./target_clients/mobile_bridge/mobileBridgeStorage";
-import { BrowserLocalStorageKeyStore } from "@near-js/keystores-browser";
+import { MeteorConnectTestClient } from "./target_clients/test_client/MeteorConnectTestClient";
+import { MeteorConnectV1Client } from "./target_clients/v1_client/MeteorConnectV1Client";
 import { accountTargetToText } from "./utils/accountTargetToText";
 import { initProp } from "./utils/initProp";
 import { isEqual } from "./utils/isEqual";
@@ -149,7 +149,7 @@ export class MeteorConnect {
       },
     );
     this._typedStorageHelper.set(typedStorageHelper);
-    this.clients.mobileBridge.configure(mobileBridge);
+    this.clients.mobileBridge.configure(mobileBridge, storage);
 
     await typedStorageHelper.setJson("lastInitialized", Date.now());
 

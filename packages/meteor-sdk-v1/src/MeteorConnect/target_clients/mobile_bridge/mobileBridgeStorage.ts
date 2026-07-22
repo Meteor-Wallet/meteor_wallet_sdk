@@ -49,9 +49,9 @@ export function createMobileBridgeStorage(
     methods: {
       type: EStorageAdapterType.string,
       durable: true,
-      getItem: storage.getItem,
-      setItem: storage.setItem,
-      removeItem: storage.removeItem,
+      getItem: (key) => storage.getItem(key),
+      setItem: (key, value) => storage.setItem(key, value),
+      removeItem: (key) => storage.removeItem(key),
     },
   });
 
@@ -85,7 +85,9 @@ export function createMobileBridgeStorage(
         throw new Error("mobile_bridge_coordination_unsupported");
       }
       const keys = await storage.getKeys(rootPrefix);
-      await Promise.all(keys.filter((key) => key.startsWith(rootPrefix)).map(storage.removeItem));
+      await Promise.all(
+        keys.filter((key) => key.startsWith(rootPrefix)).map((key) => storage.removeItem(key)),
+      );
     },
     getFencingGeneration: async () => {
       const stored = await storage.getItem(generationKey);
