@@ -1,3 +1,4 @@
+export { EMeteorAppId } from "@meteorwallet/connect-shared";
 export { setEnvConfig } from "./envConfig";
 export * from "./MeteorConnect/action/ExecutableAction";
 export * from "./MeteorConnect/action/mc_action.combined";
@@ -14,9 +15,3 @@ export { EMeteorWalletSignInType } from "./ported_common/dapp/dapp.enums";
 export * from "./ported_common/dapp/dapp.types";
 export * from "./ported_common/utils/storage/webpage/webpage_local_storage";
 export * from "./utils/MeteorSdkUtils";
-
-if (import.meta.hot) {
-  // This module "accepts" its own updates and those of its dependencies (the components).
-  // By not passing a callback, we tell Vite: "Stop the reload here, I've got it."
-  import.meta.hot.accept();
-}

@@ -1,5 +1,5 @@
 import type { IMeteorConnectAccount } from "@meteorwallet/sdk";
-import { MeteorConnect, webpage_local_storage } from "@meteorwallet/sdk";
+import { EMeteorAppId, MeteorConnect, webpage_local_storage } from "@meteorwallet/sdk";
 import { actionCreators } from "@near-js/transactions";
 import { parseNearAmount } from "@near-js/utils";
 import { QueryClient, QueryClientProvider, useMutation, useQuery } from "@tanstack/react-query";
@@ -17,11 +17,34 @@ import { NetworkSelector } from "~/pages/near-connect/NetworkSelector";
 import { Button } from "~/ui/Button";
 import { SignDelegateActionTest } from "./SignDelegateActionTest";
 
-const meteorConnectClient = new MeteorConnect();
+const MOBILE_BRIDGE_BACKEND_URL = "https://mc.meteorwallet.app";
+const MOBILE_BRIDGE_APP_ID = EMeteorAppId.meteor_wallet_mobile_dev;
+const MOBILE_BRIDGE_DEEP_LINK = "meteorwalletdev://bridge_request";
+
+const meteorConnectClient =
+  (import.meta.hot?.data.meteorConnectClient as MeteorConnect | undefined) ?? new MeteorConnect();
+
+if (import.meta.hot) {
+  import.meta.hot.data.meteorConnectClient = meteorConnectClient;
+}
 
 const initializedMeteorConnect = async (): Promise<MeteorConnect> => {
-  meteorConnectClient.initialize({
+  if (typeof window === "undefined") {
+    throw new Error("MeteorConnect must be initialized in the browser");
+  }
+
+  await meteorConnectClient.initialize({
     storage: webpage_local_storage,
+    mobileBridge: {
+      enabled: true,
+      backendUrl: MOBILE_BRIDGE_BACKEND_URL,
+      meteorAppId: MOBILE_BRIDGE_APP_ID,
+      partnerMetadata: {
+        name: "Meteor SDK test web",
+        description: "Development harness for the Meteor Connect mobile bridge",
+        originUrl: window.location.origin,
+      },
+    },
   });
 
   return meteorConnectClient;
@@ -39,12 +62,30 @@ export const MeteorConnectTest = () => {
 
 const MeteorConnectTestInner = () => {
   const meteorConnectQuery = useQuery({
-    queryKey: [],
+    queryKey: ["meteor-connect", "mobile-bridge", MOBILE_BRIDGE_APP_ID],
     queryFn: initializedMeteorConnect,
+    enabled: typeof window !== "undefined",
+    retry: false,
+    staleTime: Number.POSITIVE_INFINITY,
   });
 
+  if (meteorConnectQuery.isError) {
+    const errorMessage =
+      meteorConnectQuery.error instanceof Error
+        ? meteorConnectQuery.error.message
+        : String(meteorConnectQuery.error);
+
+    return (
+      <div className={"p-5 flex flex-col gap-3 items-start"}>
+        <h1>Meteor Connect initialization failed</h1>
+        <p className={"text-red-700"}>{errorMessage}</p>
+        <Button onClick={() => window.location.reload()}>Reload test harness</Button>
+      </div>
+    );
+  }
+
   if (meteorConnectQuery.data == null) {
-    return <></>;
+    return <div className={"p-5"}>Initializing Meteor Connect mobile bridge...</div>;
   }
 
   return <MeteorConnectTestInitialized meteorConnect={meteorConnectQuery.data} />;
@@ -73,6 +114,7 @@ const MeteorConnectTestInitialized = ({ meteorConnect }: { meteorConnect: Meteor
   return (
     <div className={"p-5"}>
       <h1>Meteor Connect (bare Meteor SDK) Test</h1>
+      <MobileBridgeTestInfo account={account} />
       <NetworkSelector
         network={network}
         onSelectNetwork={(network) => {
@@ -215,6 +257,78 @@ const MeteorConnectTestInitialized = ({ meteorConnect }: { meteorConnect: Meteor
   );
 };
 
+const MobileBridgeTestInfo = ({ account }: { account?: IMeteorConnectAccount }) => {
+  const executionTarget = account?.connection.executionTarget;
+  const isLegacyAccount =
+    executionTarget === "v1_web" ||
+    executionTarget === "v1_web_localhost" ||
+    executionTarget === "v1_ext";
+
+  return (
+    <section
+      className={
+        "my-4 max-w-3xl rounded-md border border-sky-300 bg-sky-50 p-4 text-slate-900 dark:border-sky-700 dark:bg-slate-900 dark:text-slate-100"
+      }
+    >
+      <h2 className={"font-semibold text-sky-950 dark:text-sky-100"}>
+        Meteor Mobile development bridge is enabled
+      </h2>
+      <p>
+        Opening a sign-in request should immediately show the <strong>Meteor Mobile</strong> panel,
+        while the existing Web App and Chrome Extension choices remain available.
+      </p>
+      <dl className={"mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1"}>
+        <dt className={"font-medium text-slate-700 dark:text-slate-300"}>Deep link</dt>
+        <dd>
+          <code
+            className={
+              "break-all rounded bg-white px-1 py-0.5 text-slate-900 dark:bg-slate-800 dark:text-sky-100"
+            }
+          >
+            {MOBILE_BRIDGE_DEEP_LINK}
+          </code>
+        </dd>
+        <dt className={"font-medium text-slate-700 dark:text-slate-300"}>Backend</dt>
+        <dd>
+          <code
+            className={
+              "break-all rounded bg-white px-1 py-0.5 text-slate-900 dark:bg-slate-800 dark:text-sky-100"
+            }
+          >
+            {MOBILE_BRIDGE_BACKEND_URL}
+          </code>
+        </dd>
+        <dt className={"font-medium text-slate-700 dark:text-slate-300"}>Current account route</dt>
+        <dd>
+          <code
+            className={
+              "break-all rounded bg-white px-1 py-0.5 text-slate-900 dark:bg-slate-800 dark:text-sky-100"
+            }
+          >
+            {executionTarget ?? "not signed in"}
+          </code>
+        </dd>
+      </dl>
+      {isLegacyAccount ? (
+        <p className={"mt-2 text-amber-800 dark:text-amber-300"}>
+          This account is intentionally bound to the legacy {executionTarget} client. Sign out and
+          sign in through Meteor Mobile to test subsequent push-notification requests and QR
+          fallback for account actions.
+        </p>
+      ) : executionTarget === "v2_bridge_mobile" ? (
+        <p className={"mt-2 text-emerald-800 dark:text-emerald-300"}>
+          This account is mobile-bound. Account actions should attempt push delivery immediately and
+          keep the QR/deep-link fallback visible.
+        </p>
+      ) : (
+        <p className={"mt-2"}>
+          Use any sign-in button below to test first-time QR pairing and the development app scheme.
+        </p>
+      )}
+    </section>
+  );
+};
+
 const SUGGESTED_DONATION = "0";
 const BOATLOAD_OF_GAS = "30000000000000";
 
@@ -349,10 +463,9 @@ const MeteorConnectWithAccount = ({
   );
 };
 
-// At the bottom of MeteorConnectTest.tsx
 if (import.meta.hot) {
-  // Accept updates from the SDK specifically
-  import.meta.hot.accept("@meteorwallet/sdk", (newModule) => {
-    console.log("SDK change detected, skipping full reload.");
+  import.meta.hot.accept("@meteorwallet/sdk", () => {
+    // MeteorConnect owns stateful bridge clients, so SDK updates require a clean client instance.
+    window.location.reload();
   });
 }
