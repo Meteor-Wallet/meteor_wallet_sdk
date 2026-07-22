@@ -23,6 +23,7 @@ import type {
 import {
   convertOldFunctionCallKeyDefToNew,
   convertSelectorActionToNearAction,
+  EMeteorAppId,
   ExecutableAction,
   MeteorConnect,
   MeteorLogger,
@@ -50,6 +51,7 @@ logoImage.src = "https://meteorwallet.app/loader.gif";
 const meteorConnect = new MeteorConnect();
 const selectorKeyStore = new SelectorStorageKeyStore();
 const SELECTOR_STORAGE_PREFIX = "meteor-wallet:";
+const IS_DEVELOPMENT_BUILD = process.env.NODE_ENV === "development";
 
 const getSelectorStorage = () => {
   const storage = window.selector?.storage;
@@ -82,7 +84,7 @@ const selectorNativeAppOpener = {
 };
 const selectorKeyStoreProvider = { getKeyStore: () => selectorKeyStore };
 
-if (process.env.NODE_ENV === "development") {
+if (IS_DEVELOPMENT_BUILD) {
   console.warn("Enabling debug logging for MeteorConnect");
   meteorConnect.setLoggingLevel("debug");
 }
@@ -127,7 +129,10 @@ async function getMeteorConnect(): Promise<MeteorConnect> {
     nearKeyStoreProvider: selectorKeyStoreProvider,
     mobileBridge: {
       // Production remains gated off until the compatible backend/mobile 0.3 rollout is recorded.
-      enabled: process.env.NODE_ENV === "development",
+      enabled: IS_DEVELOPMENT_BUILD,
+      meteorAppId: IS_DEVELOPMENT_BUILD
+        ? EMeteorAppId.meteor_wallet_mobile_dev
+        : EMeteorAppId.meteor_wallet_mobile,
       partnerMetadata: { originUrl: window.selector.location },
       leaseProvider: selectorBridgeLeaseProvider,
       nativeAppOpener: selectorNativeAppOpener,

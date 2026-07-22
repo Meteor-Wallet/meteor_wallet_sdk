@@ -43,6 +43,8 @@ export class MeteorMobileBridgePanel extends LitElement {
     button { border: 0; border-radius: .65rem; padding: .65rem .9rem; font: inherit; font-weight: 700; cursor: pointer; background: #6657e8; color: white; }
     button.secondary { background: rgba(255,255,255,.11); }
     button:disabled { opacity: .55; cursor: default; }
+    .spinner { display: inline-block; width: .9rem; height: .9rem; border: 2px solid rgba(255,255,255,.38); border-top-color: white; border-radius: 50%; animation: spin .7s linear infinite; vertical-align: middle; }
+    @keyframes spin { to { transform: rotate(360deg); } }
     .pin { display: flex; gap: .5rem; justify-content: center; }
     input { width: 7rem; padding: .6rem; border-radius: .55rem; border: 1px solid rgba(255,255,255,.25); background: rgba(0,0,0,.22); color: white; text-align: center; letter-spacing: .28rem; font-size: 1rem; }
   `;
@@ -117,6 +119,9 @@ export class MeteorMobileBridgePanel extends LitElement {
       this.interactionError = undefined;
     } catch {
       // The session snapshot owns the safe, user-facing PIN error.
+      this.pin = "";
+      await this.updateComplete;
+      this.pinInput?.focus();
     } finally {
       this.pinPending = false;
     }
@@ -228,9 +233,13 @@ export class MeteorMobileBridgePanel extends LitElement {
           <div class="pin">
             <input aria-label="4-digit Meteor Mobile PIN" inputmode="numeric" maxlength="4" .value=${this.pin}
               @input=${(event: InputEvent) => (this.pin = (event.target as HTMLInputElement).value.replace(/\D/g, "").slice(0, 4))} />
-            <button ?disabled=${this.pinPending || this.pin.length !== 4 || snapshot.pinAttemptsUsed >= 3} @click=${() => void this.submitPin()}>Verify</button>
+            <button aria-label=${this.pinPending ? "Verifying PIN" : "Verify PIN"}
+              ?disabled=${this.pinPending || this.pin.length !== 4 || snapshot.pinAttemptsUsed >= 3}
+              @click=${() => void this.submitPin()}>
+              ${this.pinPending ? html`<span class="spinner" role="status" aria-label="Verifying PIN"></span>` : "Verify"}
+            </button>
           </div>
-          <span class="muted">${Math.max(0, 3 - snapshot.pinAttemptsUsed)} attempts remaining</span>
+          ${snapshot.pinError && !this.pinPending ? html`<span class="muted">${Math.max(0, 3 - snapshot.pinAttemptsUsed)} attempts remaining</span>` : ""}
         `
             : ""
         }
