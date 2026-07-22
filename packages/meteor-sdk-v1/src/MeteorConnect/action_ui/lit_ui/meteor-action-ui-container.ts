@@ -61,7 +61,9 @@ export class MeteorActionUiContainer extends LitElement {
         font-family: 'Gilroy', Inter, sans-serif;
         font-weight: 500;
         font-style: normal;
-        background: linear-gradient(135deg, rgb(var(--meteor-dark-gray-darkest)) 0%, rgb(var(--meteor-dark-gray-standard)) 150%);
+        background:
+          radial-gradient(130% 55% at 50% -12%, rgba(98, 63, 220, 0.22), rgba(98, 63, 220, 0) 62%),
+          linear-gradient(135deg, rgb(var(--meteor-dark-gray-darkest)) 0%, rgb(var(--meteor-dark-gray-standard)) 150%);
         color: rgb(var(--meteor-text-on-dark-light));
         box-sizing: border-box;
         display: flex;
@@ -87,8 +89,8 @@ export class MeteorActionUiContainer extends LitElement {
         display: flex;
         flex-direction: row;
         gap: 0.65rem;
-        min-height: 4rem;
-        padding: 0.55rem 0.75rem;
+        min-height: 3.7rem;
+        padding: 0.45rem 0.75rem;
         box-sizing: border-box;
         /* background: rgba(255, 255, 255, 0.3); */
         /* background: linear-gradient(140deg, rgba(var(--meteor-topbar-blue-lightest), 0.8) 0%, rgba(var(--meteor-topbar-blue-standard), 0.5) 100%); */
@@ -216,24 +218,23 @@ export class MeteorActionUiContainer extends LitElement {
 
       .options {
         padding: 0;
+        width: 100%;
         display: flex;
         flex-direction: column;
         justify-content: center;
-        gap: 0.55rem;
+        gap: 0.5rem;
         align-items: center;
-        /* justify-content: space-between; */
-        /* justify-content: space-evenly; */
       }
 
       .meteor-connect-content {
         position: relative;
-        padding: 0.85rem 1rem 1rem;
+        padding: 0.6rem 0.9rem 0.75rem;
         display: flex;
         flex-direction: column;
         /* justify-content: space-evenly; */
         justify-content: flex-start;
         flex-grow: 1;
-        gap: 0.75rem;
+        gap: 0.6rem;
         overflow-y: auto;
         min-height: 0;
       }
@@ -282,32 +283,11 @@ export class MeteorActionUiContainer extends LitElement {
 
       .option-buttons-row {
         display: flex;
-        flex-direction: row;
+        flex-direction: column;
         width: 100%;
         justify-content: center;
-        align-items: center;
-        flex-wrap: wrap;
-        gap: 0.55rem;
-      }
-
-      .option-buttons-row button {
-        /* width: 100%;
-        max-width: 260px; */
-        display: flex;
-        padding: 0.75rem 1rem;
-        border-radius: 0.75rem;
-        border: none;
-        background: rgba(255, 255, 255, 0.12);
-        color: white;
-        font-weight: 700;
-        letter-spacing: 0.02rem;
-        cursor: pointer;
-        transition: transform 120ms ease, background 120ms ease;
-      }
-
-      .option-buttons-row button:hover {
-        background: rgba(255, 255, 255, 0.16);
-        transform: translateY(-1px);
+        align-items: stretch;
+        gap: 0.5rem;
       }
 
       .divider {
@@ -547,6 +527,7 @@ export class MeteorActionUiContainer extends LitElement {
               ${
                 extensionWalletAvailable
                   ? html`<meteor-action-button
+                  variant="option"
                   label="Chrome Extension"
                   .icon=${svg_icons_text.icon_chrome}
                   @meteor-button-click=${() => this.actionController.executeAction("v1_ext")}
@@ -556,6 +537,7 @@ export class MeteorActionUiContainer extends LitElement {
               ${
                 webWalletAvailable
                   ? html`<meteor-action-button
+                  variant="option"
                   label="Web App"
                   .icon=${svg_icons_text.icon_web_globe}
                   @meteor-button-click=${() => this.actionController.executeAction("v1_web")}
@@ -566,6 +548,7 @@ export class MeteorActionUiContainer extends LitElement {
                   includeWebDevLocalhost
                     ? html`
                       <meteor-action-button
+                        variant="option"
                         label="Dev Web (Localhost)"
                         .icon=${svg_icons_text.icon_web_globe}
                         @meteor-button-click=${() => this.actionController.executeAction("v1_web_localhost")}

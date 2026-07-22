@@ -2,8 +2,9 @@ import { css, html, LitElement } from "lit";
 import { property } from "lit/decorators.js";
 import { unsafeSVG } from "lit/directives/unsafe-svg.js";
 import { customElement } from "./custom-element";
+import { svg_icons_text } from "./graphical/svg_icons/svg_icons_text";
 
-export type ButtonVariant = "primary" | "secondary";
+export type ButtonVariant = "primary" | "secondary" | "option";
 export type PlatformType = "extension" | "web" | "ios" | "android";
 
 @customElement("meteor-action-button")
@@ -101,6 +102,79 @@ export class MeteorActionButton extends LitElement {
     :host([variant="primary"]) button:active:not(:disabled) {
       background: linear-gradient(135deg, rgba(var(--meteor-button-primary-light), 1) 0%, rgba(var(--meteor-button-primary-accent), 0.85) 100%);
     }
+
+    /* Option variant — full-width list row: icon tile, label, chevron affordance */
+    :host([variant="option"]) {
+      display: block;
+      width: 100%;
+    }
+
+    :host([variant="option"]) button {
+      width: 100%;
+      justify-content: flex-start;
+      gap: 0.65rem;
+      min-height: 2.55rem;
+      padding: 0.45rem 0.7rem;
+      border-radius: 0.8rem;
+      border: 1px solid rgba(255, 255, 255, 0.075);
+      background: linear-gradient(150deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02));
+      filter: none;
+      font-size: 0.88rem;
+      transition: transform 140ms ease, background 140ms ease, border-color 140ms ease, filter 140ms ease;
+    }
+
+    :host([variant="option"]) button:hover:not(:disabled) {
+      background: linear-gradient(150deg, rgba(139, 119, 255, 0.16), rgba(69, 193, 255, 0.05));
+      border-color: rgba(150, 140, 255, 0.4);
+      transform: translateY(-1px);
+      filter: drop-shadow(0 6px 16px rgba(62, 38, 184, 0.25));
+    }
+
+    :host([variant="option"]) button:active:not(:disabled) {
+      background: linear-gradient(150deg, rgba(139, 119, 255, 0.16), rgba(69, 193, 255, 0.05));
+      transform: translateY(0);
+    }
+
+    :host([variant="option"]) .icon-wrapper {
+      width: 1.7rem;
+      height: 1.7rem;
+      border-radius: 0.55rem;
+      border: 1px solid rgba(150, 140, 255, 0.22);
+      background: linear-gradient(140deg, rgba(112, 88, 248, 0.28), rgba(69, 193, 255, 0.12));
+      color: #d6ceff;
+      transition: border-color 140ms ease, color 140ms ease;
+    }
+
+    :host([variant="option"]) .icon-wrapper svg {
+      width: 58%;
+      height: 58%;
+      margin: auto;
+    }
+
+    :host([variant="option"]) button:hover:not(:disabled) .icon-wrapper {
+      border-color: rgba(160, 145, 255, 0.5);
+      color: #ffffff;
+    }
+
+    .chevron {
+      display: flex;
+      width: 1rem;
+      height: 1rem;
+      margin-left: auto;
+      flex-shrink: 0;
+      color: rgba(190, 190, 230, 0.45);
+      transition: transform 140ms ease, color 140ms ease;
+    }
+
+    .chevron svg {
+      width: 100%;
+      height: 100%;
+    }
+
+    :host([variant="option"]) button:hover:not(:disabled) .chevron {
+      transform: translateX(2px);
+      color: rgba(225, 220, 255, 0.9);
+    }
   `;
 
   render() {
@@ -111,7 +185,12 @@ export class MeteorActionButton extends LitElement {
         @click=${this._handleClick}
       >
         ${this.icon ? html`<div class="icon-wrapper">${unsafeSVG(this.icon)}</div>` : ""}
-        <span>${this.label}</span>
+        <span class="label">${this.label}</span>
+        ${
+          this.variant === "option"
+            ? html`<span class="chevron" aria-hidden="true">${unsafeSVG(svg_icons_text.icon_chevron_right)}</span>`
+            : ""
+        }
       </button>
     `;
   }

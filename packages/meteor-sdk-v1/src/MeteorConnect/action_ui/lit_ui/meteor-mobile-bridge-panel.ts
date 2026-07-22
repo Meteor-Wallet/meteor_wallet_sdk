@@ -64,7 +64,7 @@ export class MeteorMobileBridgePanel extends LitElement {
     }
 
     /* ---------- Card shell ---------- */
-    .panel { position: relative; isolation: isolate; overflow: hidden; display: flex; flex-direction: column; gap: .55rem; align-items: center; padding: .85rem .8rem .8rem; border: 1px solid rgba(150,140,255,.13); border-radius: .9rem; background: linear-gradient(155deg, rgba(var(--meteor-dark-gray-lightest, 34,34,41), .32), rgba(var(--meteor-dark-gray-darkest, 14,14,23), .55) 70%); box-shadow: inset 0 2px 16px rgba(0,0,0,.22), inset 0 1px rgba(255,255,255,.035); box-sizing: border-box; }
+    .panel { position: relative; isolation: isolate; overflow: hidden; display: flex; flex-direction: column; gap: .5rem; align-items: center; padding: .75rem .8rem; border: 1px solid rgba(150,140,255,.13); border-radius: .9rem; background: linear-gradient(155deg, rgba(var(--meteor-dark-gray-lightest, 34,34,41), .32), rgba(var(--meteor-dark-gray-darkest, 14,14,23), .55) 70%); box-shadow: inset 0 2px 16px rgba(0,0,0,.22), inset 0 1px rgba(255,255,255,.035); box-sizing: border-box; }
     .panel::before { content: ""; position: absolute; width: 240px; height: 240px; left: -90px; top: -110px; z-index: -1; border-radius: 50%; background: radial-gradient(circle, rgba(105,79,244,.12), transparent 68%); pointer-events: none; }
     .panel::after { content: ""; position: absolute; width: 200px; height: 200px; right: -90px; bottom: -120px; z-index: -1; border-radius: 50%; background: radial-gradient(circle, rgba(69,193,255,.07), transparent 70%); pointer-events: none; }
     :host([contextual]) .panel { padding: .9rem; }
@@ -100,13 +100,13 @@ export class MeteorMobileBridgePanel extends LitElement {
     .pill.good .pill-dot { animation: dot-pulse 1.4s ease-in-out infinite; }
 
     /* ---------- QR / waiting card ---------- */
-    .request-access { display: flex; align-items: center; justify-content: center; gap: .9rem; width: 100%; }
+    .request-access { display: flex; align-items: center; justify-content: center; gap: .75rem; width: 100%; }
     .request-access.stacked { flex-direction: column; gap: .6rem; }
     .request-controls { display: flex; flex: 1; min-width: 0; flex-direction: column; align-items: center; justify-content: center; gap: .55rem; }
     .request-access.stacked .request-controls { flex: none; }
     .actions { display: flex; gap: .5rem; flex-wrap: wrap; justify-content: center; }
-    .qr-frame { position: relative; flex: 0 0 auto; padding: 4px; border-radius: 14px; background: linear-gradient(150deg, rgba(139,119,255,.55), rgba(69,50,160,.2) 55%, rgba(69,193,255,.3)); box-shadow: 0 10px 26px rgba(30,15,90,.35); }
-    .qr { width: 148px; height: 148px; padding: 6px; box-sizing: border-box; border-radius: 11px; background: white; }
+    .qr-frame { position: relative; flex: 0 0 auto; padding: 3px; border-radius: 13px; background: linear-gradient(150deg, rgba(139,119,255,.55), rgba(69,50,160,.2) 55%, rgba(69,193,255,.3)); box-shadow: 0 10px 26px rgba(30,15,90,.35); }
+    .qr { width: 128px; height: 128px; display: grid; place-items: center; padding: 0; box-sizing: border-box; border-radius: 10px; background: white; overflow: hidden; }
     .countdown { display: inline-flex; align-items: center; gap: .4rem; font-size: .71rem; color: var(--mc-muted); font-variant-numeric: tabular-nums; }
     .countdown.urgent { color: rgb(var(--mc-amber)); }
     .countdown-ring { width: .58rem; height: .58rem; border-radius: 50%; border: 2px solid currentColor; border-top-color: transparent; opacity: .75; animation: spin 2.4s linear infinite; }
@@ -297,8 +297,8 @@ export class MeteorMobileBridgePanel extends LitElement {
     if (this.qrTarget == null) return;
     if (this.qr == null) {
       this.qr = new QRCodeStyling({
-        width: 136,
-        height: 136,
+        width: 128,
+        height: 128,
         type: "svg",
         data: link,
         margin: 5,
