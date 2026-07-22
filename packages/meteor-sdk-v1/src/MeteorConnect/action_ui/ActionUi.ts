@@ -46,6 +46,7 @@ export class ActionUi {
   private knownExecutionTargetBeforeUiCheck: TMeteorConnectionExecutionTarget | undefined =
     undefined;
   private activeAction?: ExecutableAction<any>;
+  private renderedAction?: ExecutableAction<any>;
 
   /**
    * Opens the UI and returns a Promise that resolves with the data
@@ -91,9 +92,7 @@ export class ActionUi {
       this.logger.log("Prompted action finished", response);
       return response;
     } finally {
-      this.cleanup();
-      await input.action.disposePreparedMobileSession();
-      if (this.activeAction === input.action) this.activeAction = undefined;
+      await this.finishPrompt(input.action);
     }
     /*
     return new Promise((resolve, reject) => {
@@ -118,6 +117,18 @@ export class ActionUi {
       // this.actionUiComponent.addEventListener("sdk-submit", handleSubmit, { once: true });
       this.actionUiComponent.addEventListener("sdk-cancel", handleCancel, { once: true });
     });*/
+  }
+
+  private async finishPrompt(action: ExecutableAction<any>): Promise<void> {
+    this.cleanup(action);
+    if (this.activeAction === action) this.activeAction = undefined;
+    try {
+      await action.disposePreparedMobileSession();
+    } catch (error) {
+      // Session teardown must never retain the global action lock or replace the caller's
+      // original result/cancellation error.
+      this.logger.err("Failed to dispose completed Meteor Connect action", error);
+    }
   }
 
   private renderAction(
@@ -160,11 +171,15 @@ export class ActionUi {
     pendingKnownExecutionTarget?: TMeteorConnectionExecutionTarget,
   ) {
     this.actionUiComponent = new MeteorActionUiContainer();
+    this.renderedAction = input.action;
     this.actionUiComponent.action = input.action;
     this.actionUiComponent.pendingKnownExecutionTarget = pendingKnownExecutionTarget;
     this.actionUiComponent.closeAction = () => {
       if (!this.confirmCommittedMobileClose(input.action)) return;
-      void input.action.cancelAction().finally(() => this.cleanup());
+      void input.action.cancelAction().catch((error) => {
+        this.logger.err("Failed to clean up cancelled Meteor Connect action", error);
+      });
+      this.cleanup(input.action);
     };
 
     if (this.container) {
@@ -176,7 +191,8 @@ export class ActionUi {
    * Manual clean-up method that users can call,
    * or used internally by the SDK.
    */
-  public cleanup() {
+  public cleanup(expectedAction?: ExecutableAction<any>) {
+    if (expectedAction != null && this.renderedAction !== expectedAction) return;
     if (this.actionUiComponent) {
       this.actionUiComponent.remove();
       this.actionUiComponent = null;
@@ -189,14 +205,18 @@ export class ActionUi {
     }
 
     this.knownExecutionTargetBeforeUiCheck = undefined;
+    this.renderedAction = undefined;
   }
 
   private createPopupOverlay(action: ExecutableAction<any>): HTMLElement {
     const popupOverlay = new MeteorActionUiOverlay();
     this.logger.log("Created popup overlay for action UI", popupOverlay);
+    popupOverlay.canClose = () => this.confirmCommittedMobileClose(action);
     popupOverlay.closeAction = () => {
-      if (!this.confirmCommittedMobileClose(action)) return;
-      void action.cancelAction().finally(() => this.cleanup());
+      void action.cancelAction().catch((error) => {
+        this.logger.err("Failed to clean up cancelled Meteor Connect action", error);
+      });
+      this.cleanup(action);
     };
     return popupOverlay;
   }

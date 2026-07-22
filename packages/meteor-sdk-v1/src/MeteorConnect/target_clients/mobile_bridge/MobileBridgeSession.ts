@@ -28,7 +28,7 @@ export type TMobileBridgePhase =
 
 export interface IMobileBridgeSnapshot {
   phase: TMobileBridgePhase;
-  push: "not_attempted" | "delivered" | "not_delivered";
+  push: "not_attempted" | "sending" | "delivered" | "not_delivered";
   pushReason?: string;
   deepLink?: string;
   expiresAt?: number;
@@ -75,6 +75,7 @@ export class MobileBridgeSession {
   private pairingRetryTimer?: ReturnType<typeof setTimeout>;
   private liveSession?: { stop(): Promise<void> };
   private expiryTimer?: ReturnType<typeof setTimeout>;
+  private disposePromise?: Promise<void>;
   private snapshot: IMobileBridgeSnapshot = {
     phase: "initializing",
     push: "not_attempted",
@@ -86,6 +87,9 @@ export class MobileBridgeSession {
     this.input = input;
     this.token = input.token;
     this.prepared = input.prepared;
+    if (input.pushWallet != null) {
+      this.snapshot = { ...this.snapshot, push: "sending" };
+    }
     void this.resultPromise.catch(() => {});
   }
 
@@ -405,15 +409,24 @@ export class MobileBridgeSession {
     open(this.snapshot.deepLink);
   }
 
-  async dispose(): Promise<void> {
+  private async disposeInternal(): Promise<void> {
     this.abortController.abort();
     this.unsubscribeStore?.();
     this.visibilityListener?.();
     if (this.expiryTimer != null) clearTimeout(this.expiryTimer);
     if (this.pairingRetryTimer != null) clearTimeout(this.pairingRetryTimer);
+    if (!this.resultSettled) {
+      this.resultSettled = true;
+      this.rejectResult(new Error("mobile_bridge_session_disposed"));
+    }
     await this.releaseFirstPairingLease();
     await this.liveSession?.stop();
     this.listeners.clear();
     await this.input.client.disconnect_bridge();
+  }
+
+  dispose(): Promise<void> {
+    this.disposePromise ??= this.disposeInternal();
+    return this.disposePromise;
   }
 }

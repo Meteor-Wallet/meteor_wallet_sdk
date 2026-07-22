@@ -71,6 +71,7 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
   private initializePromise?: Promise<void>;
   private currentSession?: MobileBridgeSession;
   private currentToken?: string;
+  private sessionDisposalPromise?: Promise<void>;
   private coordinatorKey?: string;
   private leaseProvider?: IMeteorConnectBridgeLeaseProvider;
   private fencingGeneration?: number;
@@ -277,6 +278,9 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
     request: TMCActionRequestUnionExpandedInput<TMCActionRegistry>,
   ): Promise<MobileBridgeSession> {
     await this.initializeBridgeClient();
+    await this.sessionDisposalPromise?.catch((error) => {
+      this.logger.err("Previous mobile bridge session disposal failed", error);
+    });
     if (this.currentSession != null) {
       const existing = this.currentSession.getSnapshot();
       if (!["completed", "failed", "cancelled"].includes(existing.phase)) {
@@ -342,6 +346,30 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
 
   getCurrentSession(): MobileBridgeSession | undefined {
     return this.currentSession;
+  }
+
+  async releaseSession(
+    session: MobileBridgeSession,
+    beforeDispose?: Promise<unknown>,
+  ): Promise<void> {
+    if (this.currentSession === session) {
+      // Fence the abandoned session immediately. A new DApp prompt may open at once, while
+      // prepareRequest waits below for the previous bridge disconnect to drain.
+      this.currentToken = undefined;
+      this.currentSession = undefined;
+    }
+    const previousDisposal = this.sessionDisposalPromise;
+    const disposal = (async () => {
+      await previousDisposal?.catch(() => {});
+      await beforeDispose?.catch(() => {});
+      await session.dispose();
+    })();
+    this.sessionDisposalPromise = disposal;
+    try {
+      await disposal;
+    } finally {
+      if (this.sessionDisposalPromise === disposal) this.sessionDisposalPromise = undefined;
+    }
   }
 
   async refreshRequest(
@@ -420,6 +448,7 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
   async dispose(): Promise<void> {
     this.currentToken = undefined;
     await this.currentSession?.dispose();
+    await this.sessionDisposalPromise?.catch(() => {});
     this.currentSession = undefined;
     await this.bridgeClient?.disconnect_bridge().catch(() => {});
     this.bridgeClient = undefined;

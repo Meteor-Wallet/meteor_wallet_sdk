@@ -25,6 +25,7 @@ export class MeteorActionUiOverlay extends LitElement {
   }
 
   @property({ type: Boolean }) private closing: boolean = false;
+  @property({ attribute: false }) canClose?: () => boolean;
 
   @provide({ context: overlayCloseTriggerContext })
   @property({ attribute: false })
@@ -139,6 +140,7 @@ export class MeteorActionUiOverlay extends LitElement {
 
   private _animateClose() {
     if (this.closing) return;
+    if (this.canClose?.() === false) return;
     this.logger.log("Starting close animation");
     this.closing = true;
 

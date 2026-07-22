@@ -32,6 +32,7 @@ export class ExecutableAction<R extends TMCActionRequestUnion<TMCActionRegistry>
   private actionRejecters: ((reason?: any) => void)[] = [];
   private preparedMobileSession?: MobileBridgeSession;
   private prepareMobilePromise?: Promise<MobileBridgeSession>;
+  private cancelPromise?: Promise<void>;
   private cancelled = false;
   private settled = false;
   private unsubscribeMobile?: () => void;
@@ -96,7 +97,10 @@ export class ExecutableAction<R extends TMCActionRequestUnion<TMCActionRegistry>
         (snapshot.phase === "wallet_verification" || snapshot.phase === "wallet_action") &&
         this.execute_promise == null
       ) {
-        void this.execute("v2_bridge_mobile");
+        void this.execute("v2_bridge_mobile").catch(() => {
+          // The action's resolver/rejecter owns delivery to the SDK caller. This prevents the
+          // session observer's intentionally detached execution promise from becoming unhandled.
+        });
       }
     });
   }
@@ -350,7 +354,19 @@ Available targets: [${this.connectionTargetConfig.allExecutionTargets.map((c) =>
   }
 
   async cancelAction(): Promise<void> {
+    if (this.cancelPromise != null) return this.cancelPromise;
     if (this.cancelled) return;
+
+    // Closing the UI always ends the local request immediately, even after the wallet has accepted
+    // a bridge that can no longer be cancelled remotely. Remote cleanup remains best-effort.
+    this.cancelled = true;
+    this.unsubscribeMobile?.();
+    this.rejectAction(new Error("Action was cancelled"));
+    this.cancelPromise = this.cancelPreparedMobileRequest();
+    return this.cancelPromise;
+  }
+
+  private async cancelPreparedMobileRequest(): Promise<void> {
     let session = this.preparedMobileSession;
     if (session == null && this.prepareMobilePromise != null) {
       try {
@@ -371,21 +387,31 @@ Available targets: [${this.connectionTargetConfig.allExecutionTargets.map((c) =>
       } catch (error) {
         // An unknown/failed cancellation never authorizes a legacy target. It is still terminal
         // for this caller and the idempotent bridge remains recoverable/expiring server-side.
-        this.cancelled = true;
-        this.unsubscribeMobile?.();
-        this.rejectAction(error);
+        this.logger.err("Failed to cancel abandoned mobile bridge request", error);
         return;
       }
     }
-    this.cancelled = true;
-    this.unsubscribeMobile?.();
-    this.rejectAction(new Error("Action was cancelled"));
   }
 
   async disposePreparedMobileSession(): Promise<void> {
     this.unsubscribeMobile?.();
     this.unsubscribeMobile = undefined;
-    await this.preparedMobileSession?.dispose();
+    const cancelPromise = this.cancelPromise?.catch(() => {});
+    const preparedSession = this.preparedMobileSession;
+    if (preparedSession != null) {
+      // releaseSession fences the old client slot synchronously; the next request can open its UI
+      // while preparation waits for this disconnect to drain.
+      await Promise.all([
+        this.meteorConnect.mobileBridgeClient.releaseSession(preparedSession, cancelPromise),
+        cancelPromise,
+      ]);
+      return;
+    }
+    await cancelPromise;
+    const latePreparedSession = this.preparedMobileSession;
+    if (latePreparedSession != null) {
+      await this.meteorConnect.mobileBridgeClient.releaseSession(latePreparedSession);
+    }
   }
 
   private async makeTargetedActionRequest<
