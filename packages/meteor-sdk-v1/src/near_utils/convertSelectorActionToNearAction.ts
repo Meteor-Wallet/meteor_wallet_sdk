@@ -1,7 +1,6 @@
-import { PublicKey } from "@near-js/crypto";
-import { actionCreators } from "@near-js/transactions";
+import { PublicKey } from "./actionCreator/public_key";
+import { actionCreators } from './actionCreator/action_creators'
 import type { Action, AddKeyPermission } from "@near-wallet-selector/core";
-import {actionCreators as customActionCreators} from './actionCreator/action_creators'
 
 const getAccessKey = (permission: AddKeyPermission) => {
   if (permission === "FullAccess") {
@@ -23,13 +22,13 @@ const getGasAccessKey = (permission: AddKeyPermission, gasKeyInfo: {
     numNonces: gasKeyInfo.numNonces
   }
   if (permission === "FullAccess") {
-    return customActionCreators.gasKeyFullAccessKey(transformedGasKeyInfo);
+    return actionCreators.gasKeyFullAccessKey(transformedGasKeyInfo);
   }
 
   const { receiverId, methodNames = [] } = permission;
   const allowance = permission.allowance ? BigInt(permission.allowance) : undefined;
 
-  return customActionCreators.gasKeyFunctionCallAccessKey(receiverId, methodNames, transformedGasKeyInfo, allowance);
+  return actionCreators.gasKeyFunctionCallAccessKey(receiverId, methodNames, transformedGasKeyInfo, allowance);
 };
 
 export const parseArgs = (data: Object | string) => {
@@ -65,7 +64,7 @@ export const convertSelectorActionToNearAction = (action: Action) => {
       const { publicKey, accessKey, gasKeyInfo } = action.params;
 
       if(gasKeyInfo){
-        return customActionCreators.addKey(
+        return actionCreators.addKey(
           PublicKey.from(publicKey), // TODO: Use accessKey.nonce? near-api-js seems to think 0 is fine?
           getGasAccessKey(accessKey.permission, gasKeyInfo),
         )
@@ -88,12 +87,12 @@ export const convertSelectorActionToNearAction = (action: Action) => {
     case "TransferToGasKey": {
       const { publicKey, deposit } = action.params;
 
-      return customActionCreators.transferToGasKey(PublicKey.from(publicKey), deposit)
+      return actionCreators.transferToGasKey(PublicKey.from(publicKey), deposit)
     }
     case "WithdrawFromGasKey": {
       const { publicKey, amount } = action.params;
 
-      return customActionCreators.withdrawFromGasKey(PublicKey.from(publicKey), amount)
+      return actionCreators.withdrawFromGasKey(PublicKey.from(publicKey), amount)
     }
     default:
       throw new Error("Invalid action type");

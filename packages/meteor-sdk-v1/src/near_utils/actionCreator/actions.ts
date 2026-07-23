@@ -1,4 +1,4 @@
-import { PublicKey } from '@near-js/crypto';
+import type { PublicKey } from './public_key';
 import { Enum } from '@near-js/types';
 
 import type { DelegateAction } from './delegate';
