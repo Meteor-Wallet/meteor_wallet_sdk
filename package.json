@@ -28,5 +28,8 @@
   "overrides": {
     "react": "19.1.0",
     "react-dom": "19.1.0"
+  },
+  "patchedDependencies": {
+    "@near-js/transactions@2.2.5": "patches/@near-js%2Ftransactions@2.2.5.patch"
   }
 }

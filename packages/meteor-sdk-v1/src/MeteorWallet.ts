@@ -1,15 +1,12 @@
 import { Account } from "@near-js/accounts";
-import { KeyPair, KeyPairEd25519, KeyType, PublicKey } from "@near-js/crypto";
+import { KeyPair, KeyPairEd25519, PublicKey } from "@near-js/crypto";
 import { KeyStore } from "@near-js/keystores";
 import { JsonRpcProvider } from "@near-js/providers";
 // import { KeyPairSigner } from "@near-js/signers";
 import {
   buildDelegateAction,
   createTransaction,
-  DelegateAction,
   SCHEMA,
-  Signature,
-  SignedDelegate,
 } from "@near-js/transactions";
 import { type AccessKeyInfoView } from "@near-js/types";
 import type {
@@ -65,6 +62,10 @@ import {
 } from "./ported_common/utils/storage/TypedStorageHelper";
 import { getMeteorPostMessenger } from "./postMessage/MeteorPostMessenger";
 import { resolveWalletUrl } from "./utils/MeteorSdkUtils";
+import { SignedDelegate } from "./near_utils/actionCreator/actions";
+import { KeyType } from "./near_utils/actionCreator/constants";
+import { Signature } from "./near_utils/actionCreator/signature";
+import { DelegateAction } from "./near_utils/actionCreator/delegate";
 
 const MULTISIG_HAS_METHOD = "add_request_and_confirm";
 
@@ -541,6 +542,13 @@ export class MeteorWallet {
             };
           }
 
+          if (signedDelegateData.signature.mlDsa65Signature != null) {
+            signatureData = {
+              data: signedDelegateData.signature.mlDsa65Signature.data,
+              keyType: KeyType.MLDSA65,
+            };
+          }
+
           if (signatureData == null) {
             console.error("Received signature data in unexpected format", signedDelegateData);
             throw new Error("Couldn't extract signature data received from Meteor Wallet");
@@ -556,12 +564,14 @@ export class MeteorWallet {
 
           return {
             delegateHash: Buffer.from(serializedSignedDelegate.delegateHash, "base64"),
+            // @ts-expect-error added more actions
             signedDelegate,
           } satisfies ISignDelegateActionReturn;
         },
       );
 
       return {
+        // @ts-expect-error added more actions
         signedDelegatesWithHashes: deserializedSignedDelegates,
       };
     }
@@ -623,6 +633,7 @@ export class MeteorWallet {
 
     const block = await this._provider.viewBlock({ finality: "optimistic" });
 
+    // @ts-expect-error added more actions
     return delegateActions.map((delegateAction, idx) => {
       return buildDelegateAction({
         actions: delegateAction.actions,
@@ -671,6 +682,7 @@ export class MeteorWallet {
           this._fakePublicKey, // will be replaced wallet-side with the correct account public key
           transaction.receiverId,
           BigInt(0 + index), // will be replace wallet-side with the correct nonce based on the account public key
+          // @ts-expect-error added more actions
           transformedActions,
           utils.serialize.base_decode(block.header.hash),
         );
@@ -772,6 +784,7 @@ export class ConnectedMeteorWalletAccount extends Account {
           return {
             executionOutcome: await super.signAndSendTransaction({
               receiverId,
+              // @ts-expect-error added more actions
               actions: actions.map((action) => convertSelectorActionToNearAction(action)),
             }),
             sent: true,
