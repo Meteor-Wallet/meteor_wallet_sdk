@@ -15,8 +15,11 @@
       ]
     },
     {
-      "version": "0.4.2",
-      "dependencies": ["@meteorwallet/connect", "@meteorwallet/connect-shared"]
+      "version": "0.4.3",
+      "dependencies": [
+        "@meteorwallet/connect",
+        "@meteorwallet/connect-shared"
+      ]
     }
   ]
 }
