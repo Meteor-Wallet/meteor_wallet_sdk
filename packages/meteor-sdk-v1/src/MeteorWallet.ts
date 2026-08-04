@@ -4,8 +4,10 @@ import { KeyStore } from "@near-js/keystores";
 import { JsonRpcProvider } from "@near-js/providers";
 // import { KeyPairSigner } from "@near-js/signers";
 import {
+  type Action as TNearJsAction,
   buildDelegateAction,
   createTransaction,
+  type DelegateAction as TNearJsDelegateAction,
   SCHEMA,
 } from "@near-js/transactions";
 import { type AccessKeyInfoView } from "@near-js/types";
@@ -618,7 +620,7 @@ export class MeteorWallet {
     delegateActions: TSimpleNearDelegateAction[];
     blockHeightTtl?: number;
     meteorConnectAccount: IMeteorConnectAccount;
-  }): Promise<DelegateAction[]> {
+  }): Promise<TNearJsDelegateAction[]> {
     // const account = await this.getConnectedAccount(meteorConnectAccount);
     // const signer = account.getSigner();
     // const provider = account.provider;
@@ -633,10 +635,10 @@ export class MeteorWallet {
 
     const block = await this._provider.viewBlock({ finality: "optimistic" });
 
-    // @ts-expect-error added more actions
     return delegateActions.map((delegateAction, idx) => {
       return buildDelegateAction({
-        actions: delegateAction.actions,
+        // The SDK's extended actions serialize through the patched @near-js borsh schema
+        actions: delegateAction.actions as TNearJsAction[],
         receiverId: delegateAction.receiverId,
         senderId: meteorConnectAccount.identifier.accountId,
         publicKey: this._fakePublicKey, // will be replaced wallet-side with the correct account public key

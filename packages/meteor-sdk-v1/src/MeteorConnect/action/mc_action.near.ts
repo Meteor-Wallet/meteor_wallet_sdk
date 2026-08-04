@@ -1,7 +1,7 @@
 import type { PublicKey } from "@near-js/crypto";
 import type { SignedMessage } from "@near-js/signers";
-import type { Action } from "@near-js/transactions";
 import type { FinalExecutionOutcome } from "@near-js/types";
+import type { TNearNativeAction } from "../../near_utils/meteor_actions.types";
 import type {
   IODappAction_VerifyOwner_Output,
   IORequestSignDelegateActions_Output,
@@ -133,7 +133,7 @@ export interface IMCAInput_Near_VerifyOwner extends IMCAction_WithExactAccountTa
 
 export type TSimpleNearTransaction = {
   receiverId: string;
-  actions: Action[];
+  actions: TNearNativeAction[];
 };
 
 // export type TSimpleNearTransaction_DelegateAction = {
@@ -152,7 +152,7 @@ export interface IMCA_Near_SignTransactions_Input extends IMCAction_WithExactAcc
 export interface INearNativeDelegateAction {
   senderId: string;
   receiverId: string;
-  actions: Array<Action>;
+  actions: Array<TNearNativeAction>;
   nonce: bigint;
   maxBlockHeight: bigint;
   publicKey: PublicKey;

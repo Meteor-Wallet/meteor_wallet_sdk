@@ -7,6 +7,7 @@ import {
 import type {
   AddFunctionCallKeyParams,
   Network,
+  SignDelegateActionsParams,
   SignDelegateActionsResponse,
   SignInAndSignMessageParams,
   SignInParams,
@@ -18,6 +19,7 @@ import type {
   IMeteorConnectAccount,
   IMeteorConnectAccountIdentifier,
   TMCActionRegistry,
+  TMeteorAction,
   TMeteorComListener,
 } from "@meteorwallet/sdk";
 import {
@@ -381,7 +383,9 @@ class NearWallet implements Omit<NearWalletBase, "manifest"> {
           target: meteorData.identifier,
           transactions: [
             {
-              actions: payload.actions.map(convertSelectorActionToNearAction),
+              actions: payload.actions.map((action) =>
+                convertSelectorActionToNearAction(action as TMeteorAction),
+              ),
               receiverId: payload.receiverId,
             },
           ],
@@ -407,7 +411,9 @@ class NearWallet implements Omit<NearWalletBase, "manifest"> {
           target: meteorData.identifier,
           transactions: payload.transactions.map((transaction) => {
             return {
-              actions: transaction.actions.map(convertSelectorActionToNearAction),
+              actions: transaction.actions.map((action) =>
+                convertSelectorActionToNearAction(action as TMeteorAction),
+              ),
               receiverId: transaction.receiverId,
             };
           }),
@@ -418,11 +424,9 @@ class NearWallet implements Omit<NearWalletBase, "manifest"> {
     }
   };
 
-  signDelegateActions = async (payload: {
-    network?: Network;
-    signerId?: string;
-    delegateActions: TSimpleNearDelegateAction[];
-  }): Promise<SignDelegateActionsResponse> => {
+  signDelegateActions = async (
+    payload: SignDelegateActionsParams,
+  ): Promise<SignDelegateActionsResponse> => {
     const meteorData = await getMeteorData();
 
     if (meteorData != null) {
@@ -431,7 +435,7 @@ class NearWallet implements Omit<NearWalletBase, "manifest"> {
         id: "near::sign_delegate_actions",
         input: {
           target: meteorData.identifier,
-          delegateActions: payload.delegateActions,
+          delegateActions: payload.delegateActions as TSimpleNearDelegateAction[],
         },
       });
 

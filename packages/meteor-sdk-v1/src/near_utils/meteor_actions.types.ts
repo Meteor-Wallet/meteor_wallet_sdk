@@ -1,4 +1,15 @@
+import type { Action as NearJsNativeAction } from "@near-js/transactions";
 import type { Action, AddKeyAction } from "@near-wallet-selector/core";
+import type { Action as MeteorNativeAction } from "./actionCreator/actions";
+
+/**
+ * A native NEAR action instance accepted by SDK transaction inputs: either a standard
+ * @near-js/transactions action or one built by the SDK's extended action creators
+ * (gas keys, ML-DSA). The two are structurally compatible on every standard action, but
+ * TypeScript cannot unify them across @near-js copies/versions in the monorepo, so SDK
+ * boundaries accept the union and narrow with a cast where a specific family is required.
+ */
+export type TNearNativeAction = NearJsNativeAction | MeteorNativeAction;
 
 /** Gas-key metadata carried by Meteor's extended actions. JSON-safe: yoctoNEAR balance as string. */
 export interface IMeteorGasKeyInfo {

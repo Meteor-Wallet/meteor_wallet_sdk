@@ -18,6 +18,7 @@ import { MeteorConnectClientBase } from "../base/MeteorConnectClientBase";
 import type { TMeteorConnectV1ExecutionTargetConfig } from "./MeteorConnectV1Client.types";
 import { getExtensionSupportedFeatures } from "./utils/getExtensionSupportedFeatures";
 import { nearActionToSdkV1Action } from "./utils/nearActionToSdkV1Action";
+import type { Action as MeteorNativeAction } from "../../../near_utils/actionCreator/actions";
 import { PublicKey as CustomPublicKey } from "../../../near_utils/actionCreator/public_key";
 import type { Action as SdkV1Action } from "@near-wallet-selector/core";
 
@@ -275,10 +276,9 @@ export class MeteorConnectV1Client extends MeteorConnectClientBase {
         transactions: request.expandedInput.transactions.map((t): TMeteorSdkV1Transaction => {
           return {
             receiverId: t.receiverId,
-            actions: t.actions.map((action) => nearActionToSdkV1Action(
-              // @ts-expect-error added more actions type
-              action
-            )),
+            actions: t.actions.map((action) =>
+              nearActionToSdkV1Action(action as MeteorNativeAction),
+            ),
           };
         }),
         account: request.expandedInput.account,

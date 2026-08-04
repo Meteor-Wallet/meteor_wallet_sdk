@@ -1,6 +1,6 @@
 import { act_impl_near } from "@meteorwallet/connect-shared";
 import { KeyPair } from "@near-js/crypto";
-import type { Action } from "@near-js/transactions";
+import type { TNearNativeAction } from "../../../near_utils/meteor_actions.types";
 import { base64 } from "@scure/base";
 import { convertOldFunctionCallKeyDefToNew } from "../../../near_utils/convertOldFunctionCallKeyDefToNew";
 import type { TMCActionRegistry } from "../../action/mc_action.combined";
@@ -15,7 +15,7 @@ function decodeJsonOrBase64(bytes: Uint8Array): unknown {
   }
 }
 
-export function nearActionToConnectorAction(action: Action): {
+export function nearActionToConnectorAction(action: TNearNativeAction): {
   type: string;
   params: Record<string, unknown>;
 } {
