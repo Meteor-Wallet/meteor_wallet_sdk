@@ -12,7 +12,6 @@ import { type AccessKeyInfoView } from "@near-js/types";
 import type {
   Action,
   FinalExecutionOutcome,
-  Optional,
   Transaction,
 } from "@near-wallet-selector/core";
 import { deserialize, serialize } from "borsh";
@@ -52,6 +51,7 @@ import {
   type IWithAccountIdentifier,
   type IWithMeteorWalletAccount,
   MeteorActionError,
+  type TMeteorSdkV1Transaction,
 } from "./ported_common/dapp/dapp.types";
 import { ENearNetwork } from "./ported_common/near/near_basic_types";
 import { NEAR_BASE_CONFIG_FOR_NETWORK } from "./ported_common/near/near_static_data";
@@ -651,7 +651,7 @@ export class MeteorWallet {
     transactions,
     meteorConnectAccount,
   }: {
-    transactions: Array<Optional<Transaction, "signerId">>;
+    transactions: TMeteorSdkV1Transaction[];
     meteorConnectAccount: IMeteorConnectAccount;
   }) {
     // const account = await this.getConnectedAccount(meteorConnectAccount);

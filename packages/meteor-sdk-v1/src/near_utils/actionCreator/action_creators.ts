@@ -99,8 +99,6 @@ function gasKeyFunctionCallAccessKey(
         }),
     })
 
-    console.log(permission)
-
     return new AccessKey({
         nonce: 0n,
         permission,

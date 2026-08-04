@@ -1,9 +1,11 @@
 import { Enum } from '@near-js/types';
 import { KeyType } from './constants';
 
-class ED25519Signature { keyType: KeyType = KeyType.ED25519; data: Uint8Array; }
-class SECP256K1Signature { keyType: KeyType = KeyType.SECP256K1; data: Uint8Array; }
-class MLDsa65Signature { keyType: number = KeyType.MLDSA65; data: Uint8Array; }
+// Type shells only — never constructed; Signature's constructor stores the raw
+// { keyType, data } object under the matching enum key, so `data` needs no initializer.
+class ED25519Signature { keyType: KeyType = KeyType.ED25519; declare data: Uint8Array; }
+class SECP256K1Signature { keyType: KeyType = KeyType.SECP256K1; declare data: Uint8Array; }
+class MLDsa65Signature { keyType: number = KeyType.MLDSA65; declare data: Uint8Array; }
 
 function resolveEnumKeyName(keyType: KeyType | number) {
     switch (keyType) {
@@ -35,8 +37,13 @@ export class Signature extends Enum {
         this.enum = keyName;
     }
 
-    get signature() {
-        return this.ed25519Signature || this.secp256k1Signature || this.mlDsa65Signature;
+    get signature(): ED25519Signature | SECP256K1Signature | MLDsa65Signature {
+        const signature = this.ed25519Signature || this.secp256k1Signature || this.mlDsa65Signature;
+        if (signature == null) {
+            // Unreachable: the constructor always sets exactly one variant.
+            throw new Error("Signature has no variant set");
+        }
+        return signature;
     }
 
     get signatureType(): KeyType | number {

@@ -1,6 +1,7 @@
 import { PublicKey } from "./actionCreator/public_key";
 import { actionCreators } from './actionCreator/action_creators'
-import type { Action, AddKeyPermission } from "@near-wallet-selector/core";
+import type { AddKeyPermission } from "@near-wallet-selector/core";
+import type { IMeteorGasKeyInfo, TMeteorAction } from "./meteor_actions.types";
 
 const getAccessKey = (permission: AddKeyPermission) => {
   if (permission === "FullAccess") {
@@ -13,10 +14,7 @@ const getAccessKey = (permission: AddKeyPermission) => {
   return actionCreators.functionCallAccessKey(receiverId, methodNames, allowance);
 };
 
-const getGasAccessKey = (permission: AddKeyPermission, gasKeyInfo: {
-  balance: string;
-  numNonces: number;
-}) => {
+const getGasAccessKey = (permission: AddKeyPermission, gasKeyInfo: IMeteorGasKeyInfo) => {
   const transformedGasKeyInfo = {
     balance: BigInt(gasKeyInfo.balance),
     numNonces: gasKeyInfo.numNonces
@@ -36,7 +34,7 @@ export const parseArgs = (data: Object | string) => {
   return data;
 };
 
-export const convertSelectorActionToNearAction = (action: Action) => {
+export const convertSelectorActionToNearAction = (action: TMeteorAction) => {
   switch (action.type) {
     case "CreateAccount":
       return actionCreators.createAccount();
@@ -87,12 +85,12 @@ export const convertSelectorActionToNearAction = (action: Action) => {
     case "TransferToGasKey": {
       const { publicKey, deposit } = action.params;
 
-      return actionCreators.transferToGasKey(PublicKey.from(publicKey), deposit)
+      return actionCreators.transferToGasKey(PublicKey.from(publicKey), BigInt(deposit))
     }
     case "WithdrawFromGasKey": {
       const { publicKey, amount } = action.params;
 
-      return actionCreators.withdrawFromGasKey(PublicKey.from(publicKey), amount)
+      return actionCreators.withdrawFromGasKey(PublicKey.from(publicKey), BigInt(amount))
     }
     default:
       throw new Error("Invalid action type");

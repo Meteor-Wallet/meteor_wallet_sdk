@@ -10,6 +10,7 @@ export * from "./MeteorWallet";
 export * from "./MeteorWalletConstants";
 export * from "./near_utils/convertOldFunctionCallKeyDefToNew";
 export * from "./near_utils/convertSelectorActionToNearAction";
+export * from "./near_utils/meteor_actions.types";
 export * from "./near_utils/serializeMessageNep413";
 export { EMeteorWalletSignInType } from "./ported_common/dapp/dapp.enums";
 export * from "./ported_common/dapp/dapp.types";

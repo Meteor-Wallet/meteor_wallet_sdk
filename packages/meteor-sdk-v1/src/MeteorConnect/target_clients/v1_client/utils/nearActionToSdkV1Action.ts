@@ -1,5 +1,5 @@
-import type { Action as SdkV1Action } from "@near-wallet-selector/core";
-import type { Action } from "packages/meteor-sdk-v1/src/near_utils/actionCreator/actions";
+import type { Action } from "../../../../near_utils/actionCreator/actions";
+import type { TMeteorAction } from "../../../../near_utils/meteor_actions.types";
 
 const deserializeArgs = (args: Uint8Array) => {
   try {
@@ -9,7 +9,7 @@ const deserializeArgs = (args: Uint8Array) => {
   }
 };
 
-export const nearActionToSdkV1Action = (action: Action): SdkV1Action => {
+export const nearActionToSdkV1Action = (action: Action): TMeteorAction => {
   if (action.functionCall) {
     return {
       type: "FunctionCall",
@@ -107,11 +107,13 @@ export const nearActionToSdkV1Action = (action: Action): SdkV1Action => {
 
   if (action.addKey) {
     if(action.addKey.accessKey.permission.gasKeyFullAccess){
+      const { gasKeyInfo } = action.addKey.accessKey.permission.gasKeyFullAccess;
       return {
         type: "AddKey",
         params: {
           publicKey: action.addKey.publicKey.toString(),
-          gasKeyInfo: action.addKey.accessKey.permission.gasKeyFullAccess.gasKeyInfo,
+          // balance as string: this action crosses a JSON boundary, where bigint cannot survive
+          gasKeyInfo: { balance: gasKeyInfo.balance.toString(), numNonces: gasKeyInfo.numNonces },
           accessKey: {
             nonce: Number(action.addKey.accessKey.nonce),
             permission: 'FullAccess'
@@ -121,11 +123,12 @@ export const nearActionToSdkV1Action = (action: Action): SdkV1Action => {
     }
     
     if(action.addKey.accessKey.permission.gasKeyFunctionCall){
+      const { gasKeyInfo } = action.addKey.accessKey.permission.gasKeyFunctionCall;
       return {
         type: "AddKey",
         params: {
           publicKey: action.addKey.publicKey.toString(),
-          gasKeyInfo: action.addKey.accessKey.permission.gasKeyFunctionCall.gasKeyInfo,
+          gasKeyInfo: { balance: gasKeyInfo.balance.toString(), numNonces: gasKeyInfo.numNonces },
           accessKey: {
             nonce: Number(action.addKey.accessKey.nonce),
             permission: {

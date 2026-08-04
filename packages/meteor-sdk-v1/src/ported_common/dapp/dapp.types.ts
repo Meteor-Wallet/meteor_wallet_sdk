@@ -17,6 +17,7 @@ import type {
 } from "../../MeteorConnect/MeteorConnect.types";
 import type { TMeteorConnectV1ExecutionTargetConfig } from "../../MeteorConnect/target_clients/v1_client/MeteorConnectV1Client.types";
 import { ENearNetwork } from "../near/near_basic_types";
+import type { TMeteorAction } from "../../near_utils/meteor_actions.types";
 import type { PartialBy } from "../utils/special_typescript_types";
 import {
   EDappActionConnectionStatus,
@@ -178,7 +179,9 @@ export interface IORequestSignTransactionsRedirect_Inputs {
   meta?: string;
 }
 
-export type TMeteorSdkV1Transaction = Omit<WalletSelectorTransaction, "signerId">;
+export type TMeteorSdkV1Transaction = Omit<WalletSelectorTransaction, "signerId" | "actions"> & {
+  actions: TMeteorAction[];
+};
 
 export interface IORequestSignTransactions_Inputs {
   /** list of transactions to sign */
