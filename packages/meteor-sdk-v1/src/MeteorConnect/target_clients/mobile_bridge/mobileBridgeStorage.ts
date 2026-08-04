@@ -118,6 +118,35 @@ export function createMobileBridgeStorage(
   };
 }
 
+/**
+ * The bridge backend (connect-shared >= 0.7.0) hard-rejects partner metadata that breaks its
+ * schema: `iconUrl` must be `https://` (blocks `javascript:`/`data:` reaching icon renderers),
+ * `name` is 1-64 chars and `description` <= 280 chars, both without Unicode control/format
+ * characters (the name is interpolated into OS push notifications). Sanitize here so a partner
+ * on plain HTTP, or with an oversized name, degrades gracefully instead of failing create_bridge.
+ */
+const CONTROL_OR_FORMAT_CHARACTERS = /[\p{Cc}\p{Cf}]/gu;
+
+function sanitizeMetadataText(value: string | undefined, maxLength: number): string | undefined {
+  const cleaned = value?.replace(CONTROL_OR_FORMAT_CHARACTERS, "").trim();
+  if (!cleaned) return undefined;
+  return cleaned.length > maxLength ? cleaned.slice(0, maxLength).trimEnd() : cleaned;
+}
+
+function normalizeIconUrl(iconUrl: string | undefined, origin: string): string | undefined {
+  const trimmed = iconUrl?.trim();
+  if (!trimmed) return undefined;
+  try {
+    // Resolve relative paths (e.g. "/icon.png") against the partner origin.
+    const resolved = new URL(trimmed, origin);
+    if (resolved.protocol !== "https:") return undefined;
+    const href = resolved.toString();
+    return href.length <= 2048 ? href : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function normalizePartnerMetadata(
   config: IMeteorConnectMobileBridgeConfig["partnerMetadata"],
 ): TPartnerMetadata {
@@ -125,11 +154,12 @@ export function normalizePartnerMetadata(
   const originUrl = config?.originUrl ?? fallbackOrigin;
   if (originUrl == null) throw new Error("Meteor mobile bridge requires a partner origin URL");
   const origin = new URL(originUrl).origin;
-  const name = config?.name?.trim() || new URL(origin).hostname;
+  const name =
+    sanitizeMetadataText(config?.name, 64) ?? (new URL(origin).hostname.slice(0, 64) || "partner");
   return {
     name,
     origin: `${EPartnerOrigin.web_url}::${origin}`,
-    description: config?.description,
-    iconUrl: config?.iconUrl,
+    description: sanitizeMetadataText(config?.description, 280),
+    iconUrl: normalizeIconUrl(config?.iconUrl, origin),
   };
 }
