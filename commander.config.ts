@@ -49,12 +49,29 @@ export default defineCommanderConfig({
       tags: { role: "backend" },
     },
     {
+      // Standalone near-connect dev harness (vite serve of src/dev). ⚠ Same port as
+      // meteor-web-wallet — mutually exclusive; the `local` group uses the build watch instead.
       id: "near-connect",
-      run: ["bun", "run", "dev"], // vite dev on 3001 (referenced by sdk-test-web's dev manifest)
+      run: ["bun", "run", "dev"],
       cwd: "./packages/meteor-near-connect",
       endpoints: [{ name: "http", protocol: "http", port: 3001, ownership: "exclusive" }],
       ready: { kind: "endpoint", endpoint: "http" },
       tags: { role: "frontend" },
+    },
+    {
+      // The near-connect script pipeline, as the old windows_dev_env_sdk scripts ran it:
+      // build-dev-watch emits <root>/near-connect/meteor-near-connect.js on every change…
+      id: "near-connect-build",
+      run: ["bun", "run", "build-dev-watch"],
+      cwd: "./packages/meteor-near-connect",
+      tags: { role: "build" },
+    },
+    {
+      // …and this chokidar watcher copies it into sdk-test-web/public for the demo to serve.
+      id: "script-sync",
+      run: ["bun", "run", "watch-meteor-script"],
+      cwd: "./packages/meteor-sdk-v1-test-web",
+      tags: { role: "build" },
     },
     {
       id: "sdk-preview",
@@ -137,8 +154,17 @@ export default defineCommanderConfig({
     preview: { include: ["sdk-preview"] },
     /** Account-transfer testing: demo app + the sibling repo's mc backend (NOT backend-test — same port). */
     transfer: { include: ["sdk-test-web", "mc-backend"] },
-    /** Transfer testing incl. the receiving localhost Meteor Web wallet (conflicts with near-connect on :3001). */
-    "transfer-full": { include: ["transfer", "meteor-web-wallet"], staggerMs: 400 },
+    /**
+     * The full local test environment (successor to the windows_dev_env_sdk terminal scripts):
+     * demo app, local mc bridge backend, the REAL localhost Meteor Web wallet (:3001 — serves as
+     * both the v1_web_localhost target and the transfer/bridge receiver), and the near-connect
+     * script pipeline. Excludes backend-test (:8787) and the near-connect dev harness (:3001) —
+     * both ports are owned by their `local` counterparts here.
+     */
+    local: {
+      include: ["sdk-test-web", "mc-backend", "meteor-web-wallet", "near-connect-build", "script-sync"],
+      staggerMs: 400,
+    },
     /** CI-style panel: ✓/✗ per check. */
     checks: { where: { role: "check" } },
   },
