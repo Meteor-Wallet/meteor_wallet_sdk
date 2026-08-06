@@ -73,8 +73,8 @@ The SDK has **zero** transfer code today. The registry is NEAR-only (`TMCActionD
 What we reuse as-is:
 
 - `PartnerBridgeClient` (0.9.0) — `create_bridge` / `verify_pin` / `cancel_bridge` already accept per-action capabilities; no transfer-specific client APIs exist or are needed.
-- `MobileBridgeSession` — its phase machine (`creating_bridge → waiting_for_wallet → wallet_verification → wallet_action → completed|failed|cancelled`) is exactly the transfer lifecycle; `wallet_action` is the authoritative reveal gate.
-- `meteor-mobile-bridge-panel` — the QR/countdown/PIN/status UI binds only to `IMobileBridgeSnapshot` and is action-agnostic.
+- `MobileBridgeSession` — its phase machine (`initializing → creating_bridge → waiting_for_wallet → wallet_verification → wallet_action → completed|failed|cancelled`, plus `busy_other_tab` while the cross-tab lease is contended) is exactly the transfer lifecycle; `wallet_action` is the authoritative reveal gate. Snapshots are shallow-copied to every subscriber — nothing secret may enter them.
+- `meteor-mobile-bridge-panel` — the QR/countdown/PIN/status UI is action-agnostic. (Correction from earlier drafts: it binds to a live `MobileBridgeSession` via its `.session` reactive property — `subscribe`/`getSnapshot`/`submitPin` — plus `.contextual` and `openInApp`/`refreshCode`/`resetIdentity` callbacks, not to a bare snapshot; §9.2 lists the exact inputs the transfer container must pass.)
 - `MeteorActionUiOverlay` — the 415×556 popup shell is fully action-agnostic (slot-based).
 
 ### 3.1 Utility inventory — package-provided vs. new SDK code
@@ -232,12 +232,13 @@ type TTransferAccountsOutcome =
   | { status: "declined" }   // wallet returned signed { success: false } (demo-wallet decline path)
   | { status: "cancelled" }  // user closed/cancelled locally before commitment
   | { status: "expired" }    // bridge expired with no signed result (user abandoned the wallet-side flow)
-  | { status: "failed"; reason: "pin_attempts_exhausted" | "wallet_update_required" | "bridge_failed" | "connection_failed" };
+  | { status: "failed"; reason: "pin_attempts_exhausted" | "wallet_update_required" | "bridge_failed" };
+  // bridge_failed covers transport/realm failures too (session catch-all "mobile_bridge_failed")
 ```
 
 **Contract: flow endings resolve; integration errors throw.** `prompt()` throws only for errors where no popup flow is possible or something is misconfigured (`transfer_accounts_nothing_staged`, `transfer_accounts_invalid_input`, `transfer_accounts_unavailable`, `transfer_accounts_backend_rejected` mapping `invalid_action_request`/`idempotency_conflict`, and result-verification failures like `mobile_bridge_action_result_mismatch`). Every user- or wallet-driven ending resolves, so partner code is one `switch (outcome.status)` instead of `try/catch` around "the user closed the popup".
 
-The mapping is grounded in the session's actual settlement behavior (verified in `MobileBridgeSession`/`ExecutableAction`): the underlying action promise rejects with `"Action was cancelled"` / `"mobile_bridge_cancelled"` → `cancelled`; `"mobile_bridge_expired"` → `expired`; `"PIN attempts exceeded"` → `failed/pin_attempts_exhausted`; `"wallet_update_required"` → `failed/wallet_update_required`; other bridge failures → `failed/bridge_failed`. Wire output maps `{ success: true } → imported`, `{ success: false } → declined`. The **registry output stays wire-shaped `{ success: boolean }`** — outcome mapping lives entirely in the wrapper, so `ExecutableAction`/adapter semantics stay uniform with every other action.
+The mapping is grounded in the session's actual settlement behavior (verified in `MobileBridgeSession`/`ExecutableAction`): the underlying action promise rejects with `"Action was cancelled"` / `"mobile_bridge_cancelled"` → `cancelled`; `"mobile_bridge_expired"` → `expired`; `"PIN attempts exceeded"` → `failed/pin_attempts_exhausted`; `"wallet_update_required"` → `failed/wallet_update_required`; other bridge failures → `failed/bridge_failed`. One verified path never settles the promise: `mobile_bridge_identity_pin_mismatch` only marks the snapshot `failed` + `identityResetRequired` — the flow ends when the user closes the popup (`"Action was cancelled"` → `cancelled`) or re-pairs; the key wipes on the `failed` phase either way. Wire output maps `{ success: true } → imported`, `{ success: false } → declined`. The **registry output stays wire-shaped `{ success: boolean }`** — outcome mapping lives entirely in the wrapper, so `ExecutableAction`/adapter semantics stay uniform with every other action.
 
 Escape hatch for advanced integrations (custom lifecycle control):
 
@@ -268,7 +269,7 @@ Internals of `createAction` (`prompt()` = `createAction()` + `promptForExecution
 Recommended design:
 
 - **Default: in-memory staging only.** The staged set lives in the `MeteorConnect` instance; a page reload loses it. This is safe-by-default and matches how a real partner wallet would use the flow (stage → transfer in one session, sourced from its own secure storage).
-- **Opt-in persistence** via config: `transferAccounts: { persistStagedAccounts: true }` on `IMeteorConnect_Initialize_Input` — stores under a new typed-storage key `stagedTransferAccounts` on `IMeteorConnectTypedStorage` (prefix `met_data_`, NOT the `met_bridge_partner::` namespace, which is wiped wholesale by identity reset). On load, re-validate with `v.safeParse(v.array(vAccountTransferDataDecrypted))` and drop on failure — same defensive pattern as the demo store.
+- **Opt-in persistence** via `persistStagedAccounts: true` on the single `transferAccounts` config block — which lives on `IMeteorConnectMobileBridgeConfig` alongside `enabled`/`meteorAppIds` (§8.4, §10): one namespace for the whole feature, not two config locations. Stores under a new typed-storage key `stagedTransferAccounts` added to `IMeteorConnectTypedStorage` (prefix `met_data_`; verified NOT the `met_bridge_partner::` namespace — that entire prefix is deleted wholesale by `resetPartnerIdentity()` / the panel's "reset pairing" button). On load, re-validate with `v.safeParse(v.array(vAccountTransferDataDecrypted))` and drop on failure — same defensive pattern as the demo store.
 - Document plainly (readme + jsdoc): persisted staging is plaintext-at-rest in the partner origin's storage; recommended only for development/testnet integration. The staged set is cleared by `transferAccounts.clearStaged()` and (by default) after a successful transfer; the in-memory set is also dropped on `MeteorConnect.dispose()`.
 
 The typed-storage helper (`meteorConnect.storage`, `createTypedStorageHelper`) already gives us get/set/remove — no new storage machinery needed.
@@ -283,8 +284,8 @@ The single most security-sensitive element. Rules (all enforced structurally, th
    - `getRevealPayload(session: MobileBridgeSession): { grouped: string; raw: string } | null` — non-null **only** while `session` is the bound instance **and** its snapshot phase is `"wallet_action"` **and** the handle is unwiped. Instance binding is the SDK-native equivalent of `demo-partner-web`'s `partnerRequestId` correlation (`App_Partner.tsx:383-393`, audit finding #9) — the demo needed the id because React state and mutations interleave; here the SDK owns both sides, and `partnerRequestId` is a private field of the session anyway. A key generated for one bridge can never meet another bridge's `wallet_action`, by construction.
    - `wipe(): void` — idempotent; clears the string field.
 2. Wipe triggers (mirroring the demo's `useEffect`/clear points): terminal phases (`completed` / `failed` / `cancelled`), `cancelAction()`, `refreshMobileBridge()`, `resetMobileIdentityAndRePair()`, popup close, session disposal, `ExecutableAction` disposal, `MeteorConnect.dispose()`, and `create_bridge`/push failure. The retained decrypted snapshot (§5.2) is dropped at the same terminal/disposal points.
-3. **Per-bridge regeneration mechanics** (new key, nonce, and ciphertext for every bridge — never rebind an old key to a new bridge): `refreshRequest()` cancels the old session and calls `prepareRequest()` fresh, but the request adapter only receives `expandedInput`, which holds the *initial* ciphertext. So `ExecutableAction.prepareMobileBridge()`/`refreshMobileBridge()` thread the **sensitive transfer attachment** into `prepareRequest`/`refreshRequest`, and the transfer branch of the adapter calls `attachment.buildFreshBridgePayload()` — which re-runs `buildAccountsTransferRequestData` on the retained decrypted snapshot, wipes the previous handle, creates a new `TransferKeyHandle` bound to the new session, and returns the fresh `actionInput` for the wire `actionRequest`. `expandedInput` keeps the initial build (typing/registry consistency); the per-bridge `prepared.actionRequest` is authoritative, and result matching already compares against exactly that (`serialized.domain/id` vs `prepared.actionRequest`).
-4. The key never enters: the action `request`/`expandedInput`, `MobileBridgeSession` snapshots, typed storage, bridge storage, lease records, logger calls, thrown errors, Lit reactive properties before the reveal gate, or any URL/QR except the dedicated key QR rendered post-reveal.
+3. **Per-bridge regeneration mechanics** (new key, nonce, and ciphertext for every bridge — never rebind an old key to a new bridge). Verified seams: `prepareMobileBridge()` takes no parameters today; the adapter receives the full `sdkRequest` (`{ id, expandedInput }`, holding the *initial* ciphertext); and `makeRequest` reuses an existing session only when `prepared.sdkRequest.expandedInput` is **reference-identical** to the action's `expandedInput` (`MeteorConnectMobileBridgeClient.ts:439-442`). So: thread an optional **sensitive transfer attachment** parameter through `prepareMobileBridge → prepareRequest → adapter` (and through `refreshRequest`, which cancels the old session and re-runs `prepareRequest`); the transfer branch of the adapter calls `attachment.buildFreshBridgePayload()` — re-runs `buildAccountsTransferRequestData` on the retained decrypted snapshot, wipes the previous handle, creates a new `TransferKeyHandle` bound to the new session, and returns the fresh `actionInput` for the wire `actionRequest`. Keep `expandedInput` the same object (initial build) so the reference-identity session-reuse check keeps working; the per-bridge `prepared.actionRequest` is authoritative, and result matching already compares against exactly that (`serialized.domain/id` vs `prepared.actionRequest`). Note each new session mints its own `partnerRequestId` (`crypto.randomUUID()` per instance), so refreshed bridges are never idempotency-deduped — exactly what per-bridge key regeneration requires.
+4. The key never enters: the action `request`/`expandedInput`, `MobileBridgeSession` snapshots, typed storage, bridge storage, lease records, logger calls, thrown errors, Lit reactive properties before the reveal gate, or any URL/QR except the dedicated key QR rendered post-reveal. The attachment/handle must also never live on `IMobileBridgePreparedAction` — `session.prepared` and `client.getCurrentSession()` are publicly reachable.
 5. **Key-confinement check:** port `mc_backend/scripts/check-key-confinement.ts` — a repo script that pins the exact SDK files allowed to reference `transferKeyString`/`TransferKeyHandle` internals (expected: the transfer module, the reveal-card element, and their tests) and greps for forbidden patterns (`console.*`, storage APIs). Wire into `bun run lint`/CI.
 6. Canary test: create a transfer action with a distinctive key, then assert its absence from `JSON.stringify(request)`, every mocked bridge call body, the deep link, the bridge QR payload, snapshots, storage contents, and the DOM before reveal (see §12).
 
@@ -304,18 +305,19 @@ Related logging hygiene (not a key leak, but worth fixing in the same pass): `Me
       input: {} as TAllAccountsTransferDataEncrypted,
       expandedInput: {} as TAllAccountsTransferDataEncrypted,
       output: {} as { success: boolean },
-      meta: { executionTargetSource: "on_execution" },   // meta is mandatory — ExecutableAction reads it unconditionally
+      meta: { executionTargetSource: "on_execution" },   // meta is optional on IMCActionSchema, but MeteorConnect.createAction dereferences .meta unconditionally (MeteorConnect.ts:309-311) — always supply it. No inputTransform: "targeted_account" would force single-target expansion via request.input.target (:317-320), which transfer doesn't fit.
     },
   } as const satisfies Record<TMCActionId<"meteor_wallet_core">, IMCActionSchema>;
   ```
 - `action/mc_action.combined.ts` — spread `MCMeteorWalletCoreActions` into `MCActionRegistryMap`.
-- Audit `ExecutableAction`'s `near::`-prefixed special cases (`:192` sign-in, `:212` sign-out, `:271` local sign-out, `:298-311` post-execute account refresh) — all are id-equality checks, so the new action flows past them safely; add a test proving it.
+- Audit `ExecutableAction`'s NEAR special cases. The *positive* id-equality checks (`:192` sign-in, `:212` sign-out, `:272` local sign-out, plus `createAction:359`'s local-sign-out bypass) are safe — transfer flows past them. **Exception (verified): the post-execute block (`ExecutableAction.ts:296-312`) uses *negative* id checks** (`id !== "near::sign_in"` …), so transfer falls *into* it — and it calls `mobileBridgeClient.getActiveConnection()` (which **throws `mobile_bridge_active_wallet_unavailable`** when no paired wallet exists; the `account != null` guard only runs after) before attempting an account-connection rewrite. Gate this block to the `near` domain (or a positive id allowlist) and add a test proving a successful transfer settles cleanly.
 
 ### 8.2 Execution-target gating
 
 - `MeteorConnectMobileBridgeClient.getExecutionTargetConfigs` (`:225-240`): add `request.id === "meteor_wallet_core::transfer_accounts"` → `[this.connectionShell()]`. (Transfer has no account target; without this, `createAction` throws "No execution clients found".)
 - `MeteorConnectV1Client.getExecutionTargetConfigs` (`:81-123`): currently offers `v1_web`/`v1_ext` targets for **any** action id and would fall through in `makeRequest`. Gate to the `near::` domain (`request.id.startsWith("near::")` or a domain check) — this is a correctness fix independent of transfer.
-- `MeteorConnectV2MessengerClient`: its execution body is entirely commented out today; no change, but the same domain gate should land when it is revived.
+- `MeteorConnectTestClient` (dev only): `MeteorConnect.getClients()` swaps to the test client *alone* when `isDev` — it offers its targets for **any** id and its `makeRequest` handles only 3 NEAR ids before throwing. Give it the same domain gate so dev-mode transfer fails fast at target selection, and note the consequence: the mobile-bridge client doesn't participate in dev mode at all, so transfer flow testing runs non-dev (the §9.3 preview harness covers UI iteration).
+- `MeteorConnectV2MessengerClient`: its execution body is entirely commented out today (and the client isn't even registered in `getClients()`); no change, but the same domain gate should land when it is revived.
 - Result: for a transfer action, `allExecutionTargets` contains exactly `v2_bridge_mobile` → the popup naturally renders in single-target (`contextual`/platform-locked) mode with no wallet picker.
 
 ### 8.3 Prepared-action shape + request adapter
@@ -331,12 +333,12 @@ Related logging hygiene (not a key leak, but worth fixing in the same pass): `Me
     kind: TMobileBridgePreparedActionKind;
   }
   ```
-- Rename/split `nearActionToMobileBridge.ts` → `sdkActionToMobileBridge.ts` dispatching by domain: NEAR cases unchanged; transfer case is one line — `act_impl_meteor_wallet_core.action.transfer_accounts.request(sdkRequest.expandedInput).toJsonObject()`. Keep `normalizeFunctionCallKey` inside the NEAR branch only.
+- Rename/split `nearActionToMobileBridge.ts` → `sdkActionToMobileBridge.ts` dispatching by domain (the adapter receives the full `sdkRequest` `{ id, expandedInput }` — it switches on `sdkRequest.id` and stores the whole request on the prepared object): NEAR cases unchanged; transfer case is one line — `act_impl_meteor_wallet_core.action.transfer_accounts.request(…).toJsonObject()` over the attachment's fresh payload (§7.3). Move `normalizeFunctionCallKey` inside the NEAR branch — today it runs unconditionally *before* the switch.
 
 ### 8.4 Per-action capabilities and app ids
 
-- `MobileBridgeSession.prepare()` (`:136-166`): compute `requiredWalletCapabilities` as
-  `sort(unique([...REQUIRED_METEOR_WALLET_CAPABILITIES, ...getServerRequiredWalletCapabilities({ domain, id })]))` from the prepared action instead of the hard-coded base set. (Server unions anyway; sending it makes wallet-link filtering and failure codes accurate, and keeps idempotency hashes consistent with what the server stores.)
+- Capabilities: compute `requiredWalletCapabilities` as
+  `sort(unique([...REQUIRED_METEOR_WALLET_CAPABILITIES, ...getServerRequiredWalletCapabilities({ domain, id })]))` from the prepared action instead of the hard-coded base set. (Server unions anyway; sending it makes wallet-link filtering and failure codes accurate, and keeps idempotency hashes consistent with what the server stores.) **Three hard-coded sites, not one** (verified): `MobileBridgeSession.prepare()`'s `create_bridge` branch (`:162`) and push branch (`:146`), plus the push-eligibility filter in `MeteorConnectMobileBridgeClient.selectPushWallet` (`:266-273`).
 - **App ids per action:** today the session sends `meteorAppIds: [this.input.meteorAppId]` (mobile app). Transfer must target the web wallet now and more apps later. Add to `IMeteorConnectMobileBridgeConfig`:
   ```ts
   transferAccounts?: {
@@ -352,7 +354,7 @@ Related logging hygiene (not a key leak, but worth fixing in the same pass): `Me
 ### 8.5 Wallet links, QR, and open-in-app
 
 - `create_bridge` output `walletLinks` contains per-app links; the current session picks a link and appends `#partnerSecret=` (or `&`) — meteor-frontend parses the secret from the fragment, so the existing append logic is compatible. Verify link selection picks the right entry for web-wallet app ids (https `…/bridge_request?bridgeId=…` links) vs the custom-scheme mobile links, and that the QR encodes the full link with fragment.
-- `openCurrentSessionInApp()` currently **throws** `mobile_bridge_native_scheme_not_allowed` for anything but `meteorwallet:`/`meteorwalletdev:` — a web-wallet https link is blocked today. Extend: when the session's selected wallet link belongs to a web-wallet app id, allow exactly that link's https URL (opened via `window.open`/anchor). The check stays an allowlist derived from the backend-issued `walletLinks`, never partner-supplied URLs.
+- `openCurrentSessionInApp()` currently computes a **single expected scheme from the configured mobile `meteorAppId`** (`meteorwalletdev:` for the dev id, else `meteorwallet:`) and throws `mobile_bridge_native_scheme_not_allowed` for anything else (`MeteorConnectMobileBridgeClient.ts:394-405`) — a web-wallet https link is structurally blocked today (and a transfer session would fail even earlier at link selection, §8.4). Extend: derive the expectation from the session's *selected wallet link* — every backend-issued link carries `linkType` (`EBridgeLinkType.web_app_url` vs `app_deep_link`), a field the SDK currently ignores; for `web_app_url` links allow exactly that link's https URL (opened via `window.open`/anchor). The check stays an allowlist derived from the backend-issued `walletLinks`, never partner-supplied URLs.
 
 ### 8.6 Result path
 
@@ -361,6 +363,7 @@ Split `mobileBridgeResultToSdk.ts` into shared verification + per-domain hydrati
 1. Shared (unchanged): `signatureVerified === true`, result-shape guard, `serialized.domain/id === prepared.actionRequest.domain/id`.
 2. Hydrate by domain: `act_impl_near` ↔ `act_impl_meteor_wallet_core.hydrateResultPayload(serialized)`; compare recomputed `outputHash`; `!hydrated.result.ok` → throw typed error.
 3. **Branch transfer before `requireTargetAccount`** (transfer has no target account — today's code would throw `mobile_bridge_missing_target_account`).
+   Also add a `default:` throw to the per-action switch — verified: today an unknown `sharedActionId` silently resolves `undefined` (the request adapter throws on unknown ids; the result adapter must too), and hydration currently calls `act_impl_near.hydrateResultPayload` unconditionally regardless of the domain-equality check.
 4. Transfer mapping: `{ success: true }` → `{ status: "imported" }`; `{ success: false }` → `{ status: "declined" }` (the standard wallet decline/give-up path — do **not** treat as a thrown error; it is a legitimate user decision). Bridge `failed`/expiry with no result → `{ status: "expired" }` (the user abandoned the wallet-side flow — see §2.4); pre-commit cancel → `{ status: "cancelled" }`.
 
 ### 8.7 Session/action lifecycle notes
@@ -368,6 +371,7 @@ Split `mobileBridgeResultToSdk.ts` into shared verification + per-domain hydrati
 - `ExecutableAction.watchMobileSession()` auto-executes at `wallet_verification`/`wallet_action` — correct for transfer too (execution = awaiting the signed result), no change.
 - `MobileBridgeSession.cancel()` already returns `"target_already_committed"` post-commitment; the popup close flow (`ActionUi.confirmCommittedMobileClose`) already warns — reuse, with transfer-specific copy ("the transfer may still complete on the other device; your decrypt key will be discarded from this page").
 - Bridge expiry (`expiresAt`) is already surfaced in snapshots; for transfer, expiry after reveal is the *normal* failure path — the UI must present it as "transfer not completed" rather than an error.
+- One live session per client: `prepareRequest` throws `mobile_bridge_session_already_active` while a non-terminal session exists. The popup path is already covered by `ActionUi`'s one-active-action guard; document that the `createAction()` escape hatch inherits the same constraint.
 
 ---
 
@@ -375,27 +379,31 @@ Split `mobileBridgeResultToSdk.ts` into shared verification + per-domain hydrati
 
 ### 9.1 Routing
 
-`ActionUi._renderNormalActionUI` (`ActionUi.ts:169-188`) is the single place that instantiates `MeteorActionUiContainer`. Select the container element by action domain: `meteor_wallet_core::transfer_accounts` → new `<meteor-transfer-accounts-container>`. Everything else about `ActionUi` (singleton one-active-action guard, overlay creation, font injection, close/cancel plumbing, committed-close confirm) is reused unchanged. `MeteorActionUiOverlay` (415×556 shell) is reused verbatim.
+`ActionUi._renderNormalActionUI` (`ActionUi.ts:169-188`) is the single place that instantiates the container — via `new MeteorActionUiContainer()` (a class constructor, not a tag string). Route by action id: `meteor_wallet_core::transfer_accounts` → `new MeteorTransferAccountsContainer()`; widen the `actionUiComponent` field type and satisfy the same property contract (`.action`, `.pendingKnownExecutionTarget`, `.closeAction` — `ActionUi.ts:175-183`). Everything else about `ActionUi` (singleton one-active-action guard, overlay creation, font injection, close/cancel plumbing, committed-close confirm) is reused unchanged; `MeteorActionUiOverlay` (415×556, viewport-clamped) is reused verbatim.
+
+Verified integration requirements for the new container: register it via the repo's HMR-safe `customElement` wrapper (`lit_ui/custom-element.ts`), not Lit's; `@consume` the overlay's `overlayCloseTriggerContext` so its close button animates instead of hard-removing; reuse `ActionUiController` for `prepareMobileBridge`/`refreshMobileBridge`/`resetMobileIdentityAndRePair` (the existing container triggers `prepareMobileBridge` from `connectedCallback` — the transfer container instead defers it to the Review screen's explicit start click, §9.2); set its own `font-family: 'Gilroy', …` on its modal root (the injected font is only consumed via each container's own CSS); and redeclare the surface/text custom properties (`--meteor-dark-gray-*`, `--meteor-text-on-dark-*`) — the "design tokens" are per-element `:host` declarations, not shared exports (the primary gradient is hand-duplicated with a keep-in-sync comment).
+
+Two fixes to land in `ActionUi` while in there: the transfer rejection of `strategy: "target_element"` goes **early in `prompt()`**, before container resolution (`ActionUi.ts:138-143`); and fix the latent stale-container bug — `cleanup()` only nulls `this.container` when it was the popup parent, so one `target_element` prompt permanently hijacks every later popup (a pre-existing correctness fix, like §8.2's V1 gate).
 
 ### 9.2 Screens (`meteor-transfer-accounts-container`)
 
 Follows `demo-partner-web`'s staged flow, restyled to the design system established in `meteor-mobile-bridge-panel` (same tokens as `meteor-action-button`: primary gradient `62,19,231 → 89,47,254`, radius .65rem, kicker/pill/stage-panel patterns):
 
 1. **Review** (pre-bridge): "Transfer accounts to Meteor Wallet" — account list from `allAccountsBasicInfo` (accountId + `NEAR · <network>` rows; safe summaries only, never secrets), count, and a primary "Start secure transfer" button. Creating the bridge only on explicit click keeps the 5-minute bridge TTL from burning while the user reads.
-2. **Connect** (`creating_bridge` → `waiting_for_wallet` → `wallet_verification`): **reuse `<meteor-mobile-bridge-panel>`** for QR (gradient-frame tile), countdown/refresh, deep-link/open button, and the segmented PIN stage — all already built and binding only to `IMobileBridgeSnapshot`. Device-adaptive: QR-primary on desktop; "Open in Meteor Wallet" primary + QR icon-toggle on mobile browsers (existing behavior).
+2. **Connect** (`creating_bridge` → `waiting_for_wallet` → `wallet_verification`, incl. `busy_other_tab`): **reuse `<meteor-mobile-bridge-panel>`** for QR (gradient-frame tile), countdown/refresh, deep-link/open button, and the segmented PIN stage — all already built. Its actual reactive inputs (verified): `.session` (live `MobileBridgeSession` — PIN entry calls `session.submitPin` directly), `.contextual`, and the `.openInApp`/`.refreshCode`/`.resetIdentity` callbacks — wire them exactly as `meteor-action-ui-container.ts:566-576` does, backed by `ActionUiController`. Device-adaptive: QR-primary on desktop; "Open in Meteor Wallet" primary + QR icon-toggle on mobile browsers (existing behavior).
 3. **Reveal** (`wallet_action`): the new `<meteor-transfer-key-card>`:
    - "Connection verified" stage header (green pill), warning copy: *"This key unlocks your transferred accounts. Enter it only in Meteor Wallet on the connected device."*
    - Hidden-by-default: the key string is **not in the DOM at all** before the explicit "Reveal decrypt key" click (conditional render, not CSS).
-   - After reveal: key grouped in 4s in a monospace tile, **Copy** button (flips to "Copied ✓", warns about clipboard history), **key QR** (via the already-bundled `qr-code-styling`, generated into component state — never via any cache/store), and a **Hide** button that removes both text and QR.
+   - After reveal: key grouped in 4s in a monospace tile, **Copy** button (flips to "Copied ✓", warns about clipboard history), **key QR** (via the already-bundled `qr-code-styling`, generated into component state — never via any cache/store; follow the bridge panel's `drawQr` settings — `type: "svg"` with `roundSize: false`, which is load-bearing for dense payloads like the key string), and a **Hide** button that removes both text and QR.
    - The card pulls the key exclusively through `TransferKeyHandle.getRevealPayload(session)` on each render — if the gate condition lapses (reconnect, phase regression), the render returns to hidden automatically.
    - Bridge expiry countdown stays visible; on expiry the card wipes and transitions to the terminal state.
 4. **Terminal**: reuse the compact icon stages from the mobile panel — `imported` (green check, "Accounts transferred"), `declined`, `expired` ("The transfer wasn't completed on the other device"), `cancelled`.
 
-Accessibility/privacy details carried over from the prior review work: no key in `aria-live`, tooltips, `<input value>`, or data attributes; reveal/copy/QR are deliberate clicks; reduced-motion respected; popup keyboard-navigable including the sandboxed-iframe Enter handling already solved for the PIN input.
+Accessibility/privacy details carried over from the prior review work: no key in `aria-live`, tooltips, `<input value>`, or data attributes; reveal/copy/QR are deliberate clicks; reduced-motion respected; popup keyboard-navigable via real buttons + `:focus-visible` (verified: the popup has **no** Escape handler or focus trap today — do not add Escape-to-close on the reveal screen, where an accidental close discards the key). The PIN input's Enter handling is hardened for partner pages that embed the SDK inside a sandboxed iframe — note the SDK itself creates no iframe; the popup is shadow-DOM custom elements on `document.body`.
 
 ### 9.3 Preview harness
 
-Add transfer scenarios to `preview/action-ui/scenarios.mjs` + entry mocks (staged review, waiting, PIN, reveal-hidden, reveal-shown, each terminal state) so the screens are iterable without a live backend, same as the existing bridge panel previews.
+Add transfer scenarios to `preview/action-ui/scenarios.mjs` + entry mocks (staged review, waiting, PIN, reveal-hidden, reveal-shown, each terminal state) so the screens are iterable without a live backend, same as the existing bridge panel previews. Three small harness extensions first (verified): `action-ui-preview.entry.ts` hard-codes creating `meteor-action-ui-container` — make the element scenario-driven; the scenario schema gains transfer-state fields (staged accounts, reveal state) alongside `snapshot`/`view`; and `screenshot.mjs` hard-codes the container selector for its overflow guard — include the transfer container. This harness matters extra here: dev mode swaps to the test-only client (§8.2), so the preview is the primary UI iteration loop.
 
 ---
 
@@ -412,7 +420,8 @@ Add transfer scenarios to `preview/action-ui/scenarios.mjs` + entry mocks (stage
 | Situation | SDK behavior |
 |---|---|
 | Empty staged set / schema-invalid input | throw `transfer_accounts_invalid_input` pre-bridge; no key generated |
-| `create_bridge` → `invalid_action_request` / `idempotency_conflict` | wipe key, throw `transfer_accounts_backend_rejected` with safe reason code |
+| `create_bridge` → `invalid_action_request` / `idempotency_conflict` | wipe key, throw `transfer_accounts_backend_rejected` with safe reason code. Needs a small new NiceError-id classifier (match `merr_bridge` error ids, not message strings) — verified none exists in the SDK; today the raw `[merr_bridge](…)`-prefixed message lands verbatim in `snapshot.error` |
+| Identity/PIN mismatch on reconnect (`mobile_bridge_identity_pin_mismatch`) | snapshot-only `failed` + `identityResetRequired` — the promise never settles (§5.2); key wiped on the `failed` phase; flow ends via re-pair or popup close → `cancelled` |
 | Wallet lacks capability (`wallet_update_required` failure code) | key wiped; outcome `failed/wallet_update_required`; panel copy generalized: "Update Meteor Wallet to receive account transfers" |
 | Wrong PIN ×3 (`pin_attempts_exceeded`) | existing terminal PIN semantics; key wiped; outcome `failed/pin_attempts_exhausted` |
 | User closes popup pre-commitment | `cancel_bridge`, wipe key, outcome `cancelled` |
@@ -431,7 +440,7 @@ Never delete or mutate partner source data on any outcome. Retries always regene
 **Unit (bun test, alongside existing mobile-bridge tests):**
 - Staging: shared-encoder reason pass-through (`empty_secret_input`, `invalid_private_key`, `invalid_mnemonic_word_count` with `wordCount`, `invalid_secret_data`) — the detection/encoding rules themselves are upstream-tested in connect-shared 0.8.0, so SDK tests cover the mapping plus SDK-owned validation: bad accountId charset/length, `duplicate_secret`, `too_many_secrets` at 11, `too_many_accounts` at 51, secret-merge on re-staging the same identity tuple. Keep one encode→decrypt round trip (staged input → `buildAccountsTransferRequestData` → `decryptAccountsTransferRequestData`) as an integration smoke test.
 - `buildAccountsTransferRequestData` integration: SDK action input validates against `vAllAccountsTransferDataEncrypted`; decrypt round trip with `decryptAccountsTransferRequestData` using the returned key; `preview_mismatch` triggers on tampered basic info.
-- Registry/adapters: transfer action returns only `v2_bridge_mobile` targets; serializes via `act_impl_meteor_wallet_core`; result hydration verifies domain/id/outputHash; `{success:false}` → `declined`; NEAR adapters regression-tested unchanged.
+- Registry/adapters: transfer action returns only `v2_bridge_mobile` targets (V1 + test clients domain-gated); serializes via `act_impl_meteor_wallet_core`; result hydration verifies domain/id/outputHash, with a `default:` throw on unknown `sharedActionId`; `{success:false}` → `declined`; a successful transfer settles without entering the post-execute account-refresh block (§8.1 guard — no `getActiveConnection()` call); NEAR adapters regression-tested unchanged.
 - Capabilities: `create_bridge` input contains the base set ∪ `transfer_accounts_v1`; NEAR actions still send exactly the base set.
 - **Key confinement canary** (§7.6) + the confinement lint script wired into CI.
 - Lifecycle races: refresh regenerates key and old handle returns null; stale session cannot unlock a new handle; wipe on every terminal path is idempotent.
@@ -444,7 +453,7 @@ Never delete or mutate partner source data on any outcome. Retries always regene
 
 ## 13. Implementation order
 
-1. **Registry + gating** (§8.1, §8.2) — including the V1-client domain gate fix. Type-check + regression tests green.
+1. **Registry + gating** (§8.1, §8.2) — including the three pre-existing correctness fixes surfaced by verification: the V1-client domain gate, the test-client domain gate, and the `ExecutableAction` post-execute guard (negative-id block). Type-check + regression tests green.
 2. **Adapters + capabilities + app ids** (§8.3, §8.4, §8.6) — transfer action executable end-to-end headlessly against a local backend (result via demo-wallet-web).
 3. **Staging API + storage** (§5.1, §6).
 4. **`transferAccounts` namespace (`prompt`/`createAction`) + `TransferKeyHandle` + attachment threading** (§5.2, §7) + confinement script + canary tests.
@@ -478,7 +487,7 @@ Meteor Mobile is the same app this SDK already targets for regular Meteor Connec
 1. A partner can stage accounts via the SDK API with the exact encodings meteor-frontend decodes, bounded by the shared constants.
 2. `transferAccounts.prompt()` runs the full popup flow against the connect backend and resolves to one of the five outcome statuses (never rejecting for user-driven endings); the NEAR action suite is behaviorally unchanged.
 3. The transfer key exists only inside `TransferKeyHandle` + the reveal card; the canary suite and confinement lint prove it absent from wire, storage, logs, snapshots, URLs, and pre-reveal DOM.
-4. Reveal requires authoritative `wallet_action` **and** matching `partnerRequestId`; every terminal/teardown path wipes the key idempotently; refresh regenerates key+ciphertext.
+4. Reveal requires authoritative `wallet_action` **and** the handle's bound session instance (§7.1); every terminal/teardown path wipes the key idempotently; refresh regenerates key+ciphertext on a fresh session (which mints its own `partnerRequestId`).
 5. `create_bridge` carries `transfer_accounts_v1` and web-wallet app ids; capability-lacking wallets fail with the update message before any reveal.
 6. Signed-result verification (domain/id/signature/outputHash) gates all outcomes; `success:false` and expiry map to `declined`/`expired` without exceptions; source data is never mutated by any outcome.
 7. Manual E2E against local backend + meteor-frontend dev passes for QR and same-device link paths.
