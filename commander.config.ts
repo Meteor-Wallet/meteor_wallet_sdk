@@ -77,6 +77,20 @@ export default defineCommanderConfig({
       tags: { role: "backend" },
     },
     {
+      // The REAL Meteor Wallet web app (meteor-frontend) from the meteor_wallet repo, served
+      // locally — the receiving side of a localhost account transfer. mkcert https on :3001.
+      // ⚠ Same port as near-connect; the two are mutually exclusive.
+      // ⚠ First boot on a machine: mkcert's CA install prompts for sudo, which a daemon child
+      // cannot answer — run `bunx nice-commander run meteor-web-wallet` once in a real terminal
+      // (single-id run inherits stdio), then daemon starts (`up transfer-full`) work.
+      id: "meteor-web-wallet",
+      run: ["bun", "run", "web:dev"],
+      cwd: "../meteor_wallet/web/packages/meteor-frontend",
+      endpoints: [{ name: "https", protocol: "tcp", port: 3001, ownership: "exclusive" }],
+      ready: { kind: "endpoint", endpoint: "https" },
+      tags: { role: "wallet" },
+    },
+    {
       // Rebuilds dist/ for consumers that resolve the built SDK (sdk-test-web aliases src
       // directly and does not need this — hence `full`, not `dev`).
       id: "sdk-build-watch",
@@ -123,6 +137,8 @@ export default defineCommanderConfig({
     preview: { include: ["sdk-preview"] },
     /** Account-transfer testing: demo app + the sibling repo's mc backend (NOT backend-test — same port). */
     transfer: { include: ["sdk-test-web", "mc-backend"] },
+    /** Transfer testing incl. the receiving localhost Meteor Web wallet (conflicts with near-connect on :3001). */
+    "transfer-full": { include: ["transfer", "meteor-web-wallet"], staggerMs: 400 },
     /** CI-style panel: ✓/✗ per check. */
     checks: { where: { role: "check" } },
   },

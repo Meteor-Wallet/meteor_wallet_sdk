@@ -98,8 +98,9 @@ export const TransferAccountsTest = ({
         </p>
       ) : (
         <p className={"text-sm text-amber-700"}>
-          ⚠ Transfers need the <b>local</b> mc backend — the production backend does not serve the
-          transfer protocol (or localhost CORS) yet.{" "}
+          ⚠ Using the production backend. If bridge creation fails with a CORS error, the request
+          is being stopped at the Cloudflare edge (WAF block on <code>mc.meteorwallet.app</code> —
+          preflights can never pass a challenge), not by the worker.{" "}
           <button className={"underline cursor-pointer"} onClick={() => switchBackend("local")}>
             Switch to local backend (reloads)
           </button>

@@ -25,8 +25,9 @@ const LOCAL_BACKEND_URL = "http://localhost:8787";
  * Backend selection via URL (?backend=local | ?backend=<url>), read once at init — the SDK pins
  * its config per instance (`mobile_bridge_config_mismatch` on change), so switching backends is
  * a full navigation, not a live toggle. Local = the mc_backend worker (`wrangler dev`, :8787)
- * from ../meteor-connect-bridge — required for account-transfer testing: the production backend
- * does not serve the transfer protocol (or localhost CORS) yet.
+ * from ../meteor-connect-bridge. Note (2026-08-06): production `mc.meteorwallet.app` hard-blocks
+ * requests at the Cloudflare edge (WAF "you have been blocked" page, even on OPTIONS preflights,
+ * which surfaces in the browser as a CORS failure) — zone security config, not worker code.
  */
 const resolveBackendUrl = (): string => {
   if (typeof window === "undefined") return PRODUCTION_BACKEND_URL;
