@@ -2,9 +2,9 @@
 
 **Status:** Proposed implementation plan
 **Repository:** `meteor_wallet_sdk` — `packages/meteor-sdk-v1/src/MeteorConnect`
-**Protocol source of truth:** `@meteorwallet/connect` / `@meteorwallet/connect-shared` **0.8.0** (already installed) and the completed backend implementation in `mc_backend` (the repo checked out at `../meteor-connect-bridge`; `PLAN-account-transfer.md` — phases 1–5b done, audited)
+**Protocol source of truth:** `@meteorwallet/connect` / `@meteorwallet/connect-shared` **0.9.0** (already installed) and the completed backend implementation in `mc_backend` (the repo checked out at `../meteor-connect-bridge`; `PLAN-account-transfer.md` — phases 1–5b done, audited)
 **Reference implementations:** `mc_backend/packages/demo-partner-web` (partner side — the flow we are productizing), `meteor_wallet/web/packages/meteor-frontend` (the first real receiving wallet), `mc_backend/packages/demo-wallet-web` + `demo-wallet-expo` (receiver references)
-**Prepared:** 2026-08-04 · **Updated:** 2026-08-06 for 0.8.0 (real web app ids + shared secret encoder landed upstream; meteor-frontend now identifies as `meteor_wallet_web`/`meteor_wallet_web_dev` — all three former §14.2 asks resolved)
+**Prepared:** 2026-08-04 · **Updated:** 2026-08-06 for 0.9.0 — all §14.2 asks resolved upstream: 0.8.0 brought real web app ids + the shared secret encoder and meteor-frontend now identifies as `meteor_wallet_web`/`meteor_wallet_web_dev`; 0.9.0 + the accompanying meteor-frontend work implemented the error-handling feedback (explicit declines, delivery-error surfacing, claim retry, sequential import). Only the richer per-account result shape remains tracked-later.
 
 ---
 
@@ -16,15 +16,15 @@ Give partner wallet applications a production SDK flow to transfer their users' 
 2. **Store** the staged set so the partner app can build up / review the list before transferring.
 3. **Transfer** the accounts through the Meteor Connect bridge backend in a dedicated popup UI that follows the proven `demo-partner-web` flow: encrypt locally → create bridge → QR / open link → PIN verification → reveal decrypt key → signed `{ success }` result.
 
-Receiving wallets, in order: **Meteor Wallet web** (`meteor-frontend`, live now), then **Meteor Mobile** (developed in the `meteor-v2-apps-windows` repo), which already receives regular Meteor Connect actions from this SDK via QR/deep link — the transfer receiver pattern for it is proven in `demo-wallet-expo`.
+Receiving wallets, in order: **Meteor Wallet web** (`meteor-frontend`, live now), then **Meteor Mobile** (developed in the `meteor-v2-apps` sibling repo, checked out at `../meteor-v2-apps`), which already receives regular Meteor Connect actions from this SDK via QR/deep link — the transfer receiver pattern for it is proven in `demo-wallet-expo`.
 
 Out of scope here: any backend or shared-package changes (the protocol is complete and audited in `mc_backend`), and wallet-side receiving code (already implemented in `meteor-frontend`).
 
 ---
 
-## 2. Protocol facts this plan builds on (verified against 0.8.0 sources)
+## 2. Protocol facts this plan builds on (verified against 0.9.0 sources)
 
-These are settled decisions from `mc_backend/PLAN-account-transfer.md` (D1–D9) and the shipped 0.8.0 packages — the SDK must consume them, not re-implement them:
+These are settled decisions from `mc_backend/PLAN-account-transfer.md` (D1–D9) and the shipped 0.9.0 packages — the SDK must consume them, not re-implement them. (0.9.0's only code delta over 0.8.0 is wallet-client-side — typed claim-failure classification for wallet UIs; every partner-side surface below is unchanged from 0.8.0.)
 
 ### 2.1 Action contract
 
@@ -61,8 +61,8 @@ These are settled decisions from `mc_backend/PLAN-account-transfer.md` (D1–D9)
 - Claims via URL only: `https://<wallet-origin>/bridge_request?bridgeId=<id>#partnerSecret=<secret>` (secret in the **fragment**). **No QR scanner, no push support** — the partner popup must present a scannable QR of that URL and/or an open-link button.
 - Real web app ids exist as of 0.8.0: `EMeteorAppId.meteor_wallet_web` / `meteor_wallet_web_dev`, with backend wallet links registered (`https://wallet.meteorwallet.app/bridge_request?bridgeId=…&protocolVersion=…` and `wallet-dev.meteorwallet.app` respectively; `EBridgeLinkType.web_app_url`). **meteor-frontend now identifies with these ids** — `meteor_wallet_web_dev` on dev deploys, `meteor_wallet_web` on production (env-selected in `meteorConnectBridgeClient.ts`). `meteor_bridge_test_web` remains only for the `mc_backend` demo-wallet test harness; the SDK does not need it in its defaults.
 - Advertises `transfer_accounts_v1`; key entry is a plain input (paste/type); decrypt → on-chain FullAccess access-key verification per secret → import.
-- **Never sends a failure result** (no decline path). User rejection, decrypt failure, verification failure, and import failure all look like *silence* to the partner — the failure path is bridge expiry. (The demo wallet, by contrast, declines with a signed `{ success: false }`.) Fixing this is now formally requested — `mc_backend/FEEDBACK-meteor-frontend-transfer-gaps.md` (§14.2) — but the SDK must still tolerate silence from older wallet versions, so the `expired` outcome handling stays.
-- Import is **non-atomic** (`Promise.all`, no rollback): a retry after partial failure can hit "already in this Meteor wallet". The SDK flow must therefore be idempotent-friendly and never assume all-or-nothing on the wallet side.
+- **Sends explicit decline/failure results** (since the 2026-08-06 feedback round — `mc_backend/FEEDBACK-meteor-frontend-transfer-gaps.md`): user cancel and import give-up send a signed `{ success: false }`, so the SDK's `declined` outcome is the *normal* negative ending. Silence → bridge expiry still happens (user closes the tab or walks away), so the `expired` outcome handling stays — it just now means "abandoned", not "declined-but-couldn't-say-so".
+- Import is **sequential with per-account outcomes** (same feedback round): already-present accounts are skipped up front, partial failures offer retry-of-remainder, and exactly one signed result is sent per transfer (`success: true` only after every account lands). The SDK should still be idempotent-friendly and never assume all-or-nothing on the wallet side — but the old "retry hits 'already in this Meteor wallet'" trap is gone. Per-account reporting *to the partner* remains impossible (`{ success: boolean }` wire result — richer shape is a tracked-later protocol ask, §14.2).
 
 ---
 
@@ -72,14 +72,14 @@ The SDK has **zero** transfer code today. The registry is NEAR-only (`TMCActionD
 
 What we reuse as-is:
 
-- `PartnerBridgeClient` (0.8.0) — `create_bridge` / `verify_pin` / `cancel_bridge` already accept per-action capabilities; no transfer-specific client APIs exist or are needed.
+- `PartnerBridgeClient` (0.9.0) — `create_bridge` / `verify_pin` / `cancel_bridge` already accept per-action capabilities; no transfer-specific client APIs exist or are needed.
 - `MobileBridgeSession` — its phase machine (`creating_bridge → waiting_for_wallet → wallet_verification → wallet_action → completed|failed|cancelled`) is exactly the transfer lifecycle; `wallet_action` is the authoritative reveal gate.
 - `meteor-mobile-bridge-panel` — the QR/countdown/PIN/status UI binds only to `IMobileBridgeSnapshot` and is action-agnostic.
 - `MeteorActionUiOverlay` — the 415×556 popup shell is fully action-agnostic (slot-based).
 
 ### 3.1 Utility inventory — package-provided vs. new SDK code
 
-Everything protocol- and crypto-level already ships in the installed packages (verified importable from this repo's `@meteorwallet/connect-shared` 0.8.0). **The SDK must import these, never re-implement them:**
+Everything protocol- and crypto-level already ships in the installed packages (verified importable from this repo's `@meteorwallet/connect-shared` 0.9.0). **The SDK must import these, never re-implement them:**
 
 | Concern | Provided by packages — use directly |
 |---|---|
@@ -231,7 +231,7 @@ type TTransferAccountsOutcome =
   | { status: "imported" }   // wallet returned signed { success: true }
   | { status: "declined" }   // wallet returned signed { success: false } (demo-wallet decline path)
   | { status: "cancelled" }  // user closed/cancelled locally before commitment
-  | { status: "expired" }    // bridge expired with no signed result (meteor-frontend's only failure signal)
+  | { status: "expired" }    // bridge expired with no signed result (user abandoned the wallet-side flow)
   | { status: "failed"; reason: "pin_attempts_exhausted" | "wallet_update_required" | "bridge_failed" | "connection_failed" };
 ```
 
@@ -361,7 +361,7 @@ Split `mobileBridgeResultToSdk.ts` into shared verification + per-domain hydrati
 1. Shared (unchanged): `signatureVerified === true`, result-shape guard, `serialized.domain/id === prepared.actionRequest.domain/id`.
 2. Hydrate by domain: `act_impl_near` ↔ `act_impl_meteor_wallet_core.hydrateResultPayload(serialized)`; compare recomputed `outputHash`; `!hydrated.result.ok` → throw typed error.
 3. **Branch transfer before `requireTargetAccount`** (transfer has no target account — today's code would throw `mobile_bridge_missing_target_account`).
-4. Transfer mapping: `{ success: true }` → `{ status: "imported" }`; `{ success: false }` → `{ status: "declined" }` (the demo wallet's decline path — do **not** treat as a thrown error; it is a legitimate user decision). Bridge `failed`/expiry with no result → `{ status: "expired" }` (meteor-frontend's only failure signal — see §2.4); pre-commit cancel → `{ status: "cancelled" }`.
+4. Transfer mapping: `{ success: true }` → `{ status: "imported" }`; `{ success: false }` → `{ status: "declined" }` (the standard wallet decline/give-up path — do **not** treat as a thrown error; it is a legitimate user decision). Bridge `failed`/expiry with no result → `{ status: "expired" }` (the user abandoned the wallet-side flow — see §2.4); pre-commit cancel → `{ status: "cancelled" }`.
 
 ### 8.7 Session/action lifecycle notes
 
@@ -417,12 +417,12 @@ Add transfer scenarios to `preview/action-ui/scenarios.mjs` + entry mocks (stage
 | Wrong PIN ×3 (`pin_attempts_exceeded`) | existing terminal PIN semantics; key wiped; outcome `failed/pin_attempts_exhausted` |
 | User closes popup pre-commitment | `cancel_bridge`, wipe key, outcome `cancelled` |
 | User closes popup post-commitment | committed-close confirm; detach locally; wipe key; outcome `expired` unless a result already arrived |
-| Bridge expires (incl. after reveal) | wipe key; outcome `expired` — presented as neutral "not completed", because meteor-frontend cannot signal failures |
+| Bridge expires (incl. after reveal) | wipe key; outcome `expired` — presented as neutral "not completed"; since meteor-frontend now declines explicitly (§2.4), expiry means the user abandoned the flow |
 | Signed `{ success: false }` | outcome `declined` (not an exception) |
 | Signed `{ success: true }` | outcome `imported`; optionally clear staged set |
 | Result signature/domain/id/hash mismatch | throw `mobile_bridge_action_result_mismatch` (existing error), wipe key |
 
-Never delete or mutate partner source data on any outcome. Retries always regenerate key + ciphertext (§7.3); because the wallet-side import is idempotent per exact account and duplicate-rejecting otherwise, document that a retry after partial wallet-side import may report already-imported accounts as errors on the wallet — this is wallet-side UX debt (§14.2), not SDK-resolvable.
+Never delete or mutate partner source data on any outcome. Retries always regenerate key + ciphertext (§7.3). Wallet-side retry is now well-behaved (already-imported accounts are skipped, failed remainders retry-able — §2.4), so a partner-initiated re-transfer after a partial ending is safe; the partner still only learns the single boolean outcome per attempt.
 
 ---
 
@@ -438,7 +438,7 @@ Never delete or mutate partner source data on any outcome. Retries always regene
 
 **Popup (preview + Playwright if available):** key absent from DOM/accessibility tree before reveal and after hide/terminal; reveal requires the gate; copy/QR require distinct clicks; committed-close confirm shows transfer copy.
 
-**Manual E2E (release gate):** local `mc_backend` backend + `meteor-frontend` dev build: full desktop-QR flow and same-device link flow, wrong-PIN path, decline (once meteor-frontend has one) / silent-expiry path, duplicate-account retry behavior. Include a **worst-case timing run**: realistic slow scan → PIN → manual key entry, to confirm the production bridge TTL comfortably covers wallet-side key entry (the bridge must stay alive until `complete_action`); if it's tight, raise a backend ask for a transfer-specific TTL or extension-on-claim. Note: `mc_backend`'s own Phase 5 manual browser E2E is still marked pending — coordinate so one pass covers both.
+**Manual E2E (release gate):** local `mc_backend` backend + `meteor-frontend` dev build: full desktop-QR flow and same-device link flow, wrong-PIN path, decline path (now implemented in meteor-frontend), abandon/silent-expiry path, duplicate-account and partial-failure retry behavior. Include a **worst-case timing run**: realistic slow scan → PIN → manual key entry, to confirm the production bridge TTL comfortably covers wallet-side key entry (the bridge must stay alive until `complete_action`); if it's tight, raise a backend ask for a transfer-specific TTL or extension-on-claim. Note: `mc_backend`'s own Phase 5 manual browser E2E and the FEEDBACK doc's acceptance §5 (decline / delivery-error / claim-retry observable from the partner side) are both still marked pending — coordinate so one pass covers all three.
 
 ---
 
@@ -457,7 +457,7 @@ Never delete or mutate partner source data on any outcome. Retries always regene
 
 ## 14. Future steps and cross-repo asks
 
-### 14.1 Meteor Mobile (`meteor-v2-apps-windows` repo)
+### 14.1 Meteor Mobile (`meteor-v2-apps` repo)
 Meteor Mobile is the same app this SDK already targets for regular Meteor Connect actions (QR/deep link/push via `meteor_wallet_mobile` / `meteor_wallet_mobile_dev`); it just doesn't handle the transfer action yet. The receiver pattern is already proven in `demo-wallet-expo` (QR key scanning via `looksLikeTransferKey`, sensitive-push variant landed in mc_backend Phase 6). When Meteor Mobile ships the transfer resolver + advertises `transfer_accounts_v1`:
 - add `meteor_wallet_mobile` / `meteor_wallet_mobile_dev` (already existing `EMeteorAppId` values — no shared-package change needed) to `transferAccounts.meteorAppIds`;
 - enable push-to-paired-wallet delivery for transfer (still PIN-gated by policy — the demo proved pushed transfers land on `wallet_verification`);
@@ -467,7 +467,8 @@ Meteor Mobile is the same app this SDK already targets for regular Meteor Connec
 - ~~**Real web app id**~~ — **landed in 0.8.0**: `meteor_wallet_web` / `meteor_wallet_web_dev` exist in `EMeteorAppId` with backend wallet links registered (§2.4, §8.4).
 - ~~**Shared secret-encoding builder**~~ — **landed in 0.8.0**: `buildAccountSecretData` in `connect-shared`; the demo store and this SDK both consume it (§3.1, §5.1).
 - ~~**meteor-frontend migration to the real web id**~~ — **done**: meteor-frontend identifies as `meteor_wallet_web_dev`/`meteor_wallet_web` (env-selected); the SDK defaults target these ids only (§2.4, §8.4).
-- **meteor-frontend gaps** — now formally requested in `mc_backend/FEEDBACK-meteor-frontend-transfer-gaps.md` (2026-08-06, error-handling items prioritized for immediate implementation): send signed `{ success: false }` decline/failure results instead of silence; render `actionDeliveryError` and the `receiving_action` step; sequential import with per-account retry/give-up (skip-existing flow already landed); retry-able `claim_bridge`. The RPC-outage vs key-not-found distinction is already resolved in current meteor-frontend. Each remaining item directly improves the SDK-side UX table in §11 — notably, decline results turn the 5-minute silent `expired` ending into an immediate `declined`.
+- ~~**meteor-frontend gaps**~~ — **implemented 2026-08-06** (see `mc_backend/FEEDBACK-meteor-frontend-transfer-gaps.md`, marked IMPLEMENTED; client-side pieces released as `@meteorwallet/connect` 0.9.0): explicit signed `{ success: false }` declines, `receiving_action`/`actionDeliveryError` rendering, retry-able `claim_bridge` with typed failure classification, and sequential per-account import. §2.4 and §11 reflect the new behavior. Still pending there: the feedback doc's manual E2E verification (fold into §12's release-gate pass).
+- **Richer per-account transfer result** (tracked, later): the wire output remains `{ success: boolean }`, so partial-import detail never reaches the partner. If real-world partial failures justify it, this needs a richer `transfer_accounts` output (or `formatVersion: 2`) designed in `connect-shared`.
 - **Cross-bridge PIN-attempt accounting** and PIN-freshness window — open items in mc_backend Phase 6; no SDK action needed, but the SDK's retry UX should not make brute-force easier (regenerating bridges is already rate-limited by user gesture in our flow).
 
 ---
