@@ -120,7 +120,7 @@ export class MeteorConnect {
                 enabled: mobileBridge.transferAccounts.enabled ?? false,
                 meteorAppIds: mobileBridge.transferAccounts.meteorAppIds,
                 persistStagedAccounts: mobileBridge.transferAccounts.persistStagedAccounts ?? false,
-                clearStagedOnSuccess: mobileBridge.transferAccounts.clearStagedOnSuccess ?? true,
+                clearStagedOnSuccess: mobileBridge.transferAccounts.clearStagedOnSuccess ?? false,
               },
       },
       (_key, value) => (typeof value === "function" ? "[function]" : value),

@@ -175,7 +175,13 @@ export interface IMeteorConnectTransferAccountsConfig {
    * that is lost on reload and dropped on dispose().
    */
   persistStagedAccounts?: boolean;
-  /** Clear the staged set after a signed { success: true } result. Default true. */
+  /**
+   * Opt-in: clear the staged set after a signed { success: true } result. Default FALSE — staged
+   * accounts remain so the user can transfer them to another platform too, and because silently
+   * emptying the partner's working set after one transfer is surprising. Staged entries are
+   * copies; keeping them never blocks a retry (the receiving wallet skips already-imported
+   * accounts).
+   */
   clearStagedOnSuccess?: boolean;
 }
 

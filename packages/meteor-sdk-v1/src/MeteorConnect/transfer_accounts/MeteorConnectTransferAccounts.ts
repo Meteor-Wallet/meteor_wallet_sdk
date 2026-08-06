@@ -185,7 +185,9 @@ export class MeteorConnectTransferAccounts {
     try {
       const output = await action.promptForExecution();
       if (output.success) {
-        if (this.config?.clearStagedOnSuccess !== false && options?.accounts == null) {
+        // Opt-in only: staged accounts remain by default so they can be transferred to other
+        // platforms too — emptying the set behind the user's back is surprising.
+        if (this.config?.clearStagedOnSuccess === true && options?.accounts == null) {
           await this.clearStaged();
         }
         return { status: "imported" };

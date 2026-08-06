@@ -10,6 +10,7 @@ import type {
   IMobileBridgeSnapshot,
   MobileBridgeSession,
 } from "../target_clients/mobile_bridge/MobileBridgeSession";
+import { MeteorConnectTransferAccounts } from "./MeteorConnectTransferAccounts";
 import { parseTransferSecretInput, TransferAccountsStaging } from "./TransferAccountsStaging";
 import { TransferSensitiveAttachment } from "./TransferSensitiveAttachment";
 
@@ -333,5 +334,45 @@ describe("TransferSensitiveAttachment + TransferKeyHandle", () => {
     expect(JSON.stringify(actionInput)).not.toContain(
       Buffer.from(MNEMONIC_12).toString("base64").slice(0, 16),
     );
+  });
+});
+
+describe("MeteorConnectTransferAccounts staged-set retention", () => {
+  function makeNamespace(config: { clearStagedOnSuccess?: boolean }) {
+    const storage = makeMemoryStorage();
+    const fakeAction = {
+      setSensitiveTransferSource: () => {},
+      promptForExecution: async () => ({ success: true }),
+    };
+    const meteorConnect = {
+      storage: storage.helper,
+      createAction: async () => fakeAction,
+    } as any;
+    const namespace = new MeteorConnectTransferAccounts(meteorConnect);
+    namespace.configure({ enabled: true, ...config });
+    return namespace;
+  }
+
+  it("keeps staged accounts after a successful transfer by default", async () => {
+    const namespace = makeNamespace({});
+    await namespace.stage({
+      networkId: "testnet",
+      accountId: "alice.testnet",
+      secretInput: MNEMONIC_12,
+    });
+    expect(await namespace.prompt()).toEqual({ status: "imported" });
+    // The user may want to transfer the same accounts to another platform next.
+    expect(await namespace.getStagedSummaries()).toHaveLength(1);
+  });
+
+  it("clears staged accounts only with the clearStagedOnSuccess opt-in", async () => {
+    const namespace = makeNamespace({ clearStagedOnSuccess: true });
+    await namespace.stage({
+      networkId: "testnet",
+      accountId: "alice.testnet",
+      secretInput: MNEMONIC_12,
+    });
+    expect(await namespace.prompt()).toEqual({ status: "imported" });
+    expect(await namespace.getStagedSummaries()).toHaveLength(0);
   });
 });

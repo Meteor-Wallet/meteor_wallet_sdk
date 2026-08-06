@@ -254,7 +254,7 @@ Internals of `createAction` (`prompt()` = `createAction()` + `promptForExecution
 3. `buildAccountsTransferRequestData({ decrypted: { formatVersion: 1, accounts } })` for the initial build; create the registry action with **only** the encrypted input: `{ id: "meteor_wallet_core::transfer_accounts", input: built.actionInput }`.
 4. Attach the **sensitive transfer attachment** (§7) to the `ExecutableAction` — the decrypted snapshot + per-session key handles — outside `request`/`expandedInput`, non-enumerable, non-serializable.
 5. Force the standard popup: transfer rejects `strategy: "target_element"` (the reveal card must not be mountable into an arbitrary partner DOM subtree; the popup path also owns the committed-close confirm plumbing).
-6. On `{ success: true }`, optionally clear the staged set (config flag, default **true** — the transfer's purpose is fulfilled; the partner app still holds its own copies). The decrypted snapshot is dropped on every terminal outcome and on disposal regardless.
+6. On `{ success: true }`, optionally clear the staged set (`clearStagedOnSuccess`, default **false** — staged accounts remain so the user can transfer them to other platforms too; silently emptying the partner's working set after one transfer is surprising, and keeping copies never blocks a retry since the receiving wallet skips already-imported accounts). The decrypted snapshot is dropped on every terminal outcome and on disposal regardless.
 
 ### 5.3 Exports
 
@@ -270,7 +270,7 @@ Recommended design:
 
 - **Default: in-memory staging only.** The staged set lives in the `MeteorConnect` instance; a page reload loses it. This is safe-by-default and matches how a real partner wallet would use the flow (stage → transfer in one session, sourced from its own secure storage).
 - **Opt-in persistence** via `persistStagedAccounts: true` on the single `transferAccounts` config block — which lives on `IMeteorConnectMobileBridgeConfig` alongside `enabled`/`meteorAppIds` (§8.4, §10): one namespace for the whole feature, not two config locations. Stores under a new typed-storage key `stagedTransferAccounts` added to `IMeteorConnectTypedStorage` (prefix `met_data_`; verified NOT the `met_bridge_partner::` namespace — that entire prefix is deleted wholesale by `resetPartnerIdentity()` / the panel's "reset pairing" button). On load, re-validate with `v.safeParse(v.array(vAccountTransferDataDecrypted))` and drop on failure — same defensive pattern as the demo store.
-- Document plainly (readme + jsdoc): persisted staging is plaintext-at-rest in the partner origin's storage; recommended only for development/testnet integration. The staged set is cleared by `transferAccounts.clearStaged()` and (by default) after a successful transfer; the in-memory set is also dropped on `MeteorConnect.dispose()`.
+- Document plainly (readme + jsdoc): persisted staging is plaintext-at-rest in the partner origin's storage; recommended only for development/testnet integration. The staged set is cleared only by `transferAccounts.clearStaged()` (or the opt-in `clearStagedOnSuccess`); the in-memory set is also dropped on `MeteorConnect.dispose()`.
 
 The typed-storage helper (`meteorConnect.storage`, `createTypedStorageHelper`) already gives us get/set/remove — no new storage machinery needed.
 
@@ -429,7 +429,7 @@ Add transfer scenarios to `preview/action-ui/scenarios.mjs` + entry mocks (stage
 | User closes popup post-commitment | committed-close confirm; detach locally; wipe key; outcome `expired` unless a result already arrived |
 | Bridge expires (incl. after reveal) | wipe key; outcome `expired` — presented as neutral "not completed"; since meteor-frontend now declines explicitly (§2.4), expiry means the user abandoned the flow |
 | Signed `{ success: false }` | outcome `declined` (not an exception) |
-| Signed `{ success: true }` | outcome `imported`; optionally clear staged set |
+| Signed `{ success: true }` | outcome `imported`; staged set kept (cleared only with opt-in `clearStagedOnSuccess`) |
 | Result signature/domain/id/hash mismatch | throw `mobile_bridge_action_result_mismatch` (existing error), wipe key |
 
 Never delete or mutate partner source data on any outcome. Retries always regenerate key + ciphertext (§7.3). Wallet-side retry is now well-behaved (already-imported accounts are skipped, failed remainders retry-able — §2.4), so a partner-initiated re-transfer after a partial ending is safe; the partner still only learns the single boolean outcome per attempt.
