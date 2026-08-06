@@ -1,0 +1,16 @@
+import { chromium } from "playwright-core";
+import { findChromiumExecutable } from "./action-ui/shared.mjs";
+const browser = await chromium.launch({ executablePath: await findChromiumExecutable() });
+const page = await browser.newPage({ ignoreHTTPSErrors: true, viewport: { width: 1200, height: 900 } });
+const logs = [];
+page.on("console", (msg) => logs.push(`[${msg.type()}] ${msg.text().slice(0, 250)}`));
+page.on("pageerror", (err) => logs.push(`[pageerror] ${String(err).slice(0, 400)}`));
+page.on("requestfailed", (req) => logs.push(`[reqfail] ${req.url().slice(0, 120)} — ${req.failure()?.errorText}`));
+const resp = await page.goto("https://localhost:3001/", { waitUntil: "domcontentloaded", timeout: 30000 });
+await page.waitForTimeout(8000);
+console.log("status:", resp?.status());
+console.log("body text length:", await page.evaluate(() => document.body.innerText.length));
+console.log("root html:", await page.evaluate(() => document.getElementById("root")?.innerHTML.slice(0, 120) ?? "(no #root)"));
+for (const line of logs.filter((l) => l.includes("error") || l.includes("fail") || l.startsWith("[pageerror]") || l.startsWith("[reqfail]")).slice(0, 12)) console.log(line);
+await page.screenshot({ path: "./preview/tmp-wallet-check.png" });
+await browser.close();
