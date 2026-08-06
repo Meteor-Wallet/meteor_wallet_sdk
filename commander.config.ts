@@ -116,6 +116,19 @@ export default defineCommanderConfig({
       tags: { role: "build" },
     },
 
+    {
+      // One-click "boot the whole SDK test environment" entry — for the web UI, where start
+      // acts on a single process: dependsOn is transitive, so starting THIS starts every
+      // service below (in order, each awaited until ready) and then succeeds as a ✓ chip.
+      // CLI equivalent: `nice-commander up local` (or bare `up` — it's the default selection).
+      id: "local-env",
+      kind: "task",
+      run: ["bun", "-e", "console.log('SDK local test environment is up: demo :5173, mc backend :8787, Meteor Web wallet :3001, near-connect script pipeline')"],
+      dependsOn: ["sdk-test-web", "mc-backend", "meteor-web-wallet", "near-connect-build", "script-sync"],
+      timeoutMs: 60_000,
+      tags: { role: "env" },
+    },
+
     // ── One-shot checks (the `checks` group renders as a CI panel) ──
     {
       id: "types-sdk",
@@ -162,11 +175,14 @@ export default defineCommanderConfig({
      * both ports are owned by their `local` counterparts here.
      */
     local: {
-      include: ["sdk-test-web", "mc-backend", "meteor-web-wallet", "near-connect-build", "script-sync"],
+      // Selecting just the env task pulls in every service via dependsOn (transitive, awaited).
+      include: ["local-env"],
       staggerMs: 400,
     },
     /** CI-style panel: ✓/✗ per check. */
     checks: { where: { role: "check" } },
   },
-  defaultSelection: "dev",
+  // Bare `up` boots the complete SDK test environment (group `local`); the lighter `dev`
+  // group (demo + backend-test only) remains selectable explicitly.
+  defaultSelection: "local",
 });
