@@ -2,6 +2,12 @@
   "name": "@meteorwallet/public-sdk-repo",
   "version": "0.0.1",
   "scripts": {
+    "dev": "nice-commander up",
+    "dev:full": "nice-commander up full",
+    "dev:status": "nice-commander status",
+    "dev:ui": "nice-commander ui",
+    "dev:down": "nice-commander down --all",
+    "checks": "nice-commander run checks --parallel 2",
     "format": "bunx biome format --write",
     "uniform-update": "bunx monoutil@latest uniform_update",
     "type-check-all": "bun run --parallel --workspaces --no-exit-on-error type-check",
@@ -14,11 +20,12 @@
   },
   "dependencies": {},
   "devDependencies": {
+    "@biomejs/biome": "2.1.4",
+    "@nice-code/commander": "0.77.0",
     "@types/bun": "latest",
     "@types/chrome": "0.1.3",
-    "typescript": "5.9.3",
     "tsdown": "0.14.1",
-    "@biomejs/biome": "2.1.4"
+    "typescript": "5.9.3"
   },
   "workspaces": {
     "packages": [
@@ -31,5 +38,9 @@
   },
   "patchedDependencies": {
     "@near-js/transactions@2.2.5": "patches/@near-js%2Ftransactions@2.2.5.patch"
-  }
+  },
+  "trustedDependencies": [
+    "@parcel/watcher",
+    "koffi"
+  ]
 }
