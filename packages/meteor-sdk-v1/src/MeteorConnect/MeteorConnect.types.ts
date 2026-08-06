@@ -1,6 +1,6 @@
-import type { ILocalStorageInterface } from "../ported_common/utils/storage/storage.types";
-import type { KeyStore } from "@near-js/keystores";
 import type { EMeteorAppId } from "@meteorwallet/connect-shared";
+import type { KeyStore } from "@near-js/keystores";
+import type { ILocalStorageInterface } from "../ported_common/utils/storage/storage.types";
 
 export type TMCLoggingLevel = "none" | "basic" | "debug";
 
@@ -118,6 +118,13 @@ export interface IMeteorConnectTypedStorage {
   selectedNetworkAccounts: TMCSelectedAccountForNetwork;
   webDevLocalhostBaseUrl: string;
   dev_000_met: number;
+  /**
+   * Opt-in staged transfer accounts (plaintext-at-rest — see
+   * IMeteorConnectTransferAccountsConfig.persistStagedAccounts). Lives under the `met_data_`
+   * prefix deliberately: the `met_bridge_partner::` namespace is wiped wholesale by identity
+   * reset, and staged secrets must never share that fate implicitly.
+   */
+  stagedTransferAccounts: unknown;
 }
 
 export interface IMeteorConnect_Initialize_Input {
@@ -146,6 +153,32 @@ export interface IMeteorConnectNearKeyStoreProvider {
   getKeyStore(): KeyStore;
 }
 
+export interface IMeteorConnectTransferAccountsConfig {
+  /**
+   * Master switch for the transfer flow (dark by default). When off,
+   * transferAccounts.prompt()/createAction() throw `transfer_accounts_unavailable` and no
+   * UI/registry behavior changes for existing consumers. The staging API works regardless —
+   * it is inert data handling.
+   */
+  enabled?: boolean;
+  /**
+   * Ordered app-id preference for transfer bridges (link selection takes the first match;
+   * the whole list is sent to create_bridge). Default: [meteor_wallet_web_dev] when the
+   * configured mobile app id is the dev variant, else [meteor_wallet_web] — matching how
+   * meteor-frontend identifies per environment. Override with [meteor_bridge_test_web] when
+   * testing against the mc_backend demo wallet.
+   */
+  meteorAppIds?: EMeteorAppId[];
+  /**
+   * Persist staged accounts (plaintext-at-rest in this origin's storage) under typed storage.
+   * Recommended only for development/testnet integration; default false = in-memory staging
+   * that is lost on reload and dropped on dispose().
+   */
+  persistStagedAccounts?: boolean;
+  /** Clear the staged set after a signed { success: true } result. Default true. */
+  clearStagedOnSuccess?: boolean;
+}
+
 export interface IMeteorConnectMobileBridgeConfig {
   enabled?: boolean;
   backendUrl?: string;
@@ -158,4 +191,5 @@ export interface IMeteorConnectMobileBridgeConfig {
     iconUrl?: string;
     originUrl?: string;
   };
+  transferAccounts?: IMeteorConnectTransferAccountsConfig;
 }

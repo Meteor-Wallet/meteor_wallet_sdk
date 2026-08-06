@@ -1,5 +1,5 @@
 import type { IPartnerActionResult } from "@meteorwallet/connect";
-import { act_impl_near } from "@meteorwallet/connect-shared";
+import { act_impl_meteor_wallet_core, act_impl_near } from "@meteorwallet/connect-shared";
 import { KeyType, PublicKey } from "@near-js/crypto";
 import { DelegateAction, SCHEMA, Signature, SignedDelegate } from "@near-js/transactions";
 import { isActionPayload_Result_JsonObject } from "@nice-code/action";
@@ -65,6 +65,7 @@ export async function mobileBridgeResultToSdk(
   partnerResult: IPartnerActionResult,
   context: IMobileBridgeResultContext,
 ): Promise<any> {
+  // Shared verification — identical for every domain.
   if (partnerResult.signatureVerified !== true) {
     throw new Error("mobile_bridge_wallet_signature_invalid");
   }
@@ -78,6 +79,25 @@ export async function mobileBridgeResultToSdk(
   ) {
     throw new Error("mobile_bridge_action_result_mismatch");
   }
+
+  // Per-domain hydration: each domain impl recomputes/verifies the output hash for its own shape.
+  if (prepared.kind.domain === "meteor_wallet_core") {
+    const hydrated: any = act_impl_meteor_wallet_core.hydrateResultPayload(serialized as any);
+    if (hydrated.outputHash !== serialized.outputHash) {
+      throw new Error("mobile_bridge_output_hash_mismatch");
+    }
+    if (!hydrated.result.ok) throw hydrated.result.error;
+    switch (prepared.kind.sharedActionId) {
+      case "transfer_accounts":
+        // Wire-shaped { success: boolean } — outcome mapping lives in the transfer wrapper, so
+        // adapter/registry semantics stay uniform with every other action.
+        return hydrated.result.output;
+      default:
+        throw new Error("mobile_bridge_unsupported_action_result");
+    }
+  }
+
+  const kind = prepared.kind;
   const hydrated: any = act_impl_near.hydrateResultPayload(serialized as any);
   if (hydrated.outputHash !== serialized.outputHash) {
     throw new Error("mobile_bridge_output_hash_mismatch");
@@ -86,14 +106,11 @@ export async function mobileBridgeResultToSdk(
   const output: any = hydrated.result.output;
   const input: any = prepared.sdkRequest.expandedInput;
 
-  if (
-    prepared.sharedActionId === "sign_in" ||
-    prepared.sharedActionId === "sign_in_and_sign_message"
-  ) {
+  if (kind.sharedActionId === "sign_in" || kind.sharedActionId === "sign_in_and_sign_message") {
     if (!Array.isArray(output) || output.length === 0) {
       throw new Error("mobile_bridge_sign_in_returned_no_accounts");
     }
-    if (prepared.sharedActionId === "sign_in_and_sign_message") {
+    if (kind.sharedActionId === "sign_in_and_sign_message") {
       for (const item of output)
         requireMatchingAccount(item.signedMessage?.accountId, item.accountId);
     }
@@ -102,7 +119,7 @@ export async function mobileBridgeResultToSdk(
     const functionCallKey = normalizeFunctionCallKeyForMeta(input) as
       | Record<string, unknown>
       | undefined;
-    if (prepared.pendingFunctionCallKey != null) {
+    if (kind.pendingFunctionCallKey != null) {
       if (context.persistFunctionCallKey == null) {
         throw new Error("local_key_persistence_failed");
       }
@@ -110,18 +127,18 @@ export async function mobileBridgeResultToSdk(
         await context.persistFunctionCallKey(
           input.target.network,
           selected.accountId,
-          prepared.pendingFunctionCallKey,
+          kind.pendingFunctionCallKey,
         );
       } catch {
         throw new Error("local_key_persistence_failed");
       }
       publicKeys.push({
         type: "ed25519",
-        publicKey: prepared.pendingFunctionCallKey.getPublicKey().toString(),
+        publicKey: kind.pendingFunctionCallKey.getPublicKey().toString(),
         meta: {
           addFunctionCallKey: {
             ...functionCallKey,
-            publicKey: prepared.pendingFunctionCallKey.getPublicKey().toString(),
+            publicKey: kind.pendingFunctionCallKey.getPublicKey().toString(),
           },
         },
       });
@@ -135,7 +152,7 @@ export async function mobileBridgeResultToSdk(
       });
     }
     const account: IMeteorConnectAccount = {
-      connection: context.connection,
+      connection: context.getConnection(),
       identifier: {
         blockchain: "near",
         network: input.target.network,
@@ -143,14 +160,14 @@ export async function mobileBridgeResultToSdk(
       },
       publicKeys,
     };
-    if (prepared.sharedActionId === "sign_in_and_sign_message") {
+    if (kind.sharedActionId === "sign_in_and_sign_message") {
       return {
         ...account,
         signedMessage: signatureFromWire(
           selected.signedMessage.publicKey,
           selected.signedMessage.signature,
           selected.signedMessage.accountId,
-          prepared.retainedMessageState,
+          kind.retainedMessageState,
         ),
       };
     }
@@ -158,7 +175,7 @@ export async function mobileBridgeResultToSdk(
   }
 
   const expectedAccount = requireTargetAccount(prepared);
-  switch (prepared.sharedActionId) {
+  switch (kind.sharedActionId) {
     case "sign_out":
       requireMatchingAccount(output.accountId, expectedAccount);
       return input.account.identifier;
@@ -168,7 +185,7 @@ export async function mobileBridgeResultToSdk(
         output.publicKey,
         output.signature,
         output.accountId,
-        prepared.retainedMessageState,
+        kind.retainedMessageState,
       );
     case "sign_and_send_transaction":
       requireMatchingAccount(output?.transaction?.signer_id, expectedAccount);
@@ -199,6 +216,9 @@ export async function mobileBridgeResultToSdk(
         ...output,
         keyType: output.publicKey.startsWith("secp256k1:") ? KeyType.SECP256K1 : KeyType.ED25519,
       };
+    default:
+      // Never silently resolve undefined for an id this mapper doesn't know.
+      throw new Error("mobile_bridge_unsupported_action_result");
   }
 }
 

@@ -63,8 +63,10 @@ try {
 
     // Bounds guard: the modal content should not need to scroll to show itself.
     const overflow = await page.evaluate(() => {
-      const host = document.querySelector("meteor-action-ui-container");
-      const content = host?.shadowRoot?.querySelector(".meteor-connect-content");
+      const host =
+        document.querySelector("meteor-action-ui-container") ??
+        document.querySelector("meteor-transfer-accounts-container");
+      const content = host?.shadowRoot?.querySelector(".meteor-connect-content, .content");
       if (!content) return null;
       return { scroll: content.scrollHeight, client: content.clientHeight };
     });

@@ -4,7 +4,7 @@ import { KeyPair } from "@near-js/crypto";
 import { actionCreators } from "@near-js/transactions";
 import type { IMeteorConnection_V2_BridgeMobile } from "../../MeteorConnect.types";
 import { mobileBridgeResultToSdk } from "./mobileBridgeResultToSdk";
-import { nearActionToConnectorAction, nearActionToMobileBridge } from "./nearActionToMobileBridge";
+import { nearActionToConnectorAction, sdkActionToMobileBridge } from "./sdkActionToMobileBridge";
 
 const account = {
   identifier: {
@@ -62,7 +62,7 @@ describe("Meteor mobile bridge NEAR adapters", () => {
 
   it("rejects an empty transaction batch before bridge creation", async () => {
     await expect(
-      nearActionToMobileBridge({
+      sdkActionToMobileBridge({
         id: "near::sign_transactions",
         expandedInput: { account, target: account.identifier, transactions: [] },
       }),
@@ -70,7 +70,7 @@ describe("Meteor mobile bridge NEAR adapters", () => {
   });
 
   it("generates a function-call key locally without placing private material in the request", async () => {
-    const prepared = await nearActionToMobileBridge({
+    const prepared = await sdkActionToMobileBridge({
       id: "near::sign_in",
       expandedInput: {
         target: { blockchain: "near", network: "testnet" },
@@ -80,19 +80,23 @@ describe("Meteor mobile bridge NEAR adapters", () => {
         },
       },
     });
-    expect(prepared.pendingFunctionCallKey).toBeDefined();
+    expect((prepared.kind as any).pendingFunctionCallKey).toBeDefined();
     const serializedRequest = JSON.stringify(prepared.actionRequest);
-    expect(serializedRequest).toContain(prepared.pendingFunctionCallKey!.getPublicKey().toString());
-    expect(serializedRequest).not.toContain(prepared.pendingFunctionCallKey!.toString());
+    expect(serializedRequest).toContain(
+      ((prepared.kind as any).pendingFunctionCallKey as KeyPair).getPublicKey().toString(),
+    );
+    expect(serializedRequest).not.toContain(
+      ((prepared.kind as any).pendingFunctionCallKey as KeyPair).toString(),
+    );
   });
 
   it("uses singular and plural shared transaction actions by cardinality", async () => {
     const transaction = { receiverId: "receiver.testnet", actions: [actionCreators.transfer(1n)] };
-    const singular = await nearActionToMobileBridge({
+    const singular = await sdkActionToMobileBridge({
       id: "near::sign_transactions",
       expandedInput: { account, target: account.identifier, transactions: [transaction] },
     });
-    const plural = await nearActionToMobileBridge({
+    const plural = await sdkActionToMobileBridge({
       id: "near::sign_transactions",
       expandedInput: {
         account,
@@ -100,12 +104,12 @@ describe("Meteor mobile bridge NEAR adapters", () => {
         transactions: [transaction, transaction],
       },
     });
-    expect(singular.sharedActionId).toBe("sign_and_send_transaction");
-    expect(plural.sharedActionId).toBe("sign_and_send_transactions");
+    expect(singular.kind.sharedActionId).toBe("sign_and_send_transaction");
+    expect(plural.kind.sharedActionId).toBe("sign_and_send_transactions");
   });
 
   it("hydrates a signed sign-in result and accepts an account with no public key", async () => {
-    const prepared = await nearActionToMobileBridge({
+    const prepared = await sdkActionToMobileBridge({
       id: "near::sign_in",
       expandedInput: { target: { blockchain: "near", network: "testnet" } },
     });
@@ -121,7 +125,7 @@ describe("Meteor mobile bridge NEAR adapters", () => {
     const converted = await mobileBridgeResultToSdk(
       prepared,
       { result, signatureVerified: true, timestamp: Date.now() },
-      { connection: mobileConnection },
+      { getConnection: () => mobileConnection },
     );
     expect(converted.identifier.accountId).toBe("alice.testnet");
     expect(converted.publicKeys).toEqual([]);
@@ -136,7 +140,7 @@ describe("Meteor mobile bridge NEAR adapters", () => {
       publicKey: addedPublicKey,
       allowMethods: { anyMethod: false as const, methodNames: ["addMessage"] },
     };
-    const prepared = await nearActionToMobileBridge({
+    const prepared = await sdkActionToMobileBridge({
       id: "near::sign_in",
       expandedInput: {
         target: { blockchain: "near", network: "testnet" },
@@ -151,7 +155,7 @@ describe("Meteor mobile bridge NEAR adapters", () => {
     const converted = await mobileBridgeResultToSdk(
       prepared,
       { result, signatureVerified: true, timestamp: Date.now() },
-      { connection: mobileConnection },
+      { getConnection: () => mobileConnection },
     );
 
     expect(converted.publicKeys).toEqual([
@@ -164,7 +168,7 @@ describe("Meteor mobile bridge NEAR adapters", () => {
   });
 
   it("rejects a tampered signed output hash", async () => {
-    const prepared = await nearActionToMobileBridge({
+    const prepared = await sdkActionToMobileBridge({
       id: "near::sign_in",
       expandedInput: { target: { blockchain: "near", network: "testnet" } },
     });
@@ -180,13 +184,13 @@ describe("Meteor mobile bridge NEAR adapters", () => {
           signatureVerified: true,
           timestamp: Date.now(),
         },
-        { connection: mobileConnection },
+        { getConnection: () => mobileConnection },
       ),
     ).rejects.toThrow("mobile_bridge_output_hash_mismatch");
   });
 
   it("rejects a validly signed result produced by the wrong NEAR account", async () => {
-    const prepared = await nearActionToMobileBridge({
+    const prepared = await sdkActionToMobileBridge({
       id: "near::sign_message",
       expandedInput: {
         account,
@@ -216,13 +220,13 @@ describe("Meteor mobile bridge NEAR adapters", () => {
       mobileBridgeResultToSdk(
         prepared,
         { result, signatureVerified: true, timestamp: Date.now() },
-        { connection: mobileConnection },
+        { getConnection: () => mobileConnection },
       ),
     ).rejects.toThrow("mobile_bridge_result_account_mismatch");
   });
 
   it("rejects inconsistent sign-in account and signed-message pairs", async () => {
-    const prepared = await nearActionToMobileBridge({
+    const prepared = await sdkActionToMobileBridge({
       id: "near::sign_in_and_sign_message",
       expandedInput: {
         target: { blockchain: "near", network: "testnet" },
@@ -257,7 +261,7 @@ describe("Meteor mobile bridge NEAR adapters", () => {
       mobileBridgeResultToSdk(
         prepared,
         { result, signatureVerified: true, timestamp: Date.now() },
-        { connection: mobileConnection },
+        { getConnection: () => mobileConnection },
       ),
     ).rejects.toThrow("mobile_bridge_result_account_mismatch");
   });

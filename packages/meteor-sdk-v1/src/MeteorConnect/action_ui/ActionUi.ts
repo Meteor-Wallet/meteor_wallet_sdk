@@ -7,6 +7,7 @@ import type { IRenderActionUi_Input } from "./action_ui.types";
 import { GILROY_FONT_FAMILY_DATA_URL_STYLESHEET } from "./lit_ui/font/gilroy-font-kit/gilroy_font.static";
 import { MeteorActionUiContainer } from "./lit_ui/meteor-action-ui-container";
 import { MeteorActionUiOverlay } from "./lit_ui/meteor-action-ui-overlay";
+import { MeteorTransferAccountsContainer } from "./lit_ui/meteor-transfer-accounts-container";
 
 declare global {
   interface Window {
@@ -38,7 +39,8 @@ function usingBrowserThatRequiresUserAction() {
 
 export class ActionUi {
   private container: HTMLElement | null = null;
-  private actionUiComponent: MeteorActionUiContainer | null = null;
+  private actionUiComponent: MeteorActionUiContainer | MeteorTransferAccountsContainer | null =
+    null;
   private styleElement: HTMLStyleElement | null = null;
   static shared: ActionUi = new ActionUi();
   private logger = MeteorLogger.createLogger("MeteorConnect:ActionUi");
@@ -57,6 +59,14 @@ export class ActionUi {
   ): Promise<A extends ExecutableAction<infer O> ? O : never> {
     if (this.activeAction != null && this.activeAction !== input.action) {
       throw new Error("meteor_connect_action_already_active");
+    }
+    // The transfer reveal card must never be mountable into an arbitrary partner DOM subtree;
+    // the popup path also owns the committed-close confirm plumbing.
+    if (
+      input.action.id === "meteor_wallet_core::transfer_accounts" &&
+      input.strategy?.strategy === "target_element"
+    ) {
+      throw new Error("transfer_accounts_target_element_not_supported");
     }
     this.activeAction = input.action;
     try {
@@ -120,6 +130,19 @@ export class ActionUi {
   }
 
   private async finishPrompt(action: ExecutableAction<any>): Promise<void> {
+    // Give containers with a farewell screen (e.g. the transfer terminal states) a bounded
+    // moment to present it before teardown.
+    const renderedComponent = this.actionUiComponent;
+    if (this.renderedAction === action && renderedComponent != null) {
+      const farewell = (renderedComponent as { farewell?: () => Promise<void> }).farewell;
+      if (typeof farewell === "function") {
+        try {
+          await Promise.race([farewell.call(renderedComponent), wait_utils.waitMillis(2_500)]);
+        } catch {
+          // Farewell is presentation-only; teardown proceeds regardless.
+        }
+      }
+    }
     this.cleanup(action);
     if (this.activeAction === action) this.activeAction = undefined;
     try {
@@ -170,7 +193,12 @@ export class ActionUi {
     input: IRenderActionUi_Input,
     pendingKnownExecutionTarget?: TMeteorConnectionExecutionTarget,
   ) {
-    this.actionUiComponent = new MeteorActionUiContainer();
+    // Route the container by action id — everything else (overlay, fonts, close plumbing,
+    // one-active-action guard) is shared.
+    this.actionUiComponent =
+      input.action.id === "meteor_wallet_core::transfer_accounts"
+        ? new MeteorTransferAccountsContainer()
+        : new MeteorActionUiContainer();
     this.renderedAction = input.action;
     this.actionUiComponent.action = input.action;
     this.actionUiComponent.pendingKnownExecutionTarget = pendingKnownExecutionTarget;
@@ -198,11 +226,13 @@ export class ActionUi {
       this.actionUiComponent = null;
     }
 
-    // Only remove the container if we created it (the popup overlay)
+    // Only remove the container element if we created it (the popup overlay) — but always drop
+    // the reference: a retained partner target_element would otherwise hijack every later
+    // prompt into that stale subtree instead of creating a popup.
     if (this.container && this.container.id === METEOR_ACTION_UI_POPUP_PARENT_ID) {
       this.container.remove();
-      this.container = null;
     }
+    this.container = null;
 
     this.knownExecutionTargetBeforeUiCheck = undefined;
     this.renderedAction = undefined;
@@ -223,6 +253,11 @@ export class ActionUi {
 
   private confirmCommittedMobileClose(action: ExecutableAction<any>): boolean {
     if (action.getPreparedMobileSession()?.isCommitted() !== true) return true;
+    if (action.id === "meteor_wallet_core::transfer_accounts") {
+      return window.confirm(
+        "The transfer may still complete on the other device. Closing this window discards your decrypt key from this page. Close anyway?",
+      );
+    }
     return window.confirm(
       "This request has already been handed to Meteor Mobile and may continue on your phone. Close this window?",
     );

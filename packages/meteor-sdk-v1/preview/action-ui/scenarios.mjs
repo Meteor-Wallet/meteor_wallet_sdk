@@ -15,6 +15,11 @@
  * - `mobileUa`    — screenshot.mjs uses a mobile user agent for this scenario.
  * - `settleMs`    — how long screenshot.mjs waits before capturing (default 900).
  * - `snapshot`    — IMobileBridgeSnapshot fields the mock mobile session emits.
+ * - `element`     — container element tag (default "meteor-action-ui-container"; transfer
+ *                   scenarios use "meteor-transfer-accounts-container").
+ * - `transfer`    — transfer-container state: { accounts: [{accountId, networkId}],
+ *                   screen: "review" | "connect", revealShown?: true, terminal?:
+ *                   "imported" | "declined" | "expired" }.
  */
 
 const ALL_TARGETS = ["v1_ext", "v1_web", "v1_web_localhost", "v2_bridge_mobile"];
@@ -194,6 +199,62 @@ export const SCENARIOS = [
       reconnecting: false,
     },
   },
+  ...makeTransferScenarios(),
 ];
+
+/** Transfer-accounts popup states (element: meteor-transfer-accounts-container). */
+function makeTransferScenarios() {
+  const TRANSFER_ACCOUNTS = [
+    { accountId: "alice.near", networkId: "mainnet" },
+    { accountId: "savings-vault.near", networkId: "mainnet" },
+    { accountId: "alice-testing.testnet", networkId: "testnet" },
+  ];
+  const base = (name, description, snapshotPhase, transfer, extra = {}) => ({
+    name,
+    description,
+    element: "meteor-transfer-accounts-container",
+    targets: ["v2_bridge_mobile"],
+    snapshot: {
+      phase: snapshotPhase,
+      push: "not_attempted",
+      deepLink: DEEP_LINK,
+      expiresAt: EXPIRES_SOON(),
+      pinAttemptsUsed: 0,
+      reconnecting: false,
+    },
+    transfer: { accounts: TRANSFER_ACCOUNTS, ...transfer },
+    ...extra,
+  });
+  return [
+    base("transfer-review", "Transfer: staged-account review before bridge creation", "initializing", {
+      screen: "review",
+    }),
+    base("transfer-connect", "Transfer: QR / open-link waiting stage", "waiting_for_wallet", {
+      screen: "connect",
+    }),
+    base("transfer-pin", "Transfer: PIN verification stage", "wallet_verification", {
+      screen: "connect",
+    }),
+    base("transfer-reveal-hidden", "Transfer: verified, key still hidden", "wallet_action", {
+      screen: "connect",
+    }),
+    base("transfer-reveal-shown", "Transfer: key revealed (text + QR)", "wallet_action", {
+      screen: "connect",
+      revealShown: true,
+    }),
+    base("transfer-imported", "Transfer: terminal — accounts transferred", "completed", {
+      screen: "connect",
+      terminal: "imported",
+    }),
+    base("transfer-declined", "Transfer: terminal — declined on device", "completed", {
+      screen: "connect",
+      terminal: "declined",
+    }),
+    base("transfer-expired", "Transfer: terminal — bridge expired", "failed", {
+      screen: "connect",
+      terminal: "expired",
+    }),
+  ];
+}
 
 export const SCENARIO_NAMES = SCENARIOS.map((s) => s.name);

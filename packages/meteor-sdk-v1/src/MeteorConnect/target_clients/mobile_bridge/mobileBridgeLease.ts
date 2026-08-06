@@ -1,8 +1,8 @@
+import type { IEnumerableLocalStorageInterface } from "../../../ported_common/utils/storage/storage.types";
 import type {
   IMeteorConnectBridgeLeaseHandle,
   IMeteorConnectBridgeLeaseProvider,
 } from "../../MeteorConnect.types";
-import type { IEnumerableLocalStorageInterface } from "../../../ported_common/utils/storage/storage.types";
 
 export class WebLockBridgeLeaseProvider implements IMeteorConnectBridgeLeaseProvider {
   async acquire(

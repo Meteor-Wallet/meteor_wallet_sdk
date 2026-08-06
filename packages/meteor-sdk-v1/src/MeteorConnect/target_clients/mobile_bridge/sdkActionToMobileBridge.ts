@@ -1,11 +1,21 @@
-import { act_impl_near } from "@meteorwallet/connect-shared";
+import {
+  act_impl_meteor_wallet_core,
+  act_impl_near,
+  type EWalletProtocolCapability,
+  getServerRequiredWalletCapabilities,
+  REQUIRED_METEOR_WALLET_CAPABILITIES,
+} from "@meteorwallet/connect-shared";
 import { KeyPair } from "@near-js/crypto";
-import type { TNearNativeAction } from "../../../near_utils/meteor_actions.types";
+import type { IActionPayload_Request_JsonObject } from "@nice-code/action";
 import { base64 } from "@scure/base";
 import { convertOldFunctionCallKeyDefToNew } from "../../../near_utils/convertOldFunctionCallKeyDefToNew";
+import type { TNearNativeAction } from "../../../near_utils/meteor_actions.types";
 import type { TMCActionRegistry } from "../../action/mc_action.combined";
 import type { TMCActionRequestUnionExpandedInput } from "../../action/mc_action.types";
-import type { IMobileBridgePreparedAction } from "./MeteorConnectMobileBridgeClient.types";
+import type {
+  IMobileBridgePreparedAction,
+  IMobileBridgeSensitiveTransferSource,
+} from "./MeteorConnectMobileBridgeClient.types";
 
 function decodeJsonOrBase64(bytes: Uint8Array): unknown {
   try {
@@ -92,7 +102,49 @@ function normalizeFunctionCallKey(input: any): any {
   });
 }
 
-export async function nearActionToMobileBridge(
+/**
+ * Per-action wallet capability set sent to create_bridge/push: the base partner requirements
+ * unioned with whatever the server would enforce for this action's domain/id (e.g.
+ * transfer_accounts_v1). The server unions its own set anyway — sending the full set keeps
+ * wallet-link filtering, failure codes, and idempotency hashes consistent with what it stores.
+ */
+export function getActionRequiredWalletCapabilities(
+  actionRequest: Pick<IActionPayload_Request_JsonObject, "domain" | "id">,
+): EWalletProtocolCapability[] {
+  return [
+    ...new Set([
+      ...REQUIRED_METEOR_WALLET_CAPABILITIES,
+      ...getServerRequiredWalletCapabilities({
+        domain: actionRequest.domain,
+        id: actionRequest.id,
+      }),
+    ]),
+  ].sort();
+}
+
+export async function sdkActionToMobileBridge(
+  sdkRequest: TMCActionRequestUnionExpandedInput<TMCActionRegistry>,
+  sensitiveTransferSource?: IMobileBridgeSensitiveTransferSource,
+): Promise<IMobileBridgePreparedAction> {
+  if (sdkRequest.id === "meteor_wallet_core::transfer_accounts") {
+    // The wire payload is regenerated per bridge (fresh key + ciphertext) from the sensitive
+    // attachment — sdkRequest.expandedInput holds only the initial build and is never sent.
+    if (sensitiveTransferSource == null) {
+      throw new Error("mobile_bridge_transfer_attachment_missing");
+    }
+    const actionInput = await sensitiveTransferSource.buildFreshBridgePayload();
+    return {
+      sdkRequest,
+      kind: { domain: "meteor_wallet_core", sharedActionId: "transfer_accounts" },
+      actionRequest: act_impl_meteor_wallet_core.action.transfer_accounts
+        .request(actionInput)
+        .toJsonObject(),
+    };
+  }
+  return nearActionToMobileBridge(sdkRequest);
+}
+
+async function nearActionToMobileBridge(
   sdkRequest: TMCActionRequestUnionExpandedInput<TMCActionRegistry>,
 ): Promise<IMobileBridgePreparedAction> {
   const input: any = sdkRequest.expandedInput;
@@ -110,8 +162,7 @@ export async function nearActionToMobileBridge(
     case "near::sign_in":
       return {
         sdkRequest,
-        sharedActionId: "sign_in",
-        pendingFunctionCallKey,
+        kind: { domain: "near", sharedActionId: "sign_in", pendingFunctionCallKey },
         actionRequest: act_impl_near.action.sign_in
           .request({ network: input.target.network, addFunctionCallKey })
           .toJsonObject(),
@@ -119,9 +170,12 @@ export async function nearActionToMobileBridge(
     case "near::sign_in_and_sign_message":
       return {
         sdkRequest,
-        sharedActionId: "sign_in_and_sign_message",
-        pendingFunctionCallKey,
-        retainedMessageState: input.messageParams.state,
+        kind: {
+          domain: "near",
+          sharedActionId: "sign_in_and_sign_message",
+          pendingFunctionCallKey,
+          retainedMessageState: input.messageParams.state,
+        },
         actionRequest: act_impl_near.action.sign_in_and_sign_message
           .request({
             network: input.target.network,
@@ -137,7 +191,7 @@ export async function nearActionToMobileBridge(
     case "near::sign_out":
       return {
         sdkRequest,
-        sharedActionId: "sign_out",
+        kind: { domain: "near", sharedActionId: "sign_out" },
         actionRequest: act_impl_near.action.sign_out
           .request({
             accountId: input.account.identifier.accountId,
@@ -148,8 +202,11 @@ export async function nearActionToMobileBridge(
     case "near::sign_message":
       return {
         sdkRequest,
-        sharedActionId: "sign_message",
-        retainedMessageState: input.messageParams.state,
+        kind: {
+          domain: "near",
+          sharedActionId: "sign_message",
+          retainedMessageState: input.messageParams.state,
+        },
         actionRequest: act_impl_near.action.sign_message
           .request({
             signerId: input.account.identifier.accountId,
@@ -173,7 +230,7 @@ export async function nearActionToMobileBridge(
       if (transactions.length === 1) {
         return {
           sdkRequest,
-          sharedActionId: "sign_and_send_transaction",
+          kind: { domain: "near", sharedActionId: "sign_and_send_transaction" },
           actionRequest: act_impl_near.action.sign_and_send_transaction
             .request({ ...common, ...transactions[0] })
             .toJsonObject(),
@@ -181,7 +238,7 @@ export async function nearActionToMobileBridge(
       }
       return {
         sdkRequest,
-        sharedActionId: "sign_and_send_transactions",
+        kind: { domain: "near", sharedActionId: "sign_and_send_transactions" },
         actionRequest: act_impl_near.action.sign_and_send_transactions
           .request({ ...common, transactions })
           .toJsonObject(),
@@ -190,7 +247,7 @@ export async function nearActionToMobileBridge(
     case "near::sign_delegate_actions":
       return {
         sdkRequest,
-        sharedActionId: "sign_delegate_actions",
+        kind: { domain: "near", sharedActionId: "sign_delegate_actions" },
         actionRequest: act_impl_near.action.sign_delegate_actions
           .request({
             signerId: input.account.identifier.accountId,
@@ -205,7 +262,7 @@ export async function nearActionToMobileBridge(
     case "near::verify_owner":
       return {
         sdkRequest,
-        sharedActionId: "verify_owner",
+        kind: { domain: "near", sharedActionId: "verify_owner" },
         actionRequest: act_impl_near.action.verify_owner
           .request({
             accountId: input.account.identifier.accountId,

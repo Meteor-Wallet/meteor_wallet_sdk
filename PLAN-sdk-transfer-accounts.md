@@ -1,6 +1,6 @@
 # SDK Plan — Transfer Accounts via Meteor Connect
 
-**Status:** Proposed implementation plan
+**Status:** IMPLEMENTED 2026-08-06 (§13 steps 1–7; branch `paul/meteor-connect-bridge`) — remaining: §12's manual E2E release gate against a local backend + meteor-frontend dev, then §13 step 8 (flip `transferAccounts.enabled` default). Playwright popup checks beyond the preview screenshots are also still open.
 **Repository:** `meteor_wallet_sdk` — `packages/meteor-sdk-v1/src/MeteorConnect`
 **Protocol source of truth:** `@meteorwallet/connect` / `@meteorwallet/connect-shared` **0.9.0** (already installed) and the completed backend implementation in `mc_backend` (the repo checked out at `../meteor-connect-bridge`; `PLAN-account-transfer.md` — phases 1–5b done, audited)
 **Reference implementations:** `mc_backend/packages/demo-partner-web` (partner side — the flow we are productizing), `meteor_wallet/web/packages/meteor-frontend` (the first real receiving wallet), `mc_backend/packages/demo-wallet-web` + `demo-wallet-expo` (receiver references)

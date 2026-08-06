@@ -4,10 +4,10 @@ import {
   PartnerBridgeStore,
 } from "@meteorwallet/connect";
 import {
+  EBridgeLinkType,
   EMeteorAppId,
   hasRequiredWalletCapabilities,
   METEOR_WALLET_PROTOCOL_VERSION,
-  REQUIRED_METEOR_WALLET_CAPABILITIES,
 } from "@meteorwallet/connect-shared";
 import type { TLinkEvent } from "@nice-code/action";
 import type { TRealmDiagnosticEvent, TRealmStatus } from "@nice-code/realm";
@@ -23,6 +23,10 @@ import type {
   TMeteorExecutionTargetConfig,
 } from "../../MeteorConnect.types";
 import { MeteorConnectClientBase } from "../base/MeteorConnectClientBase";
+import type {
+  IMobileBridgePreparedAction,
+  IMobileBridgeSensitiveTransferSource,
+} from "./MeteorConnectMobileBridgeClient.types";
 import { MobileBridgeSession } from "./MobileBridgeSession";
 import {
   directBrowserNativeAppOpener,
@@ -34,7 +38,10 @@ import {
   type IMobileBridgeStorageContext,
   normalizePartnerMetadata,
 } from "./mobileBridgeStorage";
-import { nearActionToMobileBridge } from "./nearActionToMobileBridge";
+import {
+  getActionRequiredWalletCapabilities,
+  sdkActionToMobileBridge,
+} from "./sdkActionToMobileBridge";
 
 const activeClientsByStorage = new WeakMap<object, Map<string, MeteorConnectMobileBridgeClient>>();
 
@@ -236,7 +243,28 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
     if (request.id === "near::sign_in" || request.id === "near::sign_in_and_sign_message") {
       return [this.connectionShell()];
     }
+    if (request.id === "meteor_wallet_core::transfer_accounts") {
+      // Account-less action targeting the web wallet(s) — dark by default (§ rollout gating).
+      if (this.config?.transferAccounts?.enabled !== true) return [];
+      return [this.connectionShell()];
+    }
     return [];
+  }
+
+  /**
+   * Ordered app-id preference for a prepared action. NEAR actions keep the single configured
+   * mobile wallet id (behavior unchanged); transfer targets the web wallet matching this
+   * config's environment. meteor-frontend identifies as meteor_wallet_web / meteor_wallet_web_dev
+   * (env-selected); integrations testing against the mc_backend demo wallet override via
+   * transferAccounts.meteorAppIds.
+   */
+  private targetMeteorAppIdsFor(prepared: IMobileBridgePreparedAction): EMeteorAppId[] {
+    if (prepared.kind.domain !== "meteor_wallet_core") return [this.config!.meteorAppId];
+    const configured = this.config?.transferAccounts?.meteorAppIds;
+    if (configured != null && configured.length > 0) return [...configured];
+    return this.config!.meteorAppId === EMeteorAppId.meteor_wallet_mobile_dev
+      ? [EMeteorAppId.meteor_wallet_web_dev]
+      : [EMeteorAppId.meteor_wallet_web];
   }
 
   private connectionShell(): IMeteorConnection_V2_BridgeMobile {
@@ -250,7 +278,10 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
     };
   }
 
-  private async selectPushWallet(request: TMCActionRequestUnionExpandedInput<TMCActionRegistry>) {
+  private async selectPushWallet(
+    request: TMCActionRequestUnionExpandedInput<TMCActionRegistry>,
+    prepared: IMobileBridgePreparedAction,
+  ) {
     const connection = (request.expandedInput as any).account?.connection;
     if (connection?.executionTarget !== "v2_bridge_mobile") return undefined;
     if (
@@ -269,13 +300,14 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
           wallet.walletProtocolVersion,
           wallet.walletCapabilities,
           METEOR_WALLET_PROTOCOL_VERSION,
-          [...REQUIRED_METEOR_WALLET_CAPABILITIES],
+          getActionRequiredWalletCapabilities(prepared.actionRequest),
         ),
     );
   }
 
   async prepareRequest(
     request: TMCActionRequestUnionExpandedInput<TMCActionRegistry>,
+    sensitiveTransferSource?: IMobileBridgeSensitiveTransferSource,
   ): Promise<MobileBridgeSession> {
     await this.initializeBridgeClient();
     await this.sessionDisposalPromise?.catch((error) => {
@@ -288,15 +320,15 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
       }
       await this.currentSession.dispose();
     }
-    const prepared = await nearActionToMobileBridge(request);
-    const pushWallet = await this.selectPushWallet(request);
+    const prepared = await sdkActionToMobileBridge(request, sensitiveTransferSource);
+    const pushWallet = await this.selectPushWallet(request, prepared);
     const token = crypto.randomUUID();
     this.currentToken = token;
     const session = new MobileBridgeSession({
       token,
       client: this.bridgeClient!,
       prepared,
-      meteorAppId: this.config!.meteorAppId,
+      targetMeteorAppIds: this.targetMeteorAppIdsFor(prepared),
       pushWallet,
       isCurrent: (candidate) => candidate === this.currentToken,
       buildConnection: () => this.buildConnection(),
@@ -323,6 +355,9 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
         }
       },
     });
+    // Bind the freshly minted transfer key handle to exactly this session before anything can
+    // observe it — a key generated for one bridge can never meet another bridge's wallet_action.
+    sensitiveTransferSource?.bindPendingHandleToSession(session);
     this.currentSession = session;
     void session.startPreparation().catch(() => {});
     return session;
@@ -374,9 +409,10 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
 
   async refreshRequest(
     request: TMCActionRequestUnionExpandedInput<TMCActionRegistry>,
+    sensitiveTransferSource?: IMobileBridgeSensitiveTransferSource,
   ): Promise<MobileBridgeSession> {
     const current = this.currentSession;
-    if (current == null) return this.prepareRequest(request);
+    if (current == null) return this.prepareRequest(request, sensitiveTransferSource);
     const cancellation = await current.cancel();
     if (cancellation === "target_already_committed") {
       throw new Error("mobile_bridge_refresh_after_commit");
@@ -384,7 +420,7 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
     await current.dispose();
     this.currentSession = undefined;
     this.currentToken = undefined;
-    return this.prepareRequest(request);
+    return this.prepareRequest(request, sensitiveTransferSource);
   }
 
   getActiveConnection(): IMeteorConnection_V2_BridgeMobile {
@@ -393,7 +429,23 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
 
   openCurrentSessionInApp(): void {
     const opener = this.config?.nativeAppOpener ?? directBrowserNativeAppOpener;
-    this.currentSession?.openInApp((link) => {
+    const session = this.currentSession;
+    session?.openInApp((link) => {
+      const selectedLink = session.getSelectedWalletLink();
+      if (selectedLink?.linkType === EBridgeLinkType.web_app_url) {
+        // Web-wallet targets (e.g. transfer → meteor-frontend): allow exactly the
+        // backend-issued wallet URL, extended only by our own #partnerSecret fragment. The
+        // allowlist derives from walletLinks — never a partner-supplied URL.
+        const protocol = new URL(link).protocol;
+        if (
+          (protocol !== "https:" && protocol !== "http:") ||
+          !link.startsWith(selectedLink.linkString)
+        ) {
+          throw new Error("mobile_bridge_native_scheme_not_allowed");
+        }
+        window.open(link, "_blank", "noopener");
+        return;
+      }
       const protocol = new URL(link).protocol;
       const expectedProtocol =
         this.config?.meteorAppId === EMeteorAppId.meteor_wallet_mobile_dev

@@ -7,6 +7,7 @@ import type {
   TMeteorConnectionExecutionTarget,
   TMeteorExecutionTargetConfig,
 } from "../MeteorConnect.types.ts";
+import type { IMobileBridgeSensitiveTransferSource } from "../target_clients/mobile_bridge/MeteorConnectMobileBridgeClient.types";
 import type { MobileBridgeSession } from "../target_clients/mobile_bridge/MobileBridgeSession";
 import { MCActionRegistryMap, type TMCActionRegistry } from "./mc_action.combined";
 import type {
@@ -36,6 +37,12 @@ export class ExecutableAction<R extends TMCActionRequestUnion<TMCActionRegistry>
   private cancelled = false;
   private settled = false;
   private unsubscribeMobile?: () => void;
+  /**
+   * Transfer-only sensitive payload source (§ key confinement). A true ECMAScript private field:
+   * non-enumerable, invisible to JSON.stringify/spread/Object.keys — it must never appear in any
+   * serialization of this action.
+   */
+  #sensitiveTransferSource?: IMobileBridgeSensitiveTransferSource;
 
   // private onCancelAction?: () => void;
 
@@ -71,6 +78,11 @@ export class ExecutableAction<R extends TMCActionRequestUnion<TMCActionRegistry>
     return this.preparedMobileSession;
   }
 
+  /** Attached once by the transfer flow right after createAction; never readable back. */
+  setSensitiveTransferSource(source: IMobileBridgeSensitiveTransferSource): void {
+    this.#sensitiveTransferSource = source;
+  }
+
   async prepareMobileBridge(): Promise<MobileBridgeSession | undefined> {
     const hasMobile = this.connectionTargetConfig.allExecutionTargets.some(
       (target) => target.executionTarget === "v2_bridge_mobile",
@@ -79,7 +91,7 @@ export class ExecutableAction<R extends TMCActionRequestUnion<TMCActionRegistry>
     if (!hasMobile || (contextual != null && contextual !== "v2_bridge_mobile")) return undefined;
     if (this.prepareMobilePromise == null) {
       this.prepareMobilePromise = this.meteorConnect.mobileBridgeClient
-        .prepareRequest(this.getExpandedRequest())
+        .prepareRequest(this.getExpandedRequest(), this.#sensitiveTransferSource)
         .then((session) => {
           this.preparedMobileSession = session;
           this.watchMobileSession(session);
@@ -109,6 +121,7 @@ export class ExecutableAction<R extends TMCActionRequestUnion<TMCActionRegistry>
     if (this.execute_promise != null) throw new Error("mobile_bridge_refresh_after_commit");
     const session = await this.meteorConnect.mobileBridgeClient.refreshRequest(
       this.getExpandedRequest(),
+      this.#sensitiveTransferSource,
     );
     this.preparedMobileSession = session;
     this.prepareMobilePromise = Promise.resolve(session);
@@ -121,6 +134,7 @@ export class ExecutableAction<R extends TMCActionRequestUnion<TMCActionRegistry>
     await this.meteorConnect.mobileBridgeClient.resetPartnerIdentity();
     const session = await this.meteorConnect.mobileBridgeClient.prepareRequest(
       this.getExpandedRequest(),
+      this.#sensitiveTransferSource,
     );
     this.preparedMobileSession = session;
     this.prepareMobilePromise = Promise.resolve(session);
@@ -295,8 +309,12 @@ Available targets: [${this.connectionTargetConfig.allExecutionTargets.map((c) =>
     }
     if (target === "v2_bridge_mobile") await this.prepareMobileBridge();
     const output = await this._execute(target);
+    // Account-connection refresh only applies to NEAR account actions. Other domains (e.g.
+    // meteor_wallet_core::transfer_accounts) have no target account, and getActiveConnection()
+    // throws when no paired wallet exists — they must not enter this block.
     if (
       target === "v2_bridge_mobile" &&
+      this.id.startsWith("near::") &&
       this.id !== "near::sign_in" &&
       this.id !== "near::sign_in_and_sign_message" &&
       this.id !== "near::sign_out"

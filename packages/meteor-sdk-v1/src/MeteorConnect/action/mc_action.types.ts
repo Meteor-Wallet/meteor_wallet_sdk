@@ -6,7 +6,7 @@ import type {
   TMeteorConnectionExecutionTarget,
 } from "../MeteorConnect.types.ts";
 
-export type TMCActionDomainId = "near";
+export type TMCActionDomainId = "near" | "meteor_wallet_core";
 
 export type TMCActionId<D extends TMCActionDomainId = TMCActionDomainId> = `${D}::${string}`;
 

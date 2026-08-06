@@ -29,6 +29,7 @@ import { MeteorConnectMobileBridgeClient } from "./target_clients/mobile_bridge/
 import { normalizeBridgeBackendUrl } from "./target_clients/mobile_bridge/mobileBridgeStorage";
 import { MeteorConnectTestClient } from "./target_clients/test_client/MeteorConnectTestClient";
 import { MeteorConnectV1Client } from "./target_clients/v1_client/MeteorConnectV1Client";
+import { MeteorConnectTransferAccounts } from "./transfer_accounts/MeteorConnectTransferAccounts";
 import { accountTargetToText } from "./utils/accountTargetToText";
 import { initProp } from "./utils/initProp";
 import { isEqual } from "./utils/isEqual";
@@ -65,6 +66,8 @@ export class MeteorConnect {
     mobileBridge: new MeteorConnectMobileBridgeClient(this),
   };
   public supportedPlatforms: TMeteorConnectionExecutionTarget[] = [];
+  /** The account-transfer surface (staging + popup flow) — one namespace for the whole feature. */
+  public readonly transferAccounts = new MeteorConnectTransferAccounts(this);
 
   constructor({ isDev = false }: { isDev?: boolean } = {}) {
     this.isDev = isDev;
@@ -110,6 +113,15 @@ export class MeteorConnect {
         leaseProvider: objectFingerprint(mobileBridge?.leaseProvider),
         nativeAppOpener: objectFingerprint(mobileBridge?.nativeAppOpener),
         nearKeyStoreProvider: objectFingerprint(nearKeyStoreProvider),
+        transferAccounts:
+          mobileBridge?.transferAccounts == null
+            ? undefined
+            : {
+                enabled: mobileBridge.transferAccounts.enabled ?? false,
+                meteorAppIds: mobileBridge.transferAccounts.meteorAppIds,
+                persistStagedAccounts: mobileBridge.transferAccounts.persistStagedAccounts ?? false,
+                clearStagedOnSuccess: mobileBridge.transferAccounts.clearStagedOnSuccess ?? true,
+              },
       },
       (_key, value) => (typeof value === "function" ? "[function]" : value),
     );
@@ -150,6 +162,7 @@ export class MeteorConnect {
     );
     this._typedStorageHelper.set(typedStorageHelper);
     this.clients.mobileBridge.configure(mobileBridge, storage);
+    this.transferAccounts.configure(mobileBridge?.transferAccounts);
 
     await typedStorageHelper.setJson("lastInitialized", Date.now());
 
@@ -316,7 +329,8 @@ export class MeteorConnect {
     const addAccountToInput = meta.inputTransform?.some((i) => i === "targeted_account");
 
     if (addAccountToInput || executionTargetSource === "targeted_account") {
-      targetedAccount = await this.getAccountOrThrow(request.input.target);
+      // Only account-targeted metas reach here; inputs without `target` (e.g. transfer) never do.
+      targetedAccount = await this.getAccountOrThrow((request.input as any).target);
 
       if (addAccountToInput) {
         expandedInput["account"] = targetedAccount;
@@ -375,12 +389,16 @@ Targeted Account:
 ${jsonStringifyCompat({
   targetedAccount,
 })}
-      
+
 Platform Target: ${jsonStringifyCompat({
         selectedExecutionTarget,
       })}
 
-Inputs: ${jsonStringifyCompat(expandedRequest.expandedInput)}
+Inputs: ${
+        request.id === "meteor_wallet_core::transfer_accounts"
+          ? `{ accounts: ${(expandedRequest.expandedInput as any).allAccountsBasicInfo?.length ?? 0}, ciphertext: ${(expandedRequest.expandedInput as any).encryptedData?.ciphertext?.length ?? 0} base64 chars }`
+          : jsonStringifyCompat(expandedRequest.expandedInput)
+      }
 `,
     );
 

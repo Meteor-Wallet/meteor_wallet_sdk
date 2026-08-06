@@ -1,19 +1,22 @@
 import {
   EPartnerBridgeStep,
   EPartnerClientStatus,
-  PartnerBridgeStore,
   type PartnerBridgeClient,
+  PartnerBridgeStore,
   type TPartnerPairedWallet,
 } from "@meteorwallet/connect";
 import {
   type EMeteorAppId,
   METEOR_WALLET_PROTOCOL_VERSION,
-  REQUIRED_METEOR_WALLET_CAPABILITIES,
+  type TMeteorBridgeWalletLink,
 } from "@meteorwallet/connect-shared";
-import type { IMeteorConnection_V2_BridgeMobile } from "../../MeteorConnect.types";
-import type { IMeteorConnectBridgeLeaseHandle } from "../../MeteorConnect.types";
-import { mobileBridgeResultToSdk } from "./mobileBridgeResultToSdk";
+import type {
+  IMeteorConnectBridgeLeaseHandle,
+  IMeteorConnection_V2_BridgeMobile,
+} from "../../MeteorConnect.types";
 import type { IMobileBridgePreparedAction } from "./MeteorConnectMobileBridgeClient.types";
+import { mobileBridgeResultToSdk } from "./mobileBridgeResultToSdk";
+import { getActionRequiredWalletCapabilities } from "./sdkActionToMobileBridge";
 
 export type TMobileBridgePhase =
   | "initializing"
@@ -43,7 +46,8 @@ interface IMobileBridgeSessionInput {
   token: string;
   client: PartnerBridgeClient;
   prepared: IMobileBridgePreparedAction;
-  meteorAppId: EMeteorAppId;
+  /** Ordered app-id preference: create_bridge/push targeting + wallet-link selection (first match wins). */
+  targetMeteorAppIds: EMeteorAppId[];
   pushWallet?: TPartnerPairedWallet;
   buildConnection(): IMeteorConnection_V2_BridgeMobile;
   persistFunctionCallKey?: (network: string, accountId: string, keyPair: any) => Promise<void>;
@@ -61,6 +65,7 @@ export class MobileBridgeSession {
   private unsubscribeStore?: () => void;
   private visibilityListener?: () => void;
   private partnerRequestId = crypto.randomUUID();
+  private selectedWalletLink?: TMeteorBridgeWalletLink;
   private resultSettled = false;
   private resolveResult!: (value: any) => void;
   private rejectResult!: (reason: unknown) => void;
@@ -133,6 +138,9 @@ export class MobileBridgeSession {
     this.visibilityListener = () => document.removeEventListener("visibilitychange", onVisibility);
 
     try {
+      const requiredWalletCapabilities = getActionRequiredWalletCapabilities(
+        this.prepared.actionRequest,
+      );
       if (this.input.pushWallet != null) {
         const pushWallet = this.input.pushWallet;
         const push = await this.runRecoverableMutation(
@@ -141,9 +149,9 @@ export class MobileBridgeSession {
               partnerRequestId: this.partnerRequestId,
               walletVerifyPublicKey: pushWallet.walletVerifyPublicKey,
               actionRequest: this.prepared.actionRequest,
-              meteorAppIds: [this.input.meteorAppId],
+              meteorAppIds: [...this.input.targetMeteorAppIds],
               requiredWalletProtocolVersion: METEOR_WALLET_PROTOCOL_VERSION,
-              requiredWalletCapabilities: [...REQUIRED_METEOR_WALLET_CAPABILITIES],
+              requiredWalletCapabilities,
             }),
           "push",
         );
@@ -157,9 +165,9 @@ export class MobileBridgeSession {
             this.input.client.create_bridge({
               partnerRequestId: this.partnerRequestId,
               actionRequest: this.prepared.actionRequest,
-              meteorAppIds: [this.input.meteorAppId],
+              meteorAppIds: [...this.input.targetMeteorAppIds],
               requiredWalletProtocolVersion: METEOR_WALLET_PROTOCOL_VERSION,
-              requiredWalletCapabilities: [...REQUIRED_METEOR_WALLET_CAPABILITIES],
+              requiredWalletCapabilities,
             }),
           "create",
         );
@@ -220,13 +228,15 @@ export class MobileBridgeSession {
     const common = { expiresAt: bridge.info.expiresAt };
     this.scheduleExpiry(bridge.info.expiresAt);
     if (this.snapshot.deepLink == null) {
-      const link = bridge.info.walletLinks.find(
-        (candidate) => candidate.appId === this.input.meteorAppId,
-      );
+      // Ordered preference: the first configured app id that has a backend-issued link wins.
+      const link = this.input.targetMeteorAppIds
+        .map((appId) => bridge.info.walletLinks.find((candidate) => candidate.appId === appId))
+        .find((candidate) => candidate != null);
       if (link == null) {
         this.fail(new Error("mobile_bridge_app_link_missing"));
         return;
       }
+      this.selectedWalletLink = link;
       const separator = link.linkString.includes("#") ? "&" : "#";
       this.update({
         deepLink: `${link.linkString}${separator}partnerSecret=${encodeURIComponent(bridge.info.partnerSecret)}`,
@@ -247,7 +257,7 @@ export class MobileBridgeSession {
         if (this.resultSettled) return;
         try {
           const result = await mobileBridgeResultToSdk(this.prepared, bridge.actionResult, {
-            connection: this.input.buildConnection(),
+            getConnection: () => this.input.buildConnection(),
             persistFunctionCallKey: this.input.persistFunctionCallKey,
           });
           this.resultSettled = true;
@@ -369,6 +379,11 @@ export class MobileBridgeSession {
       this.update({ pinError: message });
       throw error;
     }
+  }
+
+  /** The backend-issued wallet link the deep link / QR was built from (undefined pre-bridge). */
+  getSelectedWalletLink(): TMeteorBridgeWalletLink | undefined {
+    return this.selectedWalletLink;
   }
 
   isCommitted(): boolean {

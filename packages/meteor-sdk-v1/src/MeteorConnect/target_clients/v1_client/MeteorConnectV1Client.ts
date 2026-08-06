@@ -81,6 +81,10 @@ export class MeteorConnectV1Client extends MeteorConnectClientBase {
   async getExecutionTargetConfigs<R extends TMCActionRequestUnionExpandedInput<TMCActionRegistry>>(
     _request: R,
   ): Promise<TMeteorExecutionTargetConfig[]> {
+    // The V1 wallets only implement the NEAR action domain — offering targets for other domains
+    // would fail later in makeRequest's id chain instead of at target selection.
+    if (!_request.id.startsWith("near::")) return [];
+
     const supportedTargets: TMeteorExecutionTargetConfig[] = [
       {
         executionTarget: "v1_web",

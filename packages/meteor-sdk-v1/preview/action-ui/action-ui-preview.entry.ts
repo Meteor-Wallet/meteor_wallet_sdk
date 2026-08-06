@@ -8,16 +8,24 @@
  * Open `?scenario=<name>` to pick a scenario (see scenarios.mjs for the list).
  */
 import type { ExecutableAction } from "../../src/MeteorConnect/action/ExecutableAction";
+import type { TMeteorConnectionExecutionTarget } from "../../src/MeteorConnect/MeteorConnect.types";
 import type {
   IMobileBridgeSnapshot,
   MobileBridgeSession,
 } from "../../src/MeteorConnect/target_clients/mobile_bridge/MobileBridgeSession";
-import type { TMeteorConnectionExecutionTarget } from "../../src/MeteorConnect/MeteorConnect.types";
 import "../../src/MeteorConnect/action_ui/lit_ui/meteor-action-ui-overlay";
 import "../../src/MeteorConnect/action_ui/lit_ui/meteor-action-ui-container";
+import "../../src/MeteorConnect/action_ui/lit_ui/meteor-transfer-accounts-container";
 import { GILROY_FONT_FAMILY_DATA_URL_STYLESHEET } from "../../src/MeteorConnect/action_ui/lit_ui/font/gilroy-font-kit/gilroy_font.static";
 // Plain JS module shared with the node-side tooling (implicitly any-typed).
 import { SCENARIOS } from "./scenarios.mjs";
+
+interface ScenarioTransferConfig {
+  accounts: Array<{ accountId: string; networkId: string }>;
+  screen: "review" | "connect";
+  revealShown?: boolean;
+  terminal?: "imported" | "declined" | "expired";
+}
 
 interface ScenarioConfig {
   name: string;
@@ -29,6 +37,8 @@ interface ScenarioConfig {
   mobileUa?: boolean;
   settleMs?: number;
   snapshot: IMobileBridgeSnapshot;
+  element?: string;
+  transfer?: ScenarioTransferConfig;
 }
 
 const scenarios = SCENARIOS as ScenarioConfig[];
@@ -54,6 +64,18 @@ function makeMockAction(scenario: ScenarioConfig): ExecutableAction<any> {
   const session = makeMockSession(scenario.snapshot);
   const targets = scenario.targets ?? ["v1_web", "v2_bridge_mobile"];
   return {
+    id: scenario.transfer != null ? "meteor_wallet_core::transfer_accounts" : "near::sign_in",
+    expandedInput:
+      scenario.transfer != null
+        ? {
+            formatVersion: 1,
+            allAccountsBasicInfo: scenario.transfer.accounts.map((account) => ({
+              blockchainId: "near",
+              ...account,
+            })),
+            encryptedData: { nonce: "preview", ciphertext: "preview" },
+          }
+        : {},
     meteorConnect: {
       supportedPlatforms: targets,
       mobileBridgeClient: {
@@ -68,8 +90,22 @@ function makeMockAction(scenario: ScenarioConfig): ExecutableAction<any> {
     refreshMobileBridge: async () => session,
     resetMobileIdentityAndRePair: async () => session,
     execute: async (_target: TMeteorConnectionExecutionTarget) => {},
+    // Never settles in previews — terminal screens are driven via previewTerminalState.
+    waitForExecutionOutput: () => new Promise(() => {}),
   } as unknown as ExecutableAction<any>;
 }
+
+/** Display-only fake key for the reveal-shown preview (never a real mck1 secret). */
+const PREVIEW_KEY_RAW = `mck1.${"PrevIewKeyPrevIewKeyPrevIewKeyPrevIewKeyPre"}.aBc12x`;
+const PREVIEW_REVEAL_SOURCE = {
+  getRevealPayload: (session: MobileBridgeSession) =>
+    session.getSnapshot().phase === "wallet_action"
+      ? {
+          raw: PREVIEW_KEY_RAW,
+          grouped: PREVIEW_KEY_RAW.match(/.{1,4}/g)?.join(" ") ?? PREVIEW_KEY_RAW,
+        }
+      : null,
+};
 
 const params = new URLSearchParams(location.search);
 const scenarioName = params.get("scenario") ?? "main";
@@ -78,16 +114,36 @@ const scenario = scenarios.find((s) => s.name === scenarioName) ?? scenarios[0];
 const overlay = document.createElement("meteor-action-ui-overlay") as any;
 overlay.closeAction = () => {};
 
-const container = document.createElement("meteor-action-ui-container") as any;
+const elementTag = scenario.element ?? "meteor-action-ui-container";
+const container = document.createElement(elementTag) as any;
 container.action = makeMockAction(scenario);
 container.closeAction = () => {};
 if (scenario.pendingTarget != null) container.pendingKnownExecutionTarget = scenario.pendingTarget;
 if (scenario.view === "get-meteor") container.showGetMeteor = true;
+if (scenario.transfer != null) {
+  container.previewRevealSource = PREVIEW_REVEAL_SOURCE;
+  if (scenario.transfer.terminal != null) {
+    container.previewTerminalState = scenario.transfer.terminal;
+  }
+}
 
 overlay.appendChild(container);
 document.body.appendChild(overlay);
 
-// Readiness signal for the screenshot tooling.
-(container as any).updateComplete?.then(() => {
+// Readiness signal for the screenshot tooling (transfer scenarios may advance screens first).
+void (async () => {
+  await (container as any).updateComplete;
+  const transfer = scenario.transfer;
+  if (transfer != null && transfer.terminal == null && transfer.screen === "connect") {
+    await (container as any).startTransfer?.();
+    await (container as any).updateComplete;
+    if (transfer.revealShown) {
+      const card = (container as any).shadowRoot?.querySelector("meteor-transfer-key-card");
+      if (card != null) {
+        (card as any).revealed = true;
+        await (card as any).updateComplete;
+      }
+    }
+  }
   (window as any).__uiReady = true;
-});
+})();

@@ -27,6 +27,10 @@ export class MeteorConnectTestClient extends MeteorConnectClientBase {
   async getExecutionTargetConfigs<R extends TMCActionRequestUnionExpandedInput<TMCActionRegistry>>(
     _request: R,
   ): Promise<TMeteorExecutionTargetConfig[]> {
+    // The test client only fakes the NEAR action domain — fail other domains fast at target
+    // selection rather than at execute (its makeRequest handles 3 NEAR ids then throws).
+    if (!_request.id.startsWith("near::")) return [];
+
     return [
       {
         executionTarget: "test",
