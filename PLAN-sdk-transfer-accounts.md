@@ -2,9 +2,9 @@
 
 **Status:** Proposed implementation plan
 **Repository:** `meteor_wallet_sdk` — `packages/meteor-sdk-v1/src/MeteorConnect`
-**Protocol source of truth:** `@meteorwallet/connect` / `@meteorwallet/connect-shared` **0.7.0** (already installed) and the completed backend implementation in `mc_backend` (`PLAN-account-transfer.md` — phases 1–5b done, audited)
+**Protocol source of truth:** `@meteorwallet/connect` / `@meteorwallet/connect-shared` **0.8.0** (already installed) and the completed backend implementation in `mc_backend` (the repo checked out at `../meteor-connect-bridge`; `PLAN-account-transfer.md` — phases 1–5b done, audited)
 **Reference implementations:** `mc_backend/packages/demo-partner-web` (partner side — the flow we are productizing), `meteor_wallet/web/packages/meteor-frontend` (the first real receiving wallet), `mc_backend/packages/demo-wallet-web` + `demo-wallet-expo` (receiver references)
-**Prepared:** 2026-08-04
+**Prepared:** 2026-08-04 · **Updated:** 2026-08-06 for 0.8.0 (real web app ids + shared secret encoder — both former §14.2 asks — landed upstream)
 
 ---
 
@@ -22,9 +22,9 @@ Out of scope here: any backend or shared-package changes (the protocol is comple
 
 ---
 
-## 2. Protocol facts this plan builds on (verified against 0.7.0 sources)
+## 2. Protocol facts this plan builds on (verified against 0.8.0 sources)
 
-These are settled decisions from `mc_backend/PLAN-account-transfer.md` (D1–D9) and the shipped 0.7.0 packages — the SDK must consume them, not re-implement them:
+These are settled decisions from `mc_backend/PLAN-account-transfer.md` (D1–D9) and the shipped 0.8.0 packages — the SDK must consume them, not re-implement them:
 
 ### 2.1 Action contract
 
@@ -59,7 +59,7 @@ These are settled decisions from `mc_backend/PLAN-account-transfer.md` (D1–D9)
 ### 2.4 The first receiving wallet (meteor-frontend) — realities to tolerate
 
 - Claims via URL only: `https://<wallet-origin>/bridge_request?bridgeId=<id>#partnerSecret=<secret>` (secret in the **fragment**). **No QR scanner, no push support** — the partner popup must present a scannable QR of that URL and/or an open-link button.
-- Identifies as `EMeteorAppId.meteor_bridge_test_web` — **no `meteor_wallet_web` app id exists yet** (explicit in-code TODO). The SDK's transfer `meteorAppIds` must include `meteor_bridge_test_web` until a real id ships.
+- Real web app ids exist as of 0.8.0: `EMeteorAppId.meteor_wallet_web` / `meteor_wallet_web_dev`, with backend wallet links registered (`https://wallet.meteorwallet.app/bridge_request?bridgeId=…&protocolVersion=…` and `wallet-dev.meteorwallet.app` respectively; `EBridgeLinkType.web_app_url`). **But meteor-frontend still identifies as `EMeteorAppId.meteor_bridge_test_web`** — it has not migrated to the new id yet. So the SDK's transfer `meteorAppIds` must include `meteor_bridge_test_web` *alongside* the real web ids until that migration lands (the demo partner now sends all three: `[meteor_bridge_test_web, meteor_wallet_web_dev, meteor_wallet_web]`), after which the test id is dropped from the default.
 - Advertises `transfer_accounts_v1`; key entry is a plain input (paste/type); decrypt → on-chain FullAccess access-key verification per secret → import.
 - **Never sends a failure result** (`errorResult` unused; no decline button). User rejection, decrypt failure, verification failure, and import failure all look like *silence* to the partner — the failure path is bridge expiry. (The demo wallet, by contrast, declines with `{ success: false }`.)
 - Import is **non-atomic** (`Promise.all`, no rollback): a retry after partial failure can hit "already in this Meteor wallet". The SDK flow must therefore be idempotent-friendly and never assume all-or-nothing on the wallet side.
@@ -72,18 +72,19 @@ The SDK has **zero** transfer code today. The registry is NEAR-only (`TMCActionD
 
 What we reuse as-is:
 
-- `PartnerBridgeClient` (0.7.0) — `create_bridge` / `verify_pin` / `cancel_bridge` already accept per-action capabilities; no transfer-specific client APIs exist or are needed.
+- `PartnerBridgeClient` (0.8.0) — `create_bridge` / `verify_pin` / `cancel_bridge` already accept per-action capabilities; no transfer-specific client APIs exist or are needed.
 - `MobileBridgeSession` — its phase machine (`creating_bridge → waiting_for_wallet → wallet_verification → wallet_action → completed|failed|cancelled`) is exactly the transfer lifecycle; `wallet_action` is the authoritative reveal gate.
 - `meteor-mobile-bridge-panel` — the QR/countdown/PIN/status UI binds only to `IMobileBridgeSnapshot` and is action-agnostic.
 - `MeteorActionUiOverlay` — the 415×556 popup shell is fully action-agnostic (slot-based).
 
 ### 3.1 Utility inventory — package-provided vs. new SDK code
 
-Everything protocol- and crypto-level already ships in the installed packages (verified importable from this repo's `@meteorwallet/connect-shared` 0.7.0). **The SDK must import these, never re-implement them:**
+Everything protocol- and crypto-level already ships in the installed packages (verified importable from this repo's `@meteorwallet/connect-shared` 0.8.0). **The SDK must import these, never re-implement them:**
 
 | Concern | Provided by packages — use directly |
 |---|---|
 | Encrypt + key generation + preview derivation | `buildAccountsTransferRequestData({ decrypted })` — the entire partner-side crypto step in one call |
+| Raw secret input → `TAccountSecretData` encoding | `buildAccountSecretData({ secretInput, derivationPath? })` (new in 0.8.0) — auto-detects `ed25519:` private key vs 12/24-word mnemonic, whitespace-normalizes, applies `NEAR_DEFAULT_DERIVATION_PATH` default, builds the `utf8_base64::`/`near_prefixed_utf8_base64::` encodings, schema-validates. Returns typed failures (`TBuildAccountSecretDataResult`): `empty_secret_input` / `invalid_private_key` / `invalid_mnemonic_word_count` (+`wordCount`) / `invalid_secret_data` (+`issueMessage`) — the SDK maps these to friendly copy, never re-implements detection |
 | Decrypt + validate (tests / round-trip verification) | `decryptAccountsTransferRequestData`, `TAccountsTransferDecryptResult` |
 | Action serialization / result hydration | `act_impl_meteor_wallet_core.action.transfer_accounts.request(...).toJsonObject()` / `act_impl_meteor_wallet_core.hydrateResultPayload(...)` |
 | Payload schemas + every bound | `vAllAccountsTransferDataEncrypted`, `vAllAccountsTransferDataDecrypted`, `vAccountTransferDataDecrypted`, `vAccountSecretData` (+ mnemonic/private-key variants), `vAccountBasicData`, and all `TRANSFER_ACCOUNTS_*` constants |
@@ -96,7 +97,6 @@ What does **not** exist in the packages (demo-local code in `mc_backend`, to be 
 
 | Concern | Reference | Size |
 |---|---|---|
-| Raw secret input → `TAccountSecretData` encoding (ed25519-prefix detection, 12/24-word check, `utf8_base64::`/`near_prefixed_utf8_base64::` construction, default derivation path `m/44'/397'/0'`) | `demo-partner-web/src/state/client_bridge/transfer_accounts_store.ts` | ~80 lines |
 | Key display grouping (groups of 4) | `RevealDecryptionKeyCard.tsx` (`groupKeyForDisplay`) | 1 line |
 | Key QR rendering | demo uses `qrcode`; SDK already bundles `qr-code-styling` | existing dep |
 | Staging storage, popup UI, `TransferKeyHandle` lifecycle, registry/adapter plumbing | this plan §5–§9 | the actual SDK work |
@@ -162,7 +162,7 @@ interface IStageTransferAccountInput {
   accountId: string;
   /** Mnemonic phrase (12/24 words) OR "ed25519:<base58>" private key. */
   secretInput: string;
-  /** Mnemonic secrets only (lives on the secret entry in the schema). Default "m/44'/397'/0'". */
+  /** Mnemonic secrets only. Passed through to buildAccountSecretData; defaults to the shared NEAR_DEFAULT_DERIVATION_PATH ("m/44'/397'/0'"). */
   derivationPath?: string;
 }
 
@@ -171,18 +171,25 @@ type TStagedTransferAccountSummary = TAccountBasicData & {
   secretTypes: Array<"mnemonic" | "private_key">;
 };
 
-// Typed reason codes, matching the shared result-shape convention (cf. TAccountsTransferDecryptResult)
+// Typed reason codes, matching the shared result-shape convention (cf. TAccountsTransferDecryptResult).
+// Secret-level reasons are passed through verbatim from the shared encoder's
+// TBuildAccountSecretDataResult; account/set-level reasons are SDK-added.
 type TStageTransferAccountResult =
   | { ok: true; account: TStagedTransferAccountSummary }  // summary, not secrets — no echoing secrets back out
   | {
       ok: false;
       reason:
-        | "invalid_account_id"    // vAccountBasicData failure
-        | "invalid_secret"        // not a 12/24-word mnemonic or valid ed25519: key
-        | "duplicate_secret"      // canonical-JSON duplicate on the same account (schema check)
-        | "too_many_secrets"      // > TRANSFER_ACCOUNTS_MAX_SECRETS_PER_ACCOUNT
-        | "too_many_accounts";    // > TRANSFER_ACCOUNTS_MAX_ACCOUNTS
+        | "invalid_account_id"              // vAccountBasicData failure
+        | "empty_secret_input"              // ┐
+        | "invalid_private_key"             // │ passed through from
+        | "invalid_mnemonic_word_count"     // │ buildAccountSecretData (0.8.0)
+        | "invalid_secret_data"             // ┘ schema backstop (over-length secret, bad derivation path)
+        | "duplicate_secret"                // canonical-JSON duplicate on the same account (schema check)
+        | "too_many_secrets"                // > TRANSFER_ACCOUNTS_MAX_SECRETS_PER_ACCOUNT
+        | "too_many_accounts";              // > TRANSFER_ACCOUNTS_MAX_ACCOUNTS
       message: string;
+      /** Present for invalid_mnemonic_word_count — from the shared encoder. */
+      wordCount?: number;
     };
 
 // All transfer surface lives on one namespace object — the MeteorConnect class gains a single
@@ -201,14 +208,13 @@ transferAccounts.removeStaged(identifier: TAccountBasicData): Promise<void>;
 transferAccounts.clearStaged(): Promise<void>;
 ```
 
-A pure helper `parseTransferSecretInput(secretInput): { type: "mnemonic" | "private_key" } | { type: "invalid"; reason: string }` is exported alongside, so partner UIs can render live "detected: mnemonic" feedback (as the demo's `TransferAccountsCard` does) without staging anything.
+A pure helper `parseTransferSecretInput(secretInput): { type: "mnemonic" | "private_key" } | { type: "invalid"; reason: string }` is exported alongside, so partner UIs can render live "detected: mnemonic" feedback (as the demo's `TransferAccountsCard` does) without staging anything. It is a thin wrapper over `buildAccountSecretData` (inspect `result.secret.type` / failure reason) — no local detection logic.
 
-Validation/encoding rules mirror `demo-partner-web`'s `transfer_accounts_store.ts` exactly (they are proven against the wallet-side decoder):
+Validation/encoding rules (matching the 0.8.0 `demo-partner-web` store, which now delegates too):
 
-- Secret type detection: trimmed input starting `ed25519:` → private key (reject embedded whitespace and a bare prefix); otherwise mnemonic with **12 or 24** whitespace-collapsed words.
-- Mnemonic encodes as `{ type: "mnemonic", encoding: "utf8_base64", derivationPath, prefixedBase64DataString: "utf8_base64::" + base64(lowercased phrase) }`.
-- Private key encodes as `{ type: "private_key", encoding: "near_prefixed_utf8_base64", keyAlgorithm: "ed25519", prefixedBase64DataString: "near_prefixed_utf8_base64::" + base64("ed25519:…") }` — the wallet feeds the decoded `ed25519:<base58>` string straight into `KeyPair.fromString`, so the NEAR prefix must be preserved inside the encoding.
-- Staging keys accounts by the schema's identity tuple `(blockchainId, networkId, accountId)`; re-staging the same tuple appends to that account's `secret` array (deduped by canonical JSON, exactly as `vAccountTransferDataDecrypted` enforces). This differs from the demo store's replace-on-restage — the schema models one account with up to 10 secrets, and the merge semantics expose that properly.
+- **All secret parsing/encoding goes through the shared `buildAccountSecretData`** (§3.1) — the SDK contains zero encoding rules of its own. Its typed failure reasons pass through to `TStageTransferAccountResult`; the SDK only adds friendly `message` copy per reason (as the demo does).
+- Account ID: trimmed + lowercased, length 2–64, charset via the shared `TRANSFER_ACCOUNTS_ACCOUNT_ID_PATTERN`, then `vAccountBasicData` — readable `invalid_account_id` messages instead of an opaque valibot failure at build time.
+- Staging keys accounts by the schema's identity tuple `(blockchainId, networkId, accountId)`; re-staging the same tuple appends to that account's `secret` array (deduped by canonical JSON, exactly as `vAccountTransferDataDecrypted` enforces). This deliberately differs from the demo store's replace-on-restage (single-secret test harness) — the schema models one account with up to 10 secrets, and the merge semantics expose that properly.
 - Bounds are enforced at staging time by validating each encoded entry with the **shared schemas** (`vAccountTransferDataDecrypted`, and the full set with `vAllAccountsTransferDataDecrypted`) so failures happen early with good messages instead of at `create_bridge` — the SDK adds the typed reason codes and friendly copy, not its own limit logic (§3.1).
 
 ### 5.2 Transfer flow API
@@ -335,10 +341,11 @@ Related logging hygiene (not a key leak, but worth fixing in the same pass): `Me
   ```ts
   transferAccounts?: {
     enabled?: boolean;                       // default false until rollout
-    meteorAppIds?: EMeteorAppId[];           // default: [meteor_bridge_test_web] until a meteor_wallet_web id ships (tracked gap in meteor-frontend)
+    meteorAppIds?: EMeteorAppId[];           // ordered preference; default derived from config.meteorAppId (see below)
   };
   ```
   and plumb per-prepared-action `meteorAppIds` through `IMobileBridgePreparedAction` → `create_bridge`.
+  Default derivation (0.8.0 ids exist; meteor-frontend hasn't migrated to them yet — §2.4): when `config.meteorAppId` is the `_dev` mobile id → `[meteor_wallet_web_dev, meteor_bridge_test_web]`, otherwise → `[meteor_wallet_web, meteor_bridge_test_web]`. The real web id leads (its backend link is the canonical wallet URL, so QR/open-link land on the right deploy); `meteor_bridge_test_web` stays in the list solely so meteor-frontend's claims pass app-id filtering until it identifies as `meteor_wallet_web` — drop it from the default then (tracked in §14.2).
 - **Wallet-link selection must follow the per-action app ids** — this is a hard-fail trap, not a nicety: `MobileBridgeSession.applyPartnerState()` picks the deep link via `bridge.info.walletLinks.find((l) => l.appId === this.input.meteorAppId)` (the single configured *mobile* app id) and fails the session with `mobile_bridge_app_link_missing` when no link matches. A transfer bridge created for `meteor_bridge_test_web` would die right there. The session input gains `targetMeteorAppIds: EMeteorAppId[]` (ordered preference); link selection takes the first match from that list, and the same list is what `create_bridge`/push receives. NEAR actions pass `[config.meteorAppId]` — behavior unchanged.
 - **Push:** structurally unreachable for transfer (no account target ⇒ `selectPushWallet` is never consulted), and meteor-frontend cannot receive push at all. Explicitly assert in `prepareRequest` that the transfer path never calls `selectPushWallet` (test). Push-to-paired-mobile-wallet (still PIN-gated, proven in the demo) is a deliberate **later** enhancement once Meteor Mobile receives transfers (§14).
 
@@ -396,7 +403,7 @@ Add transfer scenarios to `preview/action-ui/scenarios.mjs` + entry mocks (stage
 
 - `IMeteorConnectMobileBridgeConfig.transferAccounts.enabled` (default `false`): when off, `transferAccounts.prompt()`/`createAction()` throw `transfer_accounts_unavailable` and no UI/registry behavior changes for existing consumers. This is the SDK-side kill switch; the backend-side lever is the wallet-capability/app-id gate that already exists.
 - The staging API works regardless of the flag (it is inert data handling); only the bridge flow is gated.
-- Partner metadata requirements from 0.7.0 already handled in this repo (https-only icon, bounded name/description — `normalizePartnerMetadata`).
+- Partner metadata requirements (since 0.7.0) already handled in this repo (https-only icon, bounded name/description — `normalizePartnerMetadata`).
 
 ---
 
@@ -422,7 +429,7 @@ Never delete or mutate partner source data on any outcome. Retries always regene
 ## 12. Test plan
 
 **Unit (bun test, alongside existing mobile-bridge tests):**
-- Staging: type detection (`ed25519:` vs 12/24-word mnemonic), rejection cases with the right typed reason (word count, embedded whitespace in key, bad accountId charset/length, `duplicate_secret`, `too_many_secrets` at 11, `too_many_accounts` at 51, oversized secret), secret-merge on re-staging the same identity tuple, encode→wallet-decode round trip (base64 → `parseSeedPhrase`/`KeyPair.fromString` compatible shapes).
+- Staging: shared-encoder reason pass-through (`empty_secret_input`, `invalid_private_key`, `invalid_mnemonic_word_count` with `wordCount`, `invalid_secret_data`) — the detection/encoding rules themselves are upstream-tested in connect-shared 0.8.0, so SDK tests cover the mapping plus SDK-owned validation: bad accountId charset/length, `duplicate_secret`, `too_many_secrets` at 11, `too_many_accounts` at 51, secret-merge on re-staging the same identity tuple. Keep one encode→decrypt round trip (staged input → `buildAccountsTransferRequestData` → `decryptAccountsTransferRequestData`) as an integration smoke test.
 - `buildAccountsTransferRequestData` integration: SDK action input validates against `vAllAccountsTransferDataEncrypted`; decrypt round trip with `decryptAccountsTransferRequestData` using the returned key; `preview_mismatch` triggers on tampered basic info.
 - Registry/adapters: transfer action returns only `v2_bridge_mobile` targets; serializes via `act_impl_meteor_wallet_core`; result hydration verifies domain/id/outputHash; `{success:false}` → `declined`; NEAR adapters regression-tested unchanged.
 - Capabilities: `create_bridge` input contains the base set ∪ `transfer_accounts_v1`; NEAR actions still send exactly the base set.
@@ -457,8 +464,9 @@ Meteor Mobile is the same app this SDK already targets for regular Meteor Connec
 - the reveal card's key QR becomes the primary cross-device entry (the phone scans it), so desktop→phone UX should be re-checked then. The existing device-adaptive QR/open-link handling in the bridge panel carries over unchanged.
 
 ### 14.2 Upstream asks (tracked, not blockers)
-- **Real web app id**: `meteor_wallet_web` in `EMeteorAppId` — until then the SDK ships with `meteor_bridge_test_web` and a documented migration. (Mobile app ids already exist.)
-- **Optional: shared secret-encoding builder** — a `buildAccountSecretData({ secretInput, derivationPath })` helper in `connect-shared` so the demo, this SDK, and future partners share one encoder instead of three mirrored copies (§3.1). Until then the SDK mirrors `demo-partner-web`'s proven encoder with round-trip tests against `decryptAccountsTransferRequestData`.
+- ~~**Real web app id**~~ — **landed in 0.8.0**: `meteor_wallet_web` / `meteor_wallet_web_dev` exist in `EMeteorAppId` with backend wallet links registered (§2.4, §8.4).
+- ~~**Shared secret-encoding builder**~~ — **landed in 0.8.0**: `buildAccountSecretData` in `connect-shared`; the demo store and this SDK both consume it (§3.1, §5.1).
+- **meteor-frontend migration to the real web id**: it still identifies as `meteor_bridge_test_web` (§2.4). Once it claims as `meteor_wallet_web`/`meteor_wallet_web_dev` and advertises `transfer_accounts_v1` under that id, drop `meteor_bridge_test_web` from the SDK's default `transferAccounts.meteorAppIds` (§8.4).
 - **meteor-frontend gaps** (from review): send `errorResult`/decline results instead of silence; render `actionDeliveryError` and the `receiving_action` step; make multi-account import atomic (or per-account result reporting); retry-able `claim_bridge`; RPC-outage vs key-not-found distinction in verification. Each of these directly improves the SDK-side UX table in §11.
 - **Cross-bridge PIN-attempt accounting** and PIN-freshness window — open items in mc_backend Phase 6; no SDK action needed, but the SDK's retry UX should not make brute-force easier (regenerating bridges is already rate-limited by user gesture in our flow).
 
