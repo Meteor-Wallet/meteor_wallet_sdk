@@ -20,6 +20,13 @@ export type TMobileNearActionId =
   | "sign_delegate_actions"
   | "verify_owner";
 
+/**
+ * Which Meteor Wallet platform a transfer bridge targets. Chosen by the user on the transfer
+ * popup's platform screen; decides the app ids sent to create_bridge and therefore which wallet
+ * links come back. NEAR actions always target the configured mobile wallet.
+ */
+export type TTransferTargetPlatform = "web" | "mobile";
+
 export type TMobileBridgePreparedActionKind =
   | {
       domain: "near";

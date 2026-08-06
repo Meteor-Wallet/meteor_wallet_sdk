@@ -229,8 +229,16 @@ function makeTransferScenarios() {
     base("transfer-review", "Transfer: staged-account review before bridge creation", "initializing", {
       screen: "review",
     }),
-    base("transfer-connect", "Transfer: QR / open-link waiting stage", "waiting_for_wallet", {
+    base("transfer-choose", "Transfer: wallet-platform choice (Meteor Web vs Mobile)", "initializing", {
+      screen: "choose",
+    }),
+    base("transfer-connect", "Transfer: QR / open-link waiting stage (web target)", "waiting_for_wallet", {
       screen: "connect",
+      platform: "web",
+    }),
+    base("transfer-connect-mobile", "Transfer: QR / open-link waiting stage (mobile target)", "waiting_for_wallet", {
+      screen: "connect",
+      platform: "mobile",
     }),
     base("transfer-pin", "Transfer: PIN verification stage", "wallet_verification", {
       screen: "connect",

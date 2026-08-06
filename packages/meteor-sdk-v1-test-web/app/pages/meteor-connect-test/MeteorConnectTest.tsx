@@ -16,8 +16,26 @@ import {
 import { NetworkSelector } from "~/pages/near-connect/NetworkSelector";
 import { Button } from "~/ui/Button";
 import { SignDelegateActionTest } from "./SignDelegateActionTest";
+import { TransferAccountsTest } from "./TransferAccountsTest";
 
-const MOBILE_BRIDGE_BACKEND_URL = "https://mc.meteorwallet.app";
+const PRODUCTION_BACKEND_URL = "https://mc.meteorwallet.app";
+const LOCAL_BACKEND_URL = "http://localhost:8787";
+
+/**
+ * Backend selection via URL (?backend=local | ?backend=<url>), read once at init — the SDK pins
+ * its config per instance (`mobile_bridge_config_mismatch` on change), so switching backends is
+ * a full navigation, not a live toggle. Local = the mc_backend worker (`wrangler dev`, :8787)
+ * from ../meteor-connect-bridge — required for account-transfer testing: the production backend
+ * does not serve the transfer protocol (or localhost CORS) yet.
+ */
+const resolveBackendUrl = (): string => {
+  if (typeof window === "undefined") return PRODUCTION_BACKEND_URL;
+  const requested = new URLSearchParams(window.location.search).get("backend");
+  if (requested == null) return PRODUCTION_BACKEND_URL;
+  return requested === "local" ? LOCAL_BACKEND_URL : requested;
+};
+
+const MOBILE_BRIDGE_BACKEND_URL = resolveBackendUrl();
 const MOBILE_BRIDGE_APP_ID = EMeteorAppId.meteor_wallet_mobile_dev;
 const MOBILE_BRIDGE_DEEP_LINK = "meteorwalletdev://bridge_request";
 
@@ -44,6 +62,16 @@ const initializedMeteorConnect = async (): Promise<MeteorConnect> => {
         description: "Development harness for the Meteor Connect mobile bridge",
         iconUrl: `${window.location.origin}/favicon.ico`,
         originUrl: window.location.origin,
+      },
+      transferAccounts: {
+        // Dark by default in the SDK — the test harness opts in explicitly.
+        enabled: true,
+        // TEST HARNESS ONLY: persists staged secrets as plaintext in this origin's
+        // localStorage so test runs are repeatable. Never do this with mainnet key material.
+        persistStagedAccounts: true,
+        // Default targets follow the mobile app id (mobile_dev → meteor_wallet_web_dev).
+        // Uncomment to test against the local mc_backend demo wallet instead:
+        // meteorAppIds: [EMeteorAppId.meteor_bridge_test_web],
       },
     },
   });
@@ -121,6 +149,11 @@ const MeteorConnectTestInitialized = ({ meteorConnect }: { meteorConnect: Meteor
         onSelectNetwork={(network) => {
           setNetwork(network);
         }}
+      />
+      <TransferAccountsTest
+        meteorConnect={meteorConnect}
+        network={network}
+        backendUrl={MOBILE_BRIDGE_BACKEND_URL}
       />
       {account == null ? (
         <div className={"p-5 flex flex-row flex-wrap gap-5 items-start"}>

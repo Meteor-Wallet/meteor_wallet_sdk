@@ -26,6 +26,7 @@ import { MeteorConnectClientBase } from "../base/MeteorConnectClientBase";
 import type {
   IMobileBridgePreparedAction,
   IMobileBridgeSensitiveTransferSource,
+  TTransferTargetPlatform,
 } from "./MeteorConnectMobileBridgeClient.types";
 import { MobileBridgeSession } from "./MobileBridgeSession";
 import {
@@ -253,13 +254,18 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
 
   /**
    * Ordered app-id preference for a prepared action. NEAR actions keep the single configured
-   * mobile wallet id (behavior unchanged); transfer targets the web wallet matching this
-   * config's environment. meteor-frontend identifies as meteor_wallet_web / meteor_wallet_web_dev
-   * (env-selected); integrations testing against the mc_backend demo wallet override via
-   * transferAccounts.meteorAppIds.
+   * mobile wallet id (behavior unchanged). Transfer targets the platform the user chose on the
+   * popup's platform screen: "mobile" → the configured mobile wallet id; "web" (default) → the
+   * web wallet matching this config's environment (meteor-frontend identifies as
+   * meteor_wallet_web / meteor_wallet_web_dev, env-selected). Integrations testing against the
+   * mc_backend demo wallet override the web list via transferAccounts.meteorAppIds.
    */
-  private targetMeteorAppIdsFor(prepared: IMobileBridgePreparedAction): EMeteorAppId[] {
+  private targetMeteorAppIdsFor(
+    prepared: IMobileBridgePreparedAction,
+    transferTargetPlatform?: TTransferTargetPlatform,
+  ): EMeteorAppId[] {
     if (prepared.kind.domain !== "meteor_wallet_core") return [this.config!.meteorAppId];
+    if (transferTargetPlatform === "mobile") return [this.config!.meteorAppId];
     const configured = this.config?.transferAccounts?.meteorAppIds;
     if (configured != null && configured.length > 0) return [...configured];
     return this.config!.meteorAppId === EMeteorAppId.meteor_wallet_mobile_dev
@@ -308,6 +314,7 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
   async prepareRequest(
     request: TMCActionRequestUnionExpandedInput<TMCActionRegistry>,
     sensitiveTransferSource?: IMobileBridgeSensitiveTransferSource,
+    transferTargetPlatform?: TTransferTargetPlatform,
   ): Promise<MobileBridgeSession> {
     await this.initializeBridgeClient();
     await this.sessionDisposalPromise?.catch((error) => {
@@ -328,7 +335,7 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
       token,
       client: this.bridgeClient!,
       prepared,
-      targetMeteorAppIds: this.targetMeteorAppIdsFor(prepared),
+      targetMeteorAppIds: this.targetMeteorAppIdsFor(prepared, transferTargetPlatform),
       pushWallet,
       isCurrent: (candidate) => candidate === this.currentToken,
       buildConnection: () => this.buildConnection(),
@@ -410,9 +417,12 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
   async refreshRequest(
     request: TMCActionRequestUnionExpandedInput<TMCActionRegistry>,
     sensitiveTransferSource?: IMobileBridgeSensitiveTransferSource,
+    transferTargetPlatform?: TTransferTargetPlatform,
   ): Promise<MobileBridgeSession> {
     const current = this.currentSession;
-    if (current == null) return this.prepareRequest(request, sensitiveTransferSource);
+    if (current == null) {
+      return this.prepareRequest(request, sensitiveTransferSource, transferTargetPlatform);
+    }
     const cancellation = await current.cancel();
     if (cancellation === "target_already_committed") {
       throw new Error("mobile_bridge_refresh_after_commit");
@@ -420,7 +430,7 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
     await current.dispose();
     this.currentSession = undefined;
     this.currentToken = undefined;
-    return this.prepareRequest(request, sensitiveTransferSource);
+    return this.prepareRequest(request, sensitiveTransferSource, transferTargetPlatform);
   }
 
   getActiveConnection(): IMeteorConnection_V2_BridgeMobile {

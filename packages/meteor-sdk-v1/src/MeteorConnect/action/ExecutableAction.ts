@@ -7,7 +7,10 @@ import type {
   TMeteorConnectionExecutionTarget,
   TMeteorExecutionTargetConfig,
 } from "../MeteorConnect.types.ts";
-import type { IMobileBridgeSensitiveTransferSource } from "../target_clients/mobile_bridge/MeteorConnectMobileBridgeClient.types";
+import type {
+  IMobileBridgeSensitiveTransferSource,
+  TTransferTargetPlatform,
+} from "../target_clients/mobile_bridge/MeteorConnectMobileBridgeClient.types";
 import type { MobileBridgeSession } from "../target_clients/mobile_bridge/MobileBridgeSession";
 import { MCActionRegistryMap, type TMCActionRegistry } from "./mc_action.combined";
 import type {
@@ -43,6 +46,8 @@ export class ExecutableAction<R extends TMCActionRequestUnion<TMCActionRegistry>
    * serialization of this action.
    */
   #sensitiveTransferSource?: IMobileBridgeSensitiveTransferSource;
+  /** Transfer only: the wallet platform the user chose; refresh/re-pair reuse it. */
+  private transferTargetPlatform?: TTransferTargetPlatform;
 
   // private onCancelAction?: () => void;
 
@@ -83,15 +88,24 @@ export class ExecutableAction<R extends TMCActionRequestUnion<TMCActionRegistry>
     this.#sensitiveTransferSource = source;
   }
 
-  async prepareMobileBridge(): Promise<MobileBridgeSession | undefined> {
+  async prepareMobileBridge(options?: {
+    transferTargetPlatform?: TTransferTargetPlatform;
+  }): Promise<MobileBridgeSession | undefined> {
     const hasMobile = this.connectionTargetConfig.allExecutionTargets.some(
       (target) => target.executionTarget === "v2_bridge_mobile",
     );
     const contextual = this.connectionTargetConfig.contextualExecutionTarget;
     if (!hasMobile || (contextual != null && contextual !== "v2_bridge_mobile")) return undefined;
+    if (options?.transferTargetPlatform != null) {
+      this.transferTargetPlatform = options.transferTargetPlatform;
+    }
     if (this.prepareMobilePromise == null) {
       this.prepareMobilePromise = this.meteorConnect.mobileBridgeClient
-        .prepareRequest(this.getExpandedRequest(), this.#sensitiveTransferSource)
+        .prepareRequest(
+          this.getExpandedRequest(),
+          this.#sensitiveTransferSource,
+          this.transferTargetPlatform,
+        )
         .then((session) => {
           this.preparedMobileSession = session;
           this.watchMobileSession(session);
@@ -122,6 +136,7 @@ export class ExecutableAction<R extends TMCActionRequestUnion<TMCActionRegistry>
     const session = await this.meteorConnect.mobileBridgeClient.refreshRequest(
       this.getExpandedRequest(),
       this.#sensitiveTransferSource,
+      this.transferTargetPlatform,
     );
     this.preparedMobileSession = session;
     this.prepareMobilePromise = Promise.resolve(session);
@@ -135,6 +150,7 @@ export class ExecutableAction<R extends TMCActionRequestUnion<TMCActionRegistry>
     const session = await this.meteorConnect.mobileBridgeClient.prepareRequest(
       this.getExpandedRequest(),
       this.#sensitiveTransferSource,
+      this.transferTargetPlatform,
     );
     this.preparedMobileSession = session;
     this.prepareMobilePromise = Promise.resolve(session);

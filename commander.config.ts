@@ -66,6 +66,17 @@ export default defineCommanderConfig({
       tags: { role: "tooling" },
     },
     {
+      // The Meteor Connect bridge backend from the sibling repo — required for account-transfer
+      // testing (open the demo with ?backend=local). ⚠ Binds :8787 like backend-test; the two
+      // are mutually exclusive, which commander reports as an endpoint conflict.
+      id: "mc-backend",
+      run: ["bun", "run", "dev"], // wrangler dev --env development
+      cwd: "../meteor-connect-bridge/packages/meteor-connect-backend",
+      endpoints: [{ name: "http", protocol: "tcp", port: 8787, ownership: "exclusive" }],
+      ready: { kind: "endpoint", endpoint: "http" },
+      tags: { role: "backend" },
+    },
+    {
       // Rebuilds dist/ for consumers that resolve the built SDK (sdk-test-web aliases src
       // directly and does not need this — hence `full`, not `dev`).
       id: "sdk-build-watch",
@@ -110,6 +121,8 @@ export default defineCommanderConfig({
     },
     /** Popup-UI iteration loop on its own. */
     preview: { include: ["sdk-preview"] },
+    /** Account-transfer testing: demo app + the sibling repo's mc backend (NOT backend-test — same port). */
+    transfer: { include: ["sdk-test-web", "mc-backend"] },
     /** CI-style panel: ✓/✗ per check. */
     checks: { where: { role: "check" } },
   },

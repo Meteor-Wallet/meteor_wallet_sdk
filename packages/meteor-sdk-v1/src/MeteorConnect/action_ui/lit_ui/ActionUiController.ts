@@ -18,8 +18,8 @@ export class ActionUiController implements ReactiveController {
     this.cleanupUi = cleanupUi;
   }
 
-  async prepareMobileBridge() {
-    return this.action.prepareMobileBridge();
+  async prepareMobileBridge(options?: Parameters<ExecutableAction<any>["prepareMobileBridge"]>[0]) {
+    return this.action.prepareMobileBridge(options);
   }
 
   async refreshMobileBridge() {

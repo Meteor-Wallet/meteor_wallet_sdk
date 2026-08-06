@@ -22,7 +22,8 @@ import { SCENARIOS } from "./scenarios.mjs";
 
 interface ScenarioTransferConfig {
   accounts: Array<{ accountId: string; networkId: string }>;
-  screen: "review" | "connect";
+  screen: "review" | "choose" | "connect";
+  platform?: "web" | "mobile";
   revealShown?: boolean;
   terminal?: "imported" | "declined" | "expired";
 }
@@ -134,8 +135,12 @@ document.body.appendChild(overlay);
 void (async () => {
   await (container as any).updateComplete;
   const transfer = scenario.transfer;
+  if (transfer != null && transfer.terminal == null && transfer.screen === "choose") {
+    (container as any).screen = "choose_platform";
+    await (container as any).updateComplete;
+  }
   if (transfer != null && transfer.terminal == null && transfer.screen === "connect") {
-    await (container as any).startTransfer?.();
+    await (container as any).startTransfer?.(transfer.platform ?? "web");
     await (container as any).updateComplete;
     if (transfer.revealShown) {
       const card = (container as any).shadowRoot?.querySelector("meteor-transfer-key-card");

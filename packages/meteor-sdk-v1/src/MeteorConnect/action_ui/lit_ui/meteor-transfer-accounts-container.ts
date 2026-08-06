@@ -6,6 +6,7 @@ import { unsafeSVG } from "lit/directives/unsafe-svg.js";
 import type { ExecutableAction } from "../../action/ExecutableAction";
 import { MeteorLogger } from "../../logging/MeteorLogger";
 import type { TMeteorConnectionExecutionTarget } from "../../MeteorConnect.types";
+import type { TTransferTargetPlatform } from "../../target_clients/mobile_bridge/MeteorConnectMobileBridgeClient.types";
 import type {
   IMobileBridgeSnapshot,
   MobileBridgeSession,
@@ -69,12 +70,13 @@ export class MeteorTransferAccountsContainer extends LitElement {
   @property({ attribute: false })
   public overlayCloseTrigger?: () => void;
 
-  @state() private screen: "review" | "connect" = "review";
+  @state() private screen: "review" | "choose_platform" | "connect" = "review";
   @state() private mobileSession?: MobileBridgeSession;
   @state() private snapshot?: IMobileBridgeSnapshot;
   @state() private startPending = false;
   @state() private startError?: string;
   @state() private terminalState?: TTransferTerminalState;
+  @state() private targetPlatform?: TTransferTargetPlatform;
 
   private actionController!: ActionUiController;
   private unsubscribeSession?: () => void;
@@ -143,6 +145,14 @@ export class MeteorTransferAccountsContainer extends LitElement {
     .primary-button:disabled { opacity: .55; cursor: default; }
     .primary-button:focus-visible { outline: 2px solid rgba(155,140,255,.95); outline-offset: 2px; }
     .start-error { margin: 0; color: rgb(var(--mc-red)); font-size: .74rem; line-height: 1rem; }
+    .platform-button { display: flex; flex-direction: column; align-items: center; gap: .3rem; width: 100%; box-sizing: border-box; padding: .85rem .9rem; border: 1px solid rgba(150,140,255,.22); border-radius: .8rem; cursor: pointer; color: inherit; font-family: inherit; background: linear-gradient(155deg, rgba(var(--meteor-dark-gray-lightest), .4), rgba(var(--meteor-dark-gray-darkest), .55) 70%); box-shadow: inset 0 1px rgba(255,255,255,.04), 0 4px 14px rgba(0,0,0,.22); transition: transform 120ms ease, border-color 120ms ease; }
+    .platform-button:hover:not(:disabled) { border-color: rgba(160,140,255,.6); transform: translateY(-1px); }
+    .platform-button:disabled { opacity: .55; cursor: default; }
+    .platform-button:focus-visible { outline: 2px solid rgba(155,140,255,.95); outline-offset: 2px; }
+    .platform-name { font-size: .95rem; font-weight: 750; color: rgba(var(--meteor-text-on-dark-light), 1); }
+    .platform-hint { font-size: .7rem; line-height: .95rem; color: rgba(var(--meteor-text-on-dark-dark), 1); }
+    .back-link { align-self: center; border: 0; padding: .3rem .5rem; background: none; cursor: pointer; font-family: inherit; font-size: .72rem; color: rgba(var(--meteor-text-on-dark-dark), 1); text-decoration: underline; }
+    .back-link:focus-visible { outline: 2px solid rgba(155,140,255,.95); outline-offset: 2px; }
     .spinner { display: inline-block; width: .9rem; height: .9rem; border: 2px solid rgba(255,255,255,.38); border-top-color: white; border-radius: 50%; animation: spin .7s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
 
@@ -191,20 +201,29 @@ export class MeteorTransferAccountsContainer extends LitElement {
     });
   }
 
-  private async startTransfer(): Promise<void> {
+  private async startTransfer(platform: TTransferTargetPlatform): Promise<void> {
     if (this.startPending) return;
     this.startPending = true;
     this.startError = undefined;
+    this.targetPlatform = platform;
     try {
-      const session = await this.actionController.prepareMobileBridge();
+      const session = await this.actionController.prepareMobileBridge({
+        transferTargetPlatform: platform,
+      });
       this.bindSession(session);
       this.screen = "connect";
     } catch (error) {
       this.logger.err("Failed to start transfer bridge", error);
-      this.startError = "Couldn't start the secure transfer. Check your connection and try again.";
+      this.startError = `Couldn't start the secure transfer: ${
+        error instanceof Error ? error.message : String(error)
+      }`;
     } finally {
       this.startPending = false;
     }
+  }
+
+  private get walletLabel(): string {
+    return this.targetPlatform === "mobile" ? "Meteor Mobile" : "Meteor Web";
   }
 
   private bindSession(session: MobileBridgeSession | undefined): void {
@@ -249,11 +268,46 @@ export class MeteorTransferAccountsContainer extends LitElement {
         Your account keys stay encrypted until you reveal the decrypt key to Meteor Wallet on the
         connected device.
       </p>
-      ${this.startError != null ? html`<p class="start-error">${this.startError}</p>` : nothing}
-      <button type="button" class="primary-button" ?disabled=${this.startPending} @click=${() => this.startTransfer()}>
-        ${this.startPending ? html`<span class="spinner" aria-hidden="true"></span>` : nothing}
+      <button type="button" class="primary-button" @click=${() => {
+        this.screen = "choose_platform";
+      }}>
         Start secure transfer
       </button>
+    `;
+  }
+
+  private renderChoosePlatform() {
+    return html`
+      <span class="section-kicker">Choose destination</span>
+      <p class="review-title">Where should your accounts go?</p>
+      <p class="review-note">
+        Both options use the same end-to-end encrypted transfer — pick the Meteor Wallet you want
+        to receive the accounts.
+      </p>
+      <button
+        type="button"
+        class="platform-button"
+        ?disabled=${this.startPending}
+        @click=${() => this.startTransfer("web")}
+      >
+        <span class="platform-name">Meteor Web</span>
+        <span class="platform-hint">wallet in this or another browser — link or QR</span>
+      </button>
+      <button
+        type="button"
+        class="platform-button"
+        ?disabled=${this.startPending}
+        @click=${() => this.startTransfer("mobile")}
+      >
+        <span class="platform-name">Meteor Mobile</span>
+        <span class="platform-hint">the app on your phone — QR or deep link</span>
+      </button>
+      ${this.startPending ? html`<span class="spinner" aria-hidden="true"></span>` : nothing}
+      ${this.startError != null ? html`<p class="start-error">${this.startError}</p>` : nothing}
+      <button type="button" class="back-link" @click=${() => {
+        this.screen = "review";
+        this.startError = undefined;
+      }}>Back to review</button>
     `;
   }
 
@@ -269,6 +323,7 @@ export class MeteorTransferAccountsContainer extends LitElement {
     return html`
       <meteor-mobile-bridge-panel
         .session=${this.mobileSession}
+        .walletLabel=${this.walletLabel}
         .contextual=${true}
         .openInApp=${() => this.action.meteorConnect.mobileBridgeClient.openCurrentSessionInApp()}
         .refreshCode=${async () => {
@@ -317,7 +372,9 @@ export class MeteorTransferAccountsContainer extends LitElement {
               ? this.renderTerminal(terminal)
               : this.screen === "review"
                 ? this.renderReview()
-                : this.renderConnect()
+                : this.screen === "choose_platform"
+                  ? this.renderChoosePlatform()
+                  : this.renderConnect()
           }
         </div>
       </div>

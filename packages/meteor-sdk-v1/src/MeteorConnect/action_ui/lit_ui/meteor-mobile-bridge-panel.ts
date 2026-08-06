@@ -18,6 +18,8 @@ export class MeteorMobileBridgePanel extends LitElement {
   @property({ attribute: false }) openInApp?: () => void;
   @property({ attribute: false }) refreshCode?: () => Promise<void>;
   @property({ attribute: false }) resetIdentity?: () => Promise<void>;
+  /** Wallet name shown in all copy — "Meteor Mobile" by default; transfer-to-web passes "Meteor Web". */
+  @property() walletLabel = "Meteor Mobile";
   @state() private snapshot?: IMobileBridgeSnapshot;
   @state() private showQr = !isMobile();
   @state() private pin = "";
@@ -357,7 +359,7 @@ export class MeteorMobileBridgePanel extends LitElement {
       this.interactionError = undefined;
     } catch {
       this.interactionError =
-        "Meteor Mobile could not be opened automatically. Scan the QR code instead.";
+        `${this.walletLabel} could not be opened automatically. Scan the QR code instead.`;
       this.showQr = true;
     }
   }
@@ -384,7 +386,7 @@ export class MeteorMobileBridgePanel extends LitElement {
     } catch (error) {
       this.interactionError =
         error instanceof Error && error.message === "mobile_bridge_other_tab_active"
-          ? "Meteor Mobile is active in another tab. Close that request and try again."
+          ? `${this.walletLabel} is active in another tab. Close that request and try again.`
           : "The mobile pairing could not be reset. Please try again.";
     } finally {
       this.resetPending = false;
@@ -396,17 +398,17 @@ export class MeteorMobileBridgePanel extends LitElement {
       case "initializing":
         return "Initializing secure mobile connection…";
       case "busy_other_tab":
-        return "Meteor Mobile is busy in another tab. Retrying…";
+        return `${this.walletLabel} is busy in another tab. Retrying…`;
       case "creating_bridge":
         return "Creating secure mobile request…";
       case "waiting_for_wallet":
-        return "Scan or open Meteor Mobile to continue.";
+        return `Scan or open ${this.walletLabel} to continue.`;
       case "wallet_verification":
         return "Enter the 4-digit PIN shown on your phone.";
       case "wallet_action":
-        return "Review and approve this request in Meteor Mobile.";
+        return `Review and approve this request in ${this.walletLabel}.`;
       case "completed":
-        return "Completed in Meteor Mobile.";
+        return `Completed in ${this.walletLabel}.`;
       case "failed":
         return "The mobile request could not be completed.";
       case "cancelled":
@@ -443,17 +445,17 @@ export class MeteorMobileBridgePanel extends LitElement {
           : "Push notification unavailable";
     const subtitle =
       stage === "sending"
-        ? "Securely contacting your paired Meteor Mobile wallet."
+        ? `Securely contacting your paired ${this.walletLabel} wallet.`
         : stage === "sent"
-          ? "Waiting for Meteor Mobile to receive the request."
-          : "Use the secure QR code to continue in Meteor Mobile.";
+          ? `Waiting for ${this.walletLabel} to receive the request.`
+          : `Use the secure QR code to continue in ${this.walletLabel}.`;
 
     return keyed(
       `push-${stage}`,
       html`<div class="stage">
         <div class="push-layout">
           <div class="stage-primary">
-            <span class="stage-kicker">Meteor Mobile</span>
+            <span class="stage-kicker">${this.walletLabel}</span>
             <div class=${`stage-icon ${stage}`} aria-hidden="true">
               ${
                 stage === "sent"
@@ -478,7 +480,7 @@ export class MeteorMobileBridgePanel extends LitElement {
             <span class="fallback-label">${stage === "sending" ? "Preparing backup QR" : "Scan instead"}</span>
             ${
               showFallbackQr
-                ? html`<div class="qr-frame"><div id="mobile-bridge-qr" class="qr" role="img" aria-label="Scan with Meteor Mobile"></div></div>`
+                ? html`<div class="qr-frame"><div id="mobile-bridge-qr" class="qr" role="img" aria-label="Scan with ${this.walletLabel}"></div></div>`
                 : html`<div class="qr-placeholder">
                     ${
                       deepLink != null && mobile
@@ -491,7 +493,7 @@ export class MeteorMobileBridgePanel extends LitElement {
             }
             ${
               stage !== "sending" && deepLink != null
-                ? html`<button class="ghost" @click=${() => this.openMobileApp()}>Open Meteor Mobile</button>`
+                ? html`<button class="ghost" @click=${() => this.openMobileApp()}>Open ${this.walletLabel}</button>`
                 : html`<span class="status-line">${secondsLeft == null ? "" : `Expires in ${this.formatCountdown(secondsLeft)}`}</span>`
             }
           </div>
@@ -508,7 +510,7 @@ export class MeteorMobileBridgePanel extends LitElement {
         <div class="review-visual" aria-hidden="true">
           <div class="review-phone"><span class="review-check"></span></div>
         </div>
-        <h2 class="review-title">Review and approve this request in Meteor Mobile</h2>
+        <h2 class="review-title">Review and approve this request in ${this.walletLabel}</h2>
         <p class="review-subtitle">Your wallet has securely received the request and is ready for your approval.</p>
         <div class="pill good" role="status">
           <span class="pill-dot"></span>
@@ -550,19 +552,19 @@ export class MeteorMobileBridgePanel extends LitElement {
         </div>
         <h2 class="review-title">Enter the PIN shown on your phone</h2>
         <p class="review-subtitle">
-          Meteor Mobile is displaying a 4-digit PIN. Enter it here to securely pair this dApp with
+          ${this.walletLabel} is displaying a 4-digit PIN. Enter it here to securely pair this dApp with
           your wallet.
         </p>
         <div
           class=${`pin-row${this.pinShake ? " shake" : ""}${snapshot.pinError && !this.pinPending ? " error" : ""}`}
           role="group"
-          aria-label="Meteor Mobile PIN verification"
+          aria-label="${this.walletLabel} PIN verification"
           @click=${() => this.pinInput?.focus()}
         >
           ${cells}
           <input
             class="pin-hidden-input"
-            aria-label="4-digit Meteor Mobile PIN"
+            aria-label="4-digit ${this.walletLabel} PIN"
             inputmode="numeric"
             autocomplete="one-time-code"
             maxlength="4"
@@ -606,7 +608,7 @@ export class MeteorMobileBridgePanel extends LitElement {
     return keyed(
       key,
       html`<div class="stage compact">
-        <span class="stage-kicker">Meteor Mobile</span>
+        <span class="stage-kicker">${this.walletLabel}</span>
         ${
           icon === "spinner"
             ? html`<div class="stage-icon small" aria-hidden="true"><span class="mini-loader"></span></div>`
@@ -626,12 +628,12 @@ export class MeteorMobileBridgePanel extends LitElement {
 
   private renderIdentityReset() {
     return html`<div class="stage compact">
-      <span class="stage-kicker">Meteor Mobile</span>
+      <span class="stage-kicker">${this.walletLabel}</span>
       <div class="stage-icon small neutral" aria-hidden="true">
         <svg viewBox="0 0 24 24"><path d="M12 8v5" /><path d="M12 16.6v.1" /><path d="M10.3 3.8 2.9 17a2 2 0 0 0 1.7 3h14.8a2 2 0 0 0 1.7-3L13.7 3.8a2 2 0 0 0-3.4 0" /></svg>
       </div>
       <div class="reset-card">
-        <span class="error">This dApp's saved Meteor Mobile pairing no longer matches the server.</span>
+        <span class="error">This dApp's saved ${this.walletLabel} pairing no longer matches the server.</span>
         ${
           this.resetConfirmation
             ? html`<span class="muted">Resetting removes this dApp's saved mobile pairings for this environment. Your NEAR accounts remain listed and will pair again by QR.</span>`
@@ -649,10 +651,10 @@ export class MeteorMobileBridgePanel extends LitElement {
     const snapshot = this.snapshot;
     if (snapshot == null) {
       return this.contextual
-        ? html`<section class="panel stage-panel" aria-live="polite" aria-label="Meteor Mobile">${this.renderPushStage(undefined, "sending")}</section>`
+        ? html`<section class="panel stage-panel" aria-live="polite" aria-label="${this.walletLabel}">${this.renderPushStage(undefined, "sending")}</section>`
         : html`<section class="panel" aria-live="polite">
             <div class="heading">
-              <span class="title">Meteor Mobile</span>
+              <span class="title">${this.walletLabel}</span>
               <div class="status-line"><span class="mini-loader" aria-hidden="true"></span><span>Preparing secure connection…</span></div>
             </div>
           </section>`;
@@ -674,13 +676,13 @@ export class MeteorMobileBridgePanel extends LitElement {
       this.presentedPushStage !== "review";
 
     if (snapshot.identityResetRequired) {
-      return html`<section class="panel stage-panel slim" aria-live="polite" aria-label="Meteor Mobile">
+      return html`<section class="panel stage-panel slim" aria-live="polite" aria-label="${this.walletLabel}">
         ${this.renderIdentityReset()}
       </section>`;
     }
 
     if (inPushPresentation) {
-      return html`<section class="panel stage-panel" aria-live="polite" aria-label="Meteor Mobile">
+      return html`<section class="panel stage-panel" aria-live="polite" aria-label="${this.walletLabel}">
         ${this.renderPushStage(
           snapshot,
           this.presentedPushStage === "sending" ? "sending" : "sent",
@@ -690,13 +692,13 @@ export class MeteorMobileBridgePanel extends LitElement {
     }
 
     if (snapshot.phase === "wallet_verification") {
-      return html`<section class="panel stage-panel auto" aria-live="polite" aria-label="Meteor Mobile">
+      return html`<section class="panel stage-panel auto" aria-live="polite" aria-label="${this.walletLabel}">
         ${this.renderPinStage(snapshot)}
       </section>`;
     }
 
     if (snapshot.phase === "wallet_action") {
-      return html`<section class="panel stage-panel" aria-live="polite" aria-label="Meteor Mobile">
+      return html`<section class="panel stage-panel" aria-live="polite" aria-label="${this.walletLabel}">
         ${this.renderReviewStage()}
       </section>`;
     }
@@ -706,23 +708,23 @@ export class MeteorMobileBridgePanel extends LitElement {
       snapshot.push === "not_delivered" &&
       ["creating_bridge", "waiting_for_wallet"].includes(snapshot.phase)
     ) {
-      return html`<section class="panel stage-panel" aria-live="polite" aria-label="Meteor Mobile">
+      return html`<section class="panel stage-panel" aria-live="polite" aria-label="${this.walletLabel}">
         ${this.renderPushStage(snapshot, "unavailable", secondsLeft)}
       </section>`;
     }
 
     if (snapshot.phase === "completed") {
-      return html`<section class="panel stage-panel slim" aria-live="polite" aria-label="Meteor Mobile">
-        ${this.renderStatusStage("mobile-completed", "check", "good", "Completed in Meteor Mobile", "You can continue in this dApp.")}
+      return html`<section class="panel stage-panel slim" aria-live="polite" aria-label="${this.walletLabel}">
+        ${this.renderStatusStage("mobile-completed", "check", "good", `Completed in ${this.walletLabel}`, "You can continue in this dApp.")}
       </section>`;
     }
 
     if (snapshot.phase === "failed" || snapshot.phase === "cancelled") {
       const failureDetail =
         snapshot.error === "wallet_update_required"
-          ? "Update Meteor Mobile to continue with this request."
+          ? `Update ${this.walletLabel} to continue with this request.`
           : snapshot.error;
-      return html`<section class="panel stage-panel slim" aria-live="polite" aria-label="Meteor Mobile">
+      return html`<section class="panel stage-panel slim" aria-live="polite" aria-label="${this.walletLabel}">
         ${this.renderStatusStage(
           `mobile-${snapshot.phase}`,
           "cross",
@@ -734,9 +736,9 @@ export class MeteorMobileBridgePanel extends LitElement {
     }
 
     return html`
-      <section class="panel" aria-live="polite" aria-label="Meteor Mobile">
+      <section class="panel" aria-live="polite" aria-label="${this.walletLabel}">
         <div class="heading">
-          <span class="title">Meteor Mobile</span>
+          <span class="title">${this.walletLabel}</span>
           <p class="status">${this.statusText(snapshot)}</p>
         </div>
         ${snapshot.reconnecting ? html`<span class="pill"><span class="mini-loader" aria-hidden="true"></span><span>Reconnecting securely…</span></span>` : ""}
@@ -746,10 +748,10 @@ export class MeteorMobileBridgePanel extends LitElement {
           showRequestAccess
             ? html`
           <div class=${`request-access${mobile && showRequestQr ? " stacked" : ""}`}>
-            ${showRequestQr ? html`<div class="qr-frame"><div id="mobile-bridge-qr" class="qr" role="img" aria-label="Scan with Meteor Mobile"></div></div>` : ""}
+            ${showRequestQr ? html`<div class="qr-frame"><div id="mobile-bridge-qr" class="qr" role="img" aria-label="Scan with ${this.walletLabel}"></div></div>` : ""}
             <div class="request-controls">
               <div class="actions">
-                <button @click=${() => this.openMobileApp()}>Open in App</button>
+                <button @click=${() => this.openMobileApp()}>Open ${this.walletLabel}</button>
                 ${
                   mobile
                     ? html`<button class="secondary icon-toggle" aria-label=${this.showQr ? "Hide QR code" : "Show QR code"}
@@ -769,7 +771,7 @@ export class MeteorMobileBridgePanel extends LitElement {
             : ""
         }
         ${this.interactionError ? html`<span class="error">${this.interactionError}</span>` : ""}
-        ${snapshot.error ? html`<span class="error">${snapshot.error === "wallet_update_required" ? "Update Meteor Mobile to continue with this request." : snapshot.error}</span>` : ""}
+        ${snapshot.error ? html`<span class="error">${snapshot.error === "wallet_update_required" ? `Update ${this.walletLabel} to continue with this request.` : snapshot.error}</span>` : ""}
       </section>
     `;
   }
