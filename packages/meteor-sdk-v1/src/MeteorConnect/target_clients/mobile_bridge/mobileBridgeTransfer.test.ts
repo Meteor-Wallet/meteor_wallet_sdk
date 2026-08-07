@@ -285,4 +285,16 @@ describe("web_local_dev link rebase", () => {
       ),
     ).toBe("http://192.168.0.12:3001/bridge_request?bridgeId=b2&protocolVersion=1");
   });
+
+  it("carries the partner's bridge backend as an mcBackend hint for the dev wallet", () => {
+    const rebased = rebaseWalletLinkToLocalDev(
+      "https://wallet-dev.meteorwallet.app/bridge_request?bridgeId=b3&protocolVersion=1",
+      "https://localhost:3001",
+      "https://mc.meteorwallet.app",
+    );
+    const url = new URL(rebased);
+    expect(url.origin).toBe("https://localhost:3001");
+    expect(url.searchParams.get("bridgeId")).toBe("b3");
+    expect(url.searchParams.get("mcBackend")).toBe("https://mc.meteorwallet.app");
+  });
 });

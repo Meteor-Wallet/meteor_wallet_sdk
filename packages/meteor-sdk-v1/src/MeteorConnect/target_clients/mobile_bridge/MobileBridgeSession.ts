@@ -16,10 +16,22 @@ import {
  * Dev-only: rebase a backend-issued web wallet link onto a local dev origin, preserving the
  * link's path and query (bridgeId, protocolVersion). "https://wallet-dev…/bridge_request?x=y"
  * + "https://localhost:3001" → "https://localhost:3001/bridge_request?x=y".
+ *
+ * `mcBackendHintUrl` (the partner's bridge backend) rides along as an `mcBackend` query param:
+ * a locally served wallet derives its backend from its own hostname, which is wrong whenever the
+ * partner used any other backend — dev wallet builds honor the hint so the claim lands on the
+ * bridge that actually exists. Never added to non-rebased (deployed) links.
  */
-export function rebaseWalletLinkToLocalDev(linkString: string, localBaseUrl: string): string {
+export function rebaseWalletLinkToLocalDev(
+  linkString: string,
+  localBaseUrl: string,
+  mcBackendHintUrl?: string,
+): string {
   const link = new URL(linkString);
   const base = new URL(localBaseUrl);
+  if (mcBackendHintUrl != null) {
+    link.searchParams.set("mcBackend", mcBackendHintUrl);
+  }
   return `${base.origin}${link.pathname}${link.search}`;
 }
 import type {
@@ -60,8 +72,8 @@ interface IMobileBridgeSessionInput {
   prepared: IMobileBridgePreparedAction;
   /** Ordered app-id preference: create_bridge/push targeting + wallet-link selection (first match wins). */
   targetMeteorAppIds: EMeteorAppId[];
-  /** Dev-only: rebase the selected web wallet link onto this origin (transfer "web_local_dev"). */
-  localDevLinkBaseUrl?: string;
+  /** Dev-only: rebase the selected web wallet link onto a local origin (transfer "web_local_dev"). */
+  localDevLinkRewrite?: { baseUrl: string; mcBackendHintUrl: string };
   pushWallet?: TPartnerPairedWallet;
   buildConnection(): IMeteorConnection_V2_BridgeMobile;
   persistFunctionCallKey?: (network: string, accountId: string, keyPair: any) => Promise<void>;
@@ -253,13 +265,14 @@ export class MobileBridgeSession {
       // Dev-only local rewrite — web links only, deep links are never rebased. The rewritten
       // link becomes the selected link so the opener allowlist follows it too.
       const link =
-        this.input.localDevLinkBaseUrl != null &&
+        this.input.localDevLinkRewrite != null &&
         backendLink.linkType === EBridgeLinkType.web_app_url
           ? {
               ...backendLink,
               linkString: rebaseWalletLinkToLocalDev(
                 backendLink.linkString,
-                this.input.localDevLinkBaseUrl,
+                this.input.localDevLinkRewrite.baseUrl,
+                this.input.localDevLinkRewrite.mcBackendHintUrl,
               ),
             }
           : backendLink;

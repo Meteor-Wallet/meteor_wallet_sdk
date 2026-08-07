@@ -354,8 +354,15 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
       client: this.bridgeClient!,
       prepared,
       targetMeteorAppIds: this.targetMeteorAppIdsFor(prepared, transferTargetPlatform),
-      localDevLinkBaseUrl:
-        transferTargetPlatform === "web_local_dev" ? await this.localDevLinkBaseUrl() : undefined,
+      localDevLinkRewrite:
+        transferTargetPlatform === "web_local_dev"
+          ? {
+              baseUrl: await this.localDevLinkBaseUrl(),
+              // Tell the local wallet which backend this bridge actually lives on — its own
+              // hostname-derived default is wrong for any non-local backend.
+              mcBackendHintUrl: this.storage!.backendUrl,
+            }
+          : undefined,
       pushWallet,
       isCurrent: (candidate) => candidate === this.currentToken,
       buildConnection: () => this.buildConnection(),
