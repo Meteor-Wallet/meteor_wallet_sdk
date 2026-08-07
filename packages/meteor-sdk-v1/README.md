@@ -347,7 +347,7 @@ Advanced integrations can use `transferAccounts.createAction()` to drive the raw
 
 ## Local development
 
-- **Try it first**: the hosted demo at <https://meteorwallet-sdk-demo.pages.dev/> runs this exact
+- **Try it first**: the hosted demo at <https://sdk-demo.meteorwallet.app/> runs this exact
   SDK; its source lives in the `meteor-sdk-v1-test-web` package of this repository and doubles as a
   reference integration for both flows.
 - **Verbose logs**: `meteorConnect.setLoggingLevel("debug")`.

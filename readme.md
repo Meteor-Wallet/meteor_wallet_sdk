@@ -2,6 +2,8 @@
 
 This is the repo for our SDKs which provide utility for connecting to Meteor Wallet on our various platforms.
 
+If you are looking to integrate with Meteor, start with the [SDK integration guide](packages/meteor-sdk-v1/README.md) and the [security documentation](packages/meteor-sdk-v1/SECURITY.md).
+
 # Installing and Building
 
 We make use of Proto for tool management (https://moonrepo.dev/docs/proto/install)
@@ -30,6 +32,11 @@ packages\meteor-sdk-v1\src\MeteorWallet.ts
 
 The Meteor Connect SDK (`MeteorConnect.ts`) is used by NEAR Connect and will eventually be the main connective layer for Meteor. This part of the repo also contains the SDK layer still used by Wallet Selector (`MeteorWallet.ts`) and which Meteor Connect currently still uses as an adapter for the Meteor V1 wallet.
 
+Documentation for this package:
+
+- [README](packages/meteor-sdk-v1/README.md) — partner integration guide: setup, the wallet-action popup, and the account-transfer flow.
+- [SECURITY](packages/meteor-sdk-v1/SECURITY.md) — the security architecture of Meteor Connect and the bridge backend, with diagrams of the pairing and account-transfer protocols.
+
 ## NEAR Connect Executor
 
 ```
@@ -46,7 +53,7 @@ packages\meteor-sdk-v1-test-web
 
 Run `bun dev` in this package to test out the Meteor SDK, including NEAR Connect functionality.
 
-Also hosted here: https://meteorwallet-sdk-demo.pages.dev/
+Also hosted here: https://sdk-demo.meteorwallet.app/
 
 # Developing with NEAR Connect
 
