@@ -23,7 +23,9 @@
   "files": [
     "./dist",
     "./src",
-    "./package.json"
+    "./package.json",
+    "./README.md",
+    "./SECURITY.md"
   ],
   "scripts": {
     "build": "bun run check-key-confinement && tsdown",
