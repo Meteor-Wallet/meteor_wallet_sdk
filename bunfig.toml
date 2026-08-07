@@ -1,0 +1,9 @@
+[install]
+# Pin the classic hoisted node_modules layout. Bun 1.3 defaults FRESH monorepo installs to the
+# isolated (.bun store + symlinks) layout — which is what CI gets on every run, while long-lived
+# local checkouts keep their existing hoisted tree. Under the isolated layout,
+# meteor-sdk-v1-test-web's deliberate `resolve.preserveSymlinks: true` (workspace module
+# identity for the aliased SDK src) stops nested dependency resolution dead: rollup resolves
+# react-router's own imports (e.g. "cookie") from the symlink path, where they don't exist —
+# the exact "Rollup failed to resolve import 'cookie'" deploy failure.
+linker = "hoisted"
