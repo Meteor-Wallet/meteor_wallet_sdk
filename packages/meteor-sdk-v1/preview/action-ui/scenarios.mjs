@@ -232,6 +232,13 @@ function makeTransferScenarios() {
     base("transfer-choose", "Transfer: wallet-platform choice (Meteor Web vs Mobile)", "initializing", {
       screen: "choose",
     }),
+    base(
+      "transfer-get-meteor",
+      "Transfer: Get Meteor Wallet sub-page (extension excluded)",
+      "initializing",
+      { screen: "choose" },
+      { view: "get-meteor" },
+    ),
     base("transfer-connect", "Transfer: QR / open-link waiting stage (web target)", "waiting_for_wallet", {
       screen: "connect",
       platform: "web",

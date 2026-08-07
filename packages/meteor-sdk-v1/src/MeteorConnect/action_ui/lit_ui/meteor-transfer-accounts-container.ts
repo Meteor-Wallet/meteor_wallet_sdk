@@ -14,12 +14,24 @@ import type {
 import { getTransferAttachmentForAction } from "../../transfer_accounts/MeteorConnectTransferAccounts";
 import { ActionUiController } from "./ActionUiController";
 import { customElement } from "./custom-element";
+import "./get-meteor-screen";
 import { svg_icons_text } from "./graphical/svg_icons/svg_icons_text";
 import { svg_meteor_logo_text } from "./graphical/svg_meteor_logo_text";
+import "./meteor-action-button";
 import "./meteor-mobile-bridge-panel";
 import type { ITransferKeyRevealSource } from "./meteor-transfer-key-card";
 import "./meteor-transfer-key-card";
 import { overlayCloseTriggerContext } from "./meteor-action-ui-context";
+
+/** Transfer supports web + mobile wallets only — the extension is deliberately excluded. */
+const TRANSFER_SUPPORTED_PLATFORMS: TMeteorConnectionExecutionTarget[] = [
+  "v1_web",
+  "v2_bridge_mobile",
+];
+
+/** Phone glyph in the shared icon style (stroke/currentColor) — the icon set has no mobile icon. */
+const svg_icon_mobile_phone =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="6.8" y="2.8" width="10.4" height="18.4" rx="2.6"/><path d="M10.5 5.5h3"/><path d="M11.99 17.9h.02" stroke-width="2.4"/></svg>';
 
 type TTransferTerminalState = "imported" | "declined" | "expired";
 
@@ -65,6 +77,8 @@ export class MeteorTransferAccountsContainer extends LitElement {
   @property({ attribute: false }) previewRevealSource?: ITransferKeyRevealSource;
   /** Preview-harness override to inspect terminal screens directly. */
   @property({ attribute: false }) previewTerminalState?: TTransferTerminalState;
+  /** "Get Meteor Wallet" sub-page (same as the NEAR popup), minus the extension wallet. */
+  @property({ type: Boolean }) showGetMeteor = false;
 
   @consume({ context: overlayCloseTriggerContext })
   @property({ attribute: false })
@@ -140,17 +154,15 @@ export class MeteorTransferAccountsContainer extends LitElement {
     .account-row { display: flex; align-items: center; justify-content: space-between; gap: .6rem; padding: .55rem .7rem; border-radius: .65rem; border: 1px solid var(--mc-hairline); background: rgba(255,255,255,.04); }
     .account-id { font-size: .8rem; font-weight: 650; color: rgba(var(--meteor-text-on-dark-light), 1); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .account-network { flex-shrink: 0; font-size: .66rem; font-weight: 700; letter-spacing: .05rem; text-transform: uppercase; color: rgba(var(--meteor-text-on-dark-dark), 1); }
-    .primary-button { display: inline-flex; align-items: center; justify-content: center; gap: .4rem; min-height: 2.55rem; border: 0; border-radius: .65rem; padding: .68rem .95rem; box-sizing: border-box; font-family: inherit; font-size: .84rem; font-weight: 700; letter-spacing: .035rem; white-space: nowrap; cursor: pointer; color: white; background: linear-gradient(135deg, rgba(var(--mc-primary-a), .8) 0%, rgba(var(--mc-primary-b), .7) 100%); filter: drop-shadow(0 3px 10px rgba(0,0,0,.2)); transition: transform 120ms ease, background 120ms ease; }
-    .primary-button:hover:not(:disabled) { background: linear-gradient(135deg, rgba(var(--mc-primary-a), 1) 0%, rgba(var(--mc-primary-b), .85) 100%); transform: translateY(-1px); }
-    .primary-button:disabled { opacity: .55; cursor: default; }
-    .primary-button:focus-visible { outline: 2px solid rgba(155,140,255,.95); outline-offset: 2px; }
     .start-error { margin: 0; color: rgb(var(--mc-red)); font-size: .74rem; line-height: 1rem; }
-    .platform-button { display: flex; flex-direction: column; align-items: center; gap: .3rem; width: 100%; box-sizing: border-box; padding: .85rem .9rem; border: 1px solid rgba(150,140,255,.22); border-radius: .8rem; cursor: pointer; color: inherit; font-family: inherit; background: linear-gradient(155deg, rgba(var(--meteor-dark-gray-lightest), .4), rgba(var(--meteor-dark-gray-darkest), .55) 70%); box-shadow: inset 0 1px rgba(255,255,255,.04), 0 4px 14px rgba(0,0,0,.22); transition: transform 120ms ease, border-color 120ms ease; }
-    .platform-button:hover:not(:disabled) { border-color: rgba(160,140,255,.6); transform: translateY(-1px); }
-    .platform-button:disabled { opacity: .55; cursor: default; }
-    .platform-button:focus-visible { outline: 2px solid rgba(155,140,255,.95); outline-offset: 2px; }
-    .platform-name { font-size: .95rem; font-weight: 750; color: rgba(var(--meteor-text-on-dark-light), 1); }
-    .platform-hint { font-size: .7rem; line-height: .95rem; color: rgba(var(--meteor-text-on-dark-dark), 1); }
+    /* NEAR-popup option/divider patterns (mirrors meteor-action-ui-container). */
+    .options { padding: 0; width: 100%; display: flex; flex-direction: column; justify-content: center; gap: .5rem; align-items: center; }
+    .option-buttons-row { display: flex; flex-direction: column; width: 100%; justify-content: center; align-items: stretch; gap: .5rem; }
+    .divider { display: flex; align-items: center; justify-content: center; width: 100%; }
+    .divider .section-kicker { flex-shrink: 0; margin: 0 .7rem; }
+    .divider .divider-line { flex-grow: 1; height: 1px; background: rgba(255,255,255,.2); }
+    .no-wallet-bottom-section { display: flex; flex-direction: column; align-items: stretch; gap: .55rem; margin-top: .35rem; }
+    .subsection-title { margin: 0; font-size: 1.05rem; font-weight: 500; letter-spacing: .02rem; color: rgba(255,255,255,.9); }
     .back-link { align-self: center; border: 0; padding: .3rem .5rem; background: none; cursor: pointer; font-family: inherit; font-size: .72rem; color: rgba(var(--meteor-text-on-dark-dark), 1); text-decoration: underline; }
     .back-link:focus-visible { outline: 2px solid rgba(155,140,255,.95); outline-offset: 2px; }
     .spinner { display: inline-block; width: .9rem; height: .9rem; border: 2px solid rgba(255,255,255,.38); border-top-color: white; border-radius: 50%; animation: spin .7s linear infinite; }
@@ -268,42 +280,62 @@ export class MeteorTransferAccountsContainer extends LitElement {
         Your account keys stay encrypted until you reveal the decrypt key to Meteor Wallet on the
         connected device.
       </p>
-      <button type="button" class="primary-button" @click=${() => {
-        this.screen = "choose_platform";
-      }}>
-        Start secure transfer
-      </button>
+      <div class="options">
+        <meteor-action-button
+          variant="primary"
+          label="Start secure transfer"
+          @meteor-button-click=${() => {
+            this.screen = "choose_platform";
+          }}
+        ></meteor-action-button>
+      </div>
     `;
   }
 
   private renderChoosePlatform() {
     return html`
-      <span class="section-kicker">Choose destination</span>
       <p class="review-title">Where should your accounts go?</p>
       <p class="review-note">
         Both options use the same end-to-end encrypted transfer — pick the Meteor Wallet you want
         to receive the accounts.
       </p>
-      <button
-        type="button"
-        class="platform-button"
-        ?disabled=${this.startPending}
-        @click=${() => this.startTransfer("web")}
-      >
-        <span class="platform-name">Meteor Web</span>
-        <span class="platform-hint">wallet in this or another browser — link or QR</span>
-      </button>
-      <button
-        type="button"
-        class="platform-button"
-        ?disabled=${this.startPending}
-        @click=${() => this.startTransfer("mobile")}
-      >
-        <span class="platform-name">Meteor Mobile</span>
-        <span class="platform-hint">the app on your phone — QR or deep link</span>
-      </button>
+      <div class="options" aria-label="Wallet platform choices">
+        <span class="section-kicker">Choose your wallet</span>
+        <div class="option-buttons-row">
+          <meteor-action-button
+            variant="option"
+            label="Meteor Web"
+            .icon=${svg_icons_text.icon_web_globe}
+            .disabled=${this.startPending}
+            @meteor-button-click=${() => this.startTransfer("web")}
+          ></meteor-action-button>
+          <meteor-action-button
+            variant="option"
+            label="Meteor Mobile"
+            .icon=${svg_icon_mobile_phone}
+            .disabled=${this.startPending}
+            @meteor-button-click=${() => this.startTransfer("mobile")}
+          ></meteor-action-button>
+        </div>
+      </div>
       ${this.startPending ? html`<span class="spinner" aria-hidden="true"></span>` : nothing}
       ${this.startError != null ? html`<p class="start-error">${this.startError}</p>` : nothing}
+      <div class="no-wallet-bottom-section">
+        <div class="divider">
+          <span class="divider-line"></span>
+          <span class="section-kicker">Don't have a wallet?</span>
+          <span class="divider-line"></span>
+        </div>
+        <div class="options">
+          <meteor-action-button
+            variant="primary"
+            label="Get Meteor Wallet"
+            @meteor-button-click=${() => {
+              this.showGetMeteor = true;
+            }}
+          ></meteor-action-button>
+        </div>
+      </div>
       <button type="button" class="back-link" @click=${() => {
         this.screen = "review";
         this.startError = undefined;
@@ -351,22 +383,44 @@ export class MeteorTransferAccountsContainer extends LitElement {
   render() {
     if (import.meta.hot) import.meta.hot.accept();
     const terminal = this.previewTerminalState ?? this.terminalState;
+    const showingGetMeteor = terminal == null && this.showGetMeteor;
 
     return html`
       <div class="modal">
         <div class="meteor-connect-title-box">
           <div class="meteor-logo-and-title">
+            ${
+              showingGetMeteor
+                ? html`
+            <button
+              type="button"
+              class="close-circle"
+              aria-label="Back to wallet choices"
+              @click=${() => {
+                this.showGetMeteor = false;
+              }}
+            >
+              ${unsafeSVG(svg_icons_text.icon_arrow_back)}
+            </button>
+            <div class="title-text-box">
+              <span class="subsection-title">Get Meteor Wallet</span>
+            </div>`
+                : html`
             <div class="meteor-logo">${unsafeSVG(svg_meteor_logo_text)}</div>
             <div class="title-text-box">
               <span class="title">Meteor</span>
               <span class="subtitle">Transfer</span>
-            </div>
+            </div>`
+            }
           </div>
           <button type="button" class="close-circle" aria-label="Close Meteor Connect" @click=${() => this.handleActionClose()}>
             ${unsafeSVG(svg_icons_text.icon_close_x)}
           </button>
         </div>
-        <div class="content">
+        ${
+          showingGetMeteor
+            ? html`<get-meteor-screen .supportedPlatforms=${TRANSFER_SUPPORTED_PLATFORMS}></get-meteor-screen>`
+            : html`<div class="content">
           ${
             terminal != null
               ? this.renderTerminal(terminal)
@@ -376,7 +430,8 @@ export class MeteorTransferAccountsContainer extends LitElement {
                   ? this.renderChoosePlatform()
                   : this.renderConnect()
           }
-        </div>
+        </div>`
+        }
       </div>
     `;
   }
