@@ -24,8 +24,13 @@ export type TMobileNearActionId =
  * Which Meteor Wallet platform a transfer bridge targets. Chosen by the user on the transfer
  * popup's platform screen; decides the app ids sent to create_bridge and therefore which wallet
  * links come back. NEAR actions always target the configured mobile wallet.
+ *
+ * "web_local_dev" (dev-gated, mirrors the V1 client's "Dev Web (Localhost)" target): a normal
+ * dev-web-identity bridge, but the backend-issued wallet link is rebased onto the
+ * `webDevLocalhostBaseUrl` origin (default https://localhost:3001) so QR/open-link land on a
+ * locally running meteor-frontend.
  */
-export type TTransferTargetPlatform = "web" | "mobile";
+export type TTransferTargetPlatform = "web" | "mobile" | "web_local_dev";
 
 export type TMobileBridgePreparedActionKind =
   | {

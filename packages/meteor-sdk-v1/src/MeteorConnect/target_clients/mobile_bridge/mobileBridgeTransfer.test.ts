@@ -14,6 +14,7 @@ import { MeteorConnectV1Client } from "../v1_client/MeteorConnectV1Client";
 import { MeteorConnectMobileBridgeClient } from "./MeteorConnectMobileBridgeClient";
 import type { IMobileBridgeSensitiveTransferSource } from "./MeteorConnectMobileBridgeClient.types";
 import { mobileBridgeResultToSdk } from "./mobileBridgeResultToSdk";
+import { rebaseWalletLinkToLocalDev } from "./MobileBridgeSession";
 import {
   getActionRequiredWalletCapabilities,
   sdkActionToMobileBridge,
@@ -265,5 +266,23 @@ describe("transfer outcome mapping", () => {
     expect(() => mapRejectionToOutcome(new Error("totally_unknown_error"))).toThrow(
       "totally_unknown_error",
     );
+  });
+});
+
+describe("web_local_dev link rebase", () => {
+  it("rebases a backend web link onto the local origin, preserving path and query", () => {
+    expect(
+      rebaseWalletLinkToLocalDev(
+        "https://wallet-dev.meteorwallet.app/bridge_request?bridgeId=b1&protocolVersion=1",
+        "https://localhost:3001",
+      ),
+    ).toBe("https://localhost:3001/bridge_request?bridgeId=b1&protocolVersion=1");
+    // A base with a stray path contributes only its origin.
+    expect(
+      rebaseWalletLinkToLocalDev(
+        "https://wallet-dev.meteorwallet.app/bridge_request?bridgeId=b2&protocolVersion=1",
+        "http://192.168.0.12:3001/ignored",
+      ),
+    ).toBe("http://192.168.0.12:3001/bridge_request?bridgeId=b2&protocolVersion=1");
   });
 });

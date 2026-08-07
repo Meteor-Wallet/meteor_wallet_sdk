@@ -81,6 +81,8 @@ function makeMockAction(scenario: ScenarioConfig): ExecutableAction<any> {
       supportedPlatforms: targets,
       mobileBridgeClient: {
         openCurrentSessionInApp() {},
+        // Previews always show the dev-gated "Meteor Web (Local Dev)" transfer option.
+        isTransferLocalDevWebAvailable: async () => true,
       },
     },
     getAllExecutionTargetConfigs: () => targets.map((executionTarget) => ({ executionTarget })),

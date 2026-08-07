@@ -266,11 +266,29 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
   ): EMeteorAppId[] {
     if (prepared.kind.domain !== "meteor_wallet_core") return [this.config!.meteorAppId];
     if (transferTargetPlatform === "mobile") return [this.config!.meteorAppId];
+    if (transferTargetPlatform === "web_local_dev") {
+      // A locally served meteor-frontend always identifies as the dev web identity.
+      return [EMeteorAppId.meteor_wallet_web_dev];
+    }
     const configured = this.config?.transferAccounts?.meteorAppIds;
     if (configured != null && configured.length > 0) return [...configured];
     return this.config!.meteorAppId === EMeteorAppId.meteor_wallet_mobile_dev
       ? [EMeteorAppId.meteor_wallet_web_dev]
       : [EMeteorAppId.meteor_wallet_web];
+  }
+
+  /**
+   * Whether the transfer popup offers "Meteor Web (Local Dev)" — same gate as the V1 client's
+   * "Dev Web (Localhost)" target: a development build, or the persisted force-dev flag.
+   */
+  async isTransferLocalDevWebAvailable(): Promise<boolean> {
+    const forceDev = (await this.meteorConnect.storage.getJsonOrDef("dev_000_met", 0)) === 1;
+    return forceDev || process.env.NODE_ENV === "development";
+  }
+
+  /** The origin a "web_local_dev" transfer link is rebased onto (shared with the V1 dev target). */
+  private async localDevLinkBaseUrl(): Promise<string> {
+    return this.meteorConnect.storage.getJsonOrDef("webDevLocalhostBaseUrl", "https://localhost:3001");
   }
 
   private connectionShell(): IMeteorConnection_V2_BridgeMobile {
@@ -336,6 +354,8 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
       client: this.bridgeClient!,
       prepared,
       targetMeteorAppIds: this.targetMeteorAppIdsFor(prepared, transferTargetPlatform),
+      localDevLinkBaseUrl:
+        transferTargetPlatform === "web_local_dev" ? await this.localDevLinkBaseUrl() : undefined,
       pushWallet,
       isCurrent: (candidate) => candidate === this.currentToken,
       buildConnection: () => this.buildConnection(),

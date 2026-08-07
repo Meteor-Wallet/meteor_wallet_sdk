@@ -91,6 +91,7 @@ export class MeteorTransferAccountsContainer extends LitElement {
   @state() private startError?: string;
   @state() private terminalState?: TTransferTerminalState;
   @state() private targetPlatform?: TTransferTargetPlatform;
+  @state() private localDevWebAvailable = false;
 
   private actionController!: ActionUiController;
   private unsubscribeSession?: () => void;
@@ -193,6 +194,13 @@ export class MeteorTransferAccountsContainer extends LitElement {
         if (message === "mobile_bridge_expired") this.terminalState = "expired";
       },
     );
+    // Dev-gated "Meteor Web (Local Dev)" option — same gate as the V1 dev-web target.
+    void this.action.meteorConnect.mobileBridgeClient
+      .isTransferLocalDevWebAvailable()
+      .then((available: boolean) => {
+        this.localDevWebAvailable = available;
+      })
+      .catch(() => {});
   }
 
   disconnectedCallback(): void {
@@ -235,7 +243,9 @@ export class MeteorTransferAccountsContainer extends LitElement {
   }
 
   private get walletLabel(): string {
-    return this.targetPlatform === "mobile" ? "Meteor Mobile" : "Meteor Web";
+    if (this.targetPlatform === "mobile") return "Meteor Mobile";
+    if (this.targetPlatform === "web_local_dev") return "Meteor Web (Local Dev)";
+    return "Meteor Web";
   }
 
   private bindSession(session: MobileBridgeSession | undefined): void {
@@ -316,6 +326,18 @@ export class MeteorTransferAccountsContainer extends LitElement {
             .disabled=${this.startPending}
             @meteor-button-click=${() => this.startTransfer("mobile")}
           ></meteor-action-button>
+          ${
+            this.localDevWebAvailable
+              ? html`
+          <meteor-action-button
+            variant="option"
+            label="Meteor Web (Local Dev)"
+            .icon=${svg_icons_text.icon_web_globe}
+            .disabled=${this.startPending}
+            @meteor-button-click=${() => this.startTransfer("web_local_dev")}
+          ></meteor-action-button>`
+              : nothing
+          }
         </div>
       </div>
       ${this.startPending ? html`<span class="spinner" aria-hidden="true"></span>` : nothing}
