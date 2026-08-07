@@ -7,6 +7,7 @@ import { parseTransferSecretInput } from "@meteorwallet/sdk";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Button } from "~/ui/Button";
+import { buildFakeTransferAccountBatch } from "./fakeTransferAccounts";
 
 /**
  * Test harness for the account-transfer flow: stage accountId + secret pairs, then run the
@@ -61,6 +62,30 @@ export const TransferAccountsTest = ({
       }
       setAccountId("");
       setSecretInput("");
+      await refreshStaged();
+    },
+  });
+
+  const addFakeBatchMutation = useMutation({
+    mutationFn: async () => {
+      setStageError(undefined);
+      // Volume testing: 5 diverse fake accounts per click (see fakeTransferAccounts.ts). A
+      // mid-batch failure (e.g. hitting the 50-account cap) stops and surfaces the reason.
+      for (const account of buildFakeTransferAccountBatch(network)) {
+        for (const secret of account.secrets) {
+          const result = await meteorConnect.transferAccounts.stage({
+            networkId: network,
+            accountId: account.accountId,
+            secretInput: secret.secretInput,
+            derivationPath: secret.derivationPath,
+          });
+          if (!result.ok) {
+            setStageError(`${account.accountId} → ${result.reason}: ${result.message}`);
+            await refreshStaged();
+            return;
+          }
+        }
+      }
       await refreshStaged();
     },
   });
@@ -138,13 +163,23 @@ export const TransferAccountsTest = ({
             Stage failed: {String(stageMutation.error)}
           </span>
         )}
-        <div className={"flex flex-row gap-3"}>
+        <div className={"flex flex-row flex-wrap gap-3 items-center"}>
           <Button
             disabled={stageMutation.isPending || accountId.trim() === "" || secretInput.trim() === ""}
             onClick={() => stageMutation.mutate()}
           >
             Stage account secret
           </Button>
+          <Button
+            disabled={addFakeBatchMutation.isPending}
+            onClick={() => addFakeBatchMutation.mutate()}
+          >
+            {addFakeBatchMutation.isPending ? "Adding fake accounts..." : "Add 5 fake accounts"}
+          </Button>
+          <span className={"text-xs text-gray-500"}>
+            Volume testing: each click stages 5 diverse fake accounts (12/24-word mnemonics,
+            custom derivation path, private keys, implicit-style id, one multi-secret account).
+          </span>
         </div>
       </div>
 
