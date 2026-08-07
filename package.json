@@ -13,6 +13,8 @@
     "uniform-update": "bunx monoutil@latest uniform_update",
     "type-check-all": "bun run --parallel --workspaces --no-exit-on-error type-check",
     "type-check-watch-all": "bun run --parallel --workspaces --no-exit-on-error type-check-watch",
+    "release": "bun run scripts/release.ts",
+    "release:dry": "bun run scripts/release.ts --dry-run",
     "clean-files": "bunx glcl",
     "clean-cache-files": "bunx glcl -f glob-list.caches.clean",
     "clean-hot-labs-near-connect": "bunx glcl -f glob-list.hot-labs-near-connect.clean",
