@@ -364,6 +364,29 @@ Advanced integrations can use `transferAccounts.createAction()` to drive the raw
 - **Dev pairing**: use `meteorAppId: EMeteorAppId.meteor_wallet_mobile_dev` to pair with the
   development Meteor Mobile app, and `backendUrl` to point at a locally running bridge backend.
 
+## Troubleshooting
+
+### Parcel: `Cannot read properties of undefined (reading '48')` — random number each time
+
+Parcel 2 (observed on 2.10.x) has a module-deferral bug with `"sideEffects": false` packages
+that breaks nanoid's browser build: nanoid's internal `url-alphabet` module gets replaced with
+an empty module, so generating any bridge id crashes with `undefined[<random byte>]` — a
+different number on every attempt. In the transfer popup this surfaces as
+_"Couldn't start the secure transfer: Cannot read properties of undefined (reading 'NN')"_.
+
+Fix (with [patch-package](https://github.com/ds300/patch-package)): remove the
+`"sideEffects": false` line from `node_modules/nanoid/package.json` — and from any nested copy
+(e.g. `node_modules/@meteorwallet/sdk/node_modules/nanoid/package.json`) — then generate the
+patches:
+
+```sh
+npx patch-package nanoid --exclude '^$'
+npx patch-package @meteorwallet/sdk/nanoid --exclude '^$'
+```
+
+(`--exclude '^$'` is required because patch-package skips `package.json` diffs by default.)
+Upgrading Parcel may also resolve it; bundlers like Vite, webpack, and Rollup are unaffected.
+
 ## Support
 
 Questions or integration help: reach the Meteor team at <https://meteorwallet.app>.
