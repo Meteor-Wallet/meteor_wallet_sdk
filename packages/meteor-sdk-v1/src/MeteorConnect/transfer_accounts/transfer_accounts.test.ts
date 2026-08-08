@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import {
+  buildAccountsTransferRequestData,
   decryptAccountsTransferRequestData,
   TRANSFER_ACCOUNTS_MAX_ACCOUNTS,
   TRANSFER_ACCOUNTS_MAX_SECRETS_PER_ACCOUNT,
@@ -194,6 +195,36 @@ describe("TransferAccountsStaging", () => {
       secretInput: MNEMONIC_12,
     });
     expect(overflowSet).toMatchObject({ ok: false, reason: "too_many_accounts" });
+  });
+
+  it("maxAccounts override raises the staging cap past the protocol transfer bound", async () => {
+    const storage = makeMemoryStorage();
+    const staging = new TransferAccountsStaging({
+      persist: false,
+      getStorage: () => storage.helper,
+      maxAccounts: TRANSFER_ACCOUNTS_MAX_ACCOUNTS + 2,
+    });
+    for (let i = 0; i < TRANSFER_ACCOUNTS_MAX_ACCOUNTS + 2; i++) {
+      const result = await staging.stage({
+        networkId: "testnet",
+        accountId: `account-${i}.testnet`,
+        secretInput: MNEMONIC_12,
+      });
+      expect(result.ok).toBe(true);
+    }
+    const overflow = await staging.stage({
+      networkId: "testnet",
+      accountId: "one-too-many.testnet",
+      secretInput: MNEMONIC_12,
+    });
+    expect(overflow).toMatchObject({ ok: false, reason: "too_many_accounts" });
+    // The raised cap is staging-only: the shared transfer builder still enforces the
+    // protocol's 50-account bound on the oversized set.
+    await expect(
+      buildAccountsTransferRequestData({
+        decrypted: { formatVersion: 1, accounts: await staging.getStagedWithSecrets() },
+      }),
+    ).rejects.toThrow();
   });
 
   it("summaries never contain secret material", async () => {

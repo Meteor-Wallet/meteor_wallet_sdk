@@ -121,6 +121,7 @@ export class MeteorConnect {
                 meteorAppIds: mobileBridge.transferAccounts.meteorAppIds,
                 persistStagedAccounts: mobileBridge.transferAccounts.persistStagedAccounts ?? false,
                 clearStagedOnSuccess: mobileBridge.transferAccounts.clearStagedOnSuccess ?? false,
+                maxStagedAccounts: mobileBridge.transferAccounts.maxStagedAccounts,
               },
       },
       (_key, value) => (typeof value === "function" ? "[function]" : value),

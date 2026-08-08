@@ -1,4 +1,4 @@
-export { EMeteorAppId } from "@meteorwallet/connect-shared";
+export { EMeteorAppId, TRANSFER_ACCOUNTS_MAX_ACCOUNTS } from "@meteorwallet/connect-shared";
 export { setEnvConfig } from "./envConfig";
 export * from "./MeteorConnect/action/ExecutableAction";
 export * from "./MeteorConnect/action/mc_action.combined";

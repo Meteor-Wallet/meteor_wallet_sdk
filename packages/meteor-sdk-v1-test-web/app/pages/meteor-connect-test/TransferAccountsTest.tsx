@@ -3,7 +3,7 @@ import type {
   TStagedTransferAccountSummary,
   TTransferAccountsOutcome,
 } from "@meteorwallet/sdk";
-import { parseTransferSecretInput } from "@meteorwallet/sdk";
+import { parseTransferSecretInput, TRANSFER_ACCOUNTS_MAX_ACCOUNTS } from "@meteorwallet/sdk";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Button } from "~/ui/Button";
@@ -95,7 +95,18 @@ export const TransferAccountsTest = ({
       setFlowError(undefined);
       setOutcome(undefined);
       try {
-        const result = await meteorConnect.transferAccounts.prompt();
+        // The protocol caps a single transfer at 50 accounts (schemas, backend, and wallet all
+        // enforce it). With an oversized staged set (harness maxStagedAccounts), transfer the
+        // first 50 via the prompt({ accounts }) override instead of throwing.
+        const result =
+          staged.length > TRANSFER_ACCOUNTS_MAX_ACCOUNTS
+            ? await meteorConnect.transferAccounts.prompt({
+                accounts: (await meteorConnect.transferAccounts.getStagedWithSecrets()).slice(
+                  0,
+                  TRANSFER_ACCOUNTS_MAX_ACCOUNTS,
+                ),
+              })
+            : await meteorConnect.transferAccounts.prompt();
         setOutcome(result);
       } catch (error) {
         // Integration/config errors throw; flow endings resolve to an outcome.
@@ -216,8 +227,18 @@ export const TransferAccountsTest = ({
           disabled={transferMutation.isPending || staged.length === 0}
           onClick={() => transferMutation.mutate()}
         >
-          {transferMutation.isPending ? "Transfer in progress..." : "Transfer to Meteor Wallet"}
+          {transferMutation.isPending
+            ? "Transfer in progress..."
+            : staged.length > TRANSFER_ACCOUNTS_MAX_ACCOUNTS
+              ? `Transfer first ${TRANSFER_ACCOUNTS_MAX_ACCOUNTS} of ${staged.length}`
+              : "Transfer to Meteor Wallet"}
         </Button>
+        {staged.length > TRANSFER_ACCOUNTS_MAX_ACCOUNTS && (
+          <span className={"text-xs text-amber-700"}>
+            The protocol caps one transfer at {TRANSFER_ACCOUNTS_MAX_ACCOUNTS} accounts — the
+            demo sends the first {TRANSFER_ACCOUNTS_MAX_ACCOUNTS}.
+          </span>
+        )}
         <Button
           disabled={staged.length === 0}
           onClick={async () => {

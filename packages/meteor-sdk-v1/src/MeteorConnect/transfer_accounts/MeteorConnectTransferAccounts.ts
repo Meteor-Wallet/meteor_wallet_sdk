@@ -100,6 +100,7 @@ export class MeteorConnectTransferAccounts {
     this.staging = new TransferAccountsStaging({
       persist: config?.persistStagedAccounts === true,
       getStorage: () => this.meteorConnect.storage,
+      maxAccounts: config?.maxStagedAccounts,
     });
   }
 

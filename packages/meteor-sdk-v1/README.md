@@ -277,6 +277,7 @@ await meteorConnect.initialize({
 | `meteorAppIds` | follows environment | Ordered destination app-id preference. Defaults to the production Meteor web wallet (or the dev variant when `meteorAppId` is `meteor_wallet_mobile_dev`). |
 | `persistStagedAccounts` | `false` | Persist staged secrets (plaintext-at-rest in your origin's storage) so staging survives reloads. **Development / testnet only** — the default keeps staging in memory. |
 | `clearStagedOnSuccess` | `false` | Clear the staged set after a successful import. Off by default so users can transfer the same accounts to another platform; Meteor skips already-imported accounts on a re-run. |
+| `maxStagedAccounts` | `50` | **Testing only.** Raises the staged-set cap past the protocol's 50-accounts-per-transfer bound (which the backend and wallet still enforce). With more than 50 staged, call `prompt({ accounts })` with a ≤50 subset — a plain `prompt()` throws `transfer_accounts_invalid_input`. |
 
 ### 2. Stage the accounts
 

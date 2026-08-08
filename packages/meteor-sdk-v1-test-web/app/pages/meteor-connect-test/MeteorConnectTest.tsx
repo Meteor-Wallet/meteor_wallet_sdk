@@ -73,6 +73,10 @@ const initializedMeteorConnect = async (): Promise<MeteorConnect> => {
         // Default targets follow the mobile app id (mobile_dev → meteor_wallet_web_dev).
         // Uncomment to test against the local mc_backend demo wallet instead:
         // meteorAppIds: [EMeteorAppId.meteor_bridge_test_web],
+        // TEST HARNESS ONLY: stage far beyond the 50-per-transfer protocol bound so volume
+        // testing isn't capped; the demo transfers the first 50 when over (see
+        // TransferAccountsTest).
+        maxStagedAccounts: 250,
       },
     },
   });

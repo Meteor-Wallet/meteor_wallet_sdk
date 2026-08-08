@@ -183,6 +183,15 @@ export interface IMeteorConnectTransferAccountsConfig {
    * accounts).
    */
   clearStagedOnSuccess?: boolean;
+  /**
+   * TESTING ESCAPE HATCH: raise the staged-set cap above the protocol's per-transfer bound
+   * (TRANSFER_ACCOUNTS_MAX_ACCOUNTS = 50). Staging beyond 50 becomes possible, but a single
+   * transfer still cannot exceed 50 accounts — the shared schemas, the bridge backend, and the
+   * receiving wallet each enforce that bound independently. With an oversized staged set,
+   * prompt() with no options throws `transfer_accounts_invalid_input`; pass a ≤50 subset via
+   * prompt({ accounts }) instead (e.g. chunked transfers). Leave unset in production.
+   */
+  maxStagedAccounts?: number;
 }
 
 export interface IMeteorConnectMobileBridgeConfig {

@@ -57,6 +57,8 @@ export class TransferAccountsStaging {
     private readonly options: {
       persist: boolean;
       getStorage: () => ITypedStorageHelper<IMeteorConnectTypedStorage>;
+      /** Testing escape hatch (IMeteorConnectTransferAccountsConfig.maxStagedAccounts). */
+      maxAccounts?: number;
     },
   ) {}
 
@@ -140,11 +142,15 @@ export class TransferAccountsStaging {
     const existing = this.accounts.find(
       (account) => identityKey(account) === identityKey(identity),
     );
-    if (existing == null && this.accounts.length >= TRANSFER_ACCOUNTS_MAX_ACCOUNTS) {
+    const maxAccounts = this.options.maxAccounts ?? TRANSFER_ACCOUNTS_MAX_ACCOUNTS;
+    if (existing == null && this.accounts.length >= maxAccounts) {
       return {
         ok: false,
         reason: "too_many_accounts",
-        message: `A transfer supports at most ${TRANSFER_ACCOUNTS_MAX_ACCOUNTS} accounts.`,
+        message:
+          maxAccounts === TRANSFER_ACCOUNTS_MAX_ACCOUNTS
+            ? `A transfer supports at most ${TRANSFER_ACCOUNTS_MAX_ACCOUNTS} accounts.`
+            : `At most ${maxAccounts} accounts can be staged (a single transfer still supports at most ${TRANSFER_ACCOUNTS_MAX_ACCOUNTS}).`,
       };
     }
     if (existing != null) {
