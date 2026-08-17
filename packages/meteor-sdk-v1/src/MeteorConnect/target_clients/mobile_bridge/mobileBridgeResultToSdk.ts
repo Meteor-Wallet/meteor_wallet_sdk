@@ -1,11 +1,19 @@
 import type { IPartnerActionResult } from "@meteorwallet/connect";
-import { act_impl_meteor_wallet_core, act_impl_near } from "@meteorwallet/connect-shared";
+import {
+  act_impl_meteor_wallet_core,
+  act_impl_near,
+  validateNewKeyTransferStartOutputForInput,
+  validateNewKeyTransferVerifyActiveOutputForInput,
+  vNewKeyTransferStartInputV1,
+  vNewKeyTransferVerifyActiveInputV1,
+} from "@meteorwallet/connect-shared";
 import { KeyType, PublicKey } from "@near-js/crypto";
 import { DelegateAction, SCHEMA, Signature, SignedDelegate } from "@near-js/transactions";
 import { isActionPayload_Result_JsonObject } from "@nice-code/action";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { base64 } from "@scure/base";
 import { deserialize, serialize } from "borsh";
+import * as v from "valibot";
 import type { IMeteorConnectAccount, TMeteorConnectPublicKey } from "../../MeteorConnect.types";
 import type {
   IMobileBridgePreparedAction,
@@ -92,6 +100,16 @@ export async function mobileBridgeResultToSdk(
         // Wire-shaped { success: boolean } — outcome mapping lives in the transfer wrapper, so
         // adapter/registry semantics stay uniform with every other action.
         return hydrated.result.output;
+      case "new_key_account_transfer_start":
+        return validateNewKeyTransferStartOutputForInput({
+          request: v.parse(vNewKeyTransferStartInputV1, prepared.sdkRequest.expandedInput),
+          output: hydrated.result.output,
+        });
+      case "new_key_account_transfer_verify_active":
+        return validateNewKeyTransferVerifyActiveOutputForInput({
+          request: v.parse(vNewKeyTransferVerifyActiveInputV1, prepared.sdkRequest.expandedInput),
+          output: hydrated.result.output,
+        });
       default:
         throw new Error("mobile_bridge_unsupported_action_result");
     }

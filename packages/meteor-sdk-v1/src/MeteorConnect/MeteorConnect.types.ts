@@ -81,7 +81,7 @@ export interface IMeteorConnection_V2_BridgeMobile
   extends IMeteorConnection_Base<"v2_bridge_mobile"> {
   schemaVersion: 1;
   bridgeEnvironmentId: string;
-  meteorAppId: EMeteorAppId.meteor_wallet_mobile | EMeteorAppId.meteor_wallet_mobile_dev;
+  meteorAppId: EMeteorAppId;
   partnerClientId: string;
   walletVerifyPublicKey: string;
 }
@@ -125,6 +125,8 @@ export interface IMeteorConnectTypedStorage {
    * reset, and staged secrets must never share that fate implicitly.
    */
   stagedTransferAccounts: unknown;
+  /** Secret-free, validated new-key transfer orchestration journal. */
+  newKeyTransferSessions: unknown;
 }
 
 export interface IMeteorConnect_Initialize_Input {

@@ -5,6 +5,7 @@ export * from "./MeteorConnect/action/mc_action.combined";
 export * from "./MeteorConnect/logging/MeteorLogger";
 export * from "./MeteorConnect/MeteorConnect";
 export * from "./MeteorConnect/MeteorConnect.types";
+export * from "./MeteorConnect/new_key_transfer/new_key_transfer.types";
 export * from "./MeteorConnect/target_clients/mobile_bridge/mobileBridgeLease";
 export { parseTransferSecretInput } from "./MeteorConnect/transfer_accounts/TransferAccountsStaging";
 // Transfer accounts: public types + the live-detection helper ONLY. The key handle, the

@@ -18,6 +18,11 @@ declare global {
   }
 }
 
+const isTransferActionId = (id: string): boolean =>
+  id === "meteor_wallet_core::transfer_accounts" ||
+  id === "meteor_wallet_core::new_key_account_transfer_start" ||
+  id === "meteor_wallet_core::new_key_account_transfer_verify_active";
+
 // This is mostly for Safari on iOS which requires user interaction to open new tabs/windows,
 // but we can use it as a general flag for whether we should attempt to open windows immediately or
 // show a prompt for the user to click before opening windows, since many browsers are moving towards stricter popup blocking.
@@ -62,10 +67,7 @@ export class ActionUi {
     }
     // The transfer reveal card must never be mountable into an arbitrary partner DOM subtree;
     // the popup path also owns the committed-close confirm plumbing.
-    if (
-      input.action.id === "meteor_wallet_core::transfer_accounts" &&
-      input.strategy?.strategy === "target_element"
-    ) {
+    if (isTransferActionId(input.action.id) && input.strategy?.strategy === "target_element") {
       throw new Error("transfer_accounts_target_element_not_supported");
     }
     this.activeAction = input.action;
@@ -195,10 +197,9 @@ export class ActionUi {
   ) {
     // Route the container by action id — everything else (overlay, fonts, close plumbing,
     // one-active-action guard) is shared.
-    this.actionUiComponent =
-      input.action.id === "meteor_wallet_core::transfer_accounts"
-        ? new MeteorTransferAccountsContainer()
-        : new MeteorActionUiContainer();
+    this.actionUiComponent = isTransferActionId(input.action.id)
+      ? new MeteorTransferAccountsContainer()
+      : new MeteorActionUiContainer();
     this.renderedAction = input.action;
     this.actionUiComponent.action = input.action;
     this.actionUiComponent.pendingKnownExecutionTarget = pendingKnownExecutionTarget;
@@ -253,7 +254,7 @@ export class ActionUi {
 
   private confirmCommittedMobileClose(action: ExecutableAction<any>): boolean {
     if (action.getPreparedMobileSession()?.isCommitted() !== true) return true;
-    if (action.id === "meteor_wallet_core::transfer_accounts") {
+    if (isTransferActionId(action.id)) {
       return window.confirm(
         "The transfer may still complete on the other device. Closing this window discards your decrypt key from this page. Close anyway?",
       );

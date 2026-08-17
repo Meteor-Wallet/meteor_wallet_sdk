@@ -3,6 +3,7 @@ import type { IRenderActionUi_Input } from "../action_ui/action_ui.types";
 import { MeteorLogger } from "../logging/MeteorLogger";
 import type { MeteorConnect } from "../MeteorConnect";
 import type {
+  IMeteorConnection_V2_BridgeMobile,
   IMeteorConnectAccount,
   TMeteorConnectionExecutionTarget,
   TMeteorExecutionTargetConfig,
@@ -48,6 +49,8 @@ export class ExecutableAction<R extends TMCActionRequestUnion<TMCActionRegistry>
   #sensitiveTransferSource?: IMobileBridgeSensitiveTransferSource;
   /** Transfer only: the wallet platform the user chose; refresh/re-pair reuse it. */
   private transferTargetPlatform?: TTransferTargetPlatform;
+  /** New-key verify actions are pinned to the exact wallet that completed start. */
+  private transferTargetWalletConnection?: IMeteorConnection_V2_BridgeMobile;
 
   // private onCancelAction?: () => void;
 
@@ -88,6 +91,25 @@ export class ExecutableAction<R extends TMCActionRequestUnion<TMCActionRegistry>
     this.#sensitiveTransferSource = source;
   }
 
+  setTransferTarget(input: {
+    platform: TTransferTargetPlatform;
+    walletConnection?: IMeteorConnection_V2_BridgeMobile;
+  }): void {
+    if (this.prepareMobilePromise != null || this.execute_promise != null) {
+      throw new Error("mobile_bridge_target_after_prepare");
+    }
+    this.transferTargetPlatform = input.platform;
+    this.transferTargetWalletConnection = input.walletConnection;
+  }
+
+  getTransferTargetPlatform(): TTransferTargetPlatform | undefined {
+    return this.transferTargetPlatform;
+  }
+
+  getCompletedMobileConnection(): IMeteorConnection_V2_BridgeMobile | undefined {
+    return this.preparedMobileSession?.getCompletedConnection();
+  }
+
   async prepareMobileBridge(options?: {
     transferTargetPlatform?: TTransferTargetPlatform;
   }): Promise<MobileBridgeSession | undefined> {
@@ -105,6 +127,7 @@ export class ExecutableAction<R extends TMCActionRequestUnion<TMCActionRegistry>
           this.getExpandedRequest(),
           this.#sensitiveTransferSource,
           this.transferTargetPlatform,
+          this.transferTargetWalletConnection,
         )
         .then((session) => {
           this.preparedMobileSession = session;
@@ -137,6 +160,7 @@ export class ExecutableAction<R extends TMCActionRequestUnion<TMCActionRegistry>
       this.getExpandedRequest(),
       this.#sensitiveTransferSource,
       this.transferTargetPlatform,
+      this.transferTargetWalletConnection,
     );
     this.preparedMobileSession = session;
     this.prepareMobilePromise = Promise.resolve(session);
@@ -151,6 +175,7 @@ export class ExecutableAction<R extends TMCActionRequestUnion<TMCActionRegistry>
       this.getExpandedRequest(),
       this.#sensitiveTransferSource,
       this.transferTargetPlatform,
+      this.transferTargetWalletConnection,
     );
     this.preparedMobileSession = session;
     this.prepareMobilePromise = Promise.resolve(session);

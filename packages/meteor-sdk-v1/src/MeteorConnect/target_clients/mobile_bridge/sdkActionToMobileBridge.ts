@@ -141,6 +141,27 @@ export async function sdkActionToMobileBridge(
         .toJsonObject(),
     };
   }
+  if (sdkRequest.id === "meteor_wallet_core::new_key_account_transfer_start") {
+    return {
+      sdkRequest,
+      kind: { domain: "meteor_wallet_core", sharedActionId: "new_key_account_transfer_start" },
+      actionRequest: act_impl_meteor_wallet_core.action.new_key_account_transfer_start
+        .request(sdkRequest.expandedInput)
+        .toJsonObject(),
+    };
+  }
+  if (sdkRequest.id === "meteor_wallet_core::new_key_account_transfer_verify_active") {
+    return {
+      sdkRequest,
+      kind: {
+        domain: "meteor_wallet_core",
+        sharedActionId: "new_key_account_transfer_verify_active",
+      },
+      actionRequest: act_impl_meteor_wallet_core.action.new_key_account_transfer_verify_active
+        .request(sdkRequest.expandedInput)
+        .toJsonObject(),
+    };
+  }
   return nearActionToMobileBridge(sdkRequest);
 }
 

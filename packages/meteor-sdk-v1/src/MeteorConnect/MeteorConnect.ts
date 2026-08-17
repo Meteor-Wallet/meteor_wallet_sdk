@@ -29,6 +29,7 @@ import { MeteorConnectMobileBridgeClient } from "./target_clients/mobile_bridge/
 import { normalizeBridgeBackendUrl } from "./target_clients/mobile_bridge/mobileBridgeStorage";
 import { MeteorConnectTestClient } from "./target_clients/test_client/MeteorConnectTestClient";
 import { MeteorConnectV1Client } from "./target_clients/v1_client/MeteorConnectV1Client";
+import { MeteorConnectNewKeyTransfer } from "./new_key_transfer/MeteorConnectNewKeyTransfer";
 import { MeteorConnectTransferAccounts } from "./transfer_accounts/MeteorConnectTransferAccounts";
 import { accountTargetToText } from "./utils/accountTargetToText";
 import { initProp } from "./utils/initProp";
@@ -68,6 +69,8 @@ export class MeteorConnect {
   public supportedPlatforms: TMeteorConnectionExecutionTarget[] = [];
   /** The account-transfer surface (staging + popup flow) — one namespace for the whole feature. */
   public readonly transferAccounts = new MeteorConnectTransferAccounts(this);
+  /** Secret-free account transfer that grants a newly generated Meteor signer on-chain. */
+  public readonly newKeyTransfer = new MeteorConnectNewKeyTransfer(this);
 
   constructor({ isDev = false }: { isDev?: boolean } = {}) {
     this.isDev = isDev;
@@ -164,6 +167,7 @@ export class MeteorConnect {
     this._typedStorageHelper.set(typedStorageHelper);
     this.clients.mobileBridge.configure(mobileBridge, storage);
     this.transferAccounts.configure(mobileBridge?.transferAccounts);
+    this.newKeyTransfer.configure(mobileBridge?.transferAccounts?.enabled === true);
 
     await typedStorageHelper.setJson("lastInitialized", Date.now());
 
@@ -396,7 +400,9 @@ Platform Target: ${jsonStringifyCompat({
       })}
 
 Inputs: ${
-        request.id === "meteor_wallet_core::transfer_accounts"
+        request.id === "meteor_wallet_core::transfer_accounts" ||
+        request.id === "meteor_wallet_core::new_key_account_transfer_start" ||
+        request.id === "meteor_wallet_core::new_key_account_transfer_verify_active"
           ? `{ accounts: ${(expandedRequest.expandedInput as any).allAccountsBasicInfo?.length ?? 0}, ciphertext: ${(expandedRequest.expandedInput as any).encryptedData?.ciphertext?.length ?? 0} base64 chars }`
           : jsonStringifyCompat(expandedRequest.expandedInput)
       }

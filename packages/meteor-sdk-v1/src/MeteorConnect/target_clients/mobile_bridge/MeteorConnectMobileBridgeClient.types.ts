@@ -39,7 +39,13 @@ export type TMobileBridgePreparedActionKind =
       pendingFunctionCallKey?: KeyPair;
       retainedMessageState?: string;
     }
-  | { domain: "meteor_wallet_core"; sharedActionId: "transfer_accounts" };
+  | {
+      domain: "meteor_wallet_core";
+      sharedActionId:
+        | "transfer_accounts"
+        | "new_key_account_transfer_start"
+        | "new_key_account_transfer_verify_active";
+    };
 
 export interface IMobileBridgePreparedAction {
   sdkRequest: TMCActionRequestUnionExpandedInput<TMCActionRegistry>;

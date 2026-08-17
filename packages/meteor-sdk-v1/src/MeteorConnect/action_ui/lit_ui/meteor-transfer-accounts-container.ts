@@ -1,5 +1,9 @@
 import { consume } from "@lit/context";
-import type { TAllAccountsTransferDataEncrypted } from "@meteorwallet/connect-shared";
+import type {
+  TAllAccountsTransferDataEncrypted,
+  TNewKeyTransferStartInputV1,
+  TNewKeyTransferVerifyActiveInputV1,
+} from "@meteorwallet/connect-shared";
 import { css, html, LitElement, nothing } from "lit";
 import { property, state } from "lit/decorators.js";
 import { unsafeSVG } from "lit/directives/unsafe-svg.js";
@@ -33,7 +37,12 @@ const TRANSFER_SUPPORTED_PLATFORMS: TMeteorConnectionExecutionTarget[] = [
 const svg_icon_mobile_phone =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="6.8" y="2.8" width="10.4" height="18.4" rx="2.6"/><path d="M10.5 5.5h3"/><path d="M11.99 17.9h.02" stroke-width="2.4"/></svg>';
 
-type TTransferTerminalState = "imported" | "declined" | "expired";
+type TTransferTerminalState =
+  | "imported"
+  | "keys_prepared"
+  | "keys_verified"
+  | "declined"
+  | "expired";
 
 const TERMINAL_COPY: Record<
   TTransferTerminalState,
@@ -42,6 +51,17 @@ const TERMINAL_COPY: Record<
   imported: {
     title: "Accounts transferred",
     subtitle: "Your accounts are now available in Meteor Wallet.",
+    good: true,
+  },
+  keys_prepared: {
+    title: "Destination keys prepared",
+    subtitle: "Meteor Wallet securely prepared the destination signer. Continue in My NEAR Wallet.",
+    good: true,
+  },
+  keys_verified: {
+    title: "Destination keys verified",
+    subtitle:
+      "Meteor verified the submitted AddKey transactions. Recovery and cleanup continue in the wallet.",
     good: true,
   },
   declined: {
@@ -185,9 +205,18 @@ export class MeteorTransferAccountsContainer extends LitElement {
     // Terminal screens: observe the action's settlement so a signed result / expiry renders a
     // closing state during ActionUi's farewell grace instead of vanishing instantly. Attaching
     // here never *creates* execution — the transfer only starts on the Review click.
+    this.targetPlatform = this.action.getTransferTargetPlatform();
     this.action.waitForExecutionOutput().then(
-      (output: { success: boolean }) => {
-        this.terminalState = output.success ? "imported" : "declined";
+      (output: unknown) => {
+        if (this.action.id === "meteor_wallet_core::transfer_accounts") {
+          const legacyOutput = output as { success: boolean };
+          this.terminalState = legacyOutput.success ? "imported" : "declined";
+        } else {
+          this.terminalState =
+            this.action.id === "meteor_wallet_core::new_key_account_transfer_start"
+              ? "keys_prepared"
+              : "keys_verified";
+        }
       },
       (error: unknown) => {
         const message = error instanceof Error ? error.message : String(error);
@@ -270,12 +299,18 @@ export class MeteorTransferAccountsContainer extends LitElement {
   }
 
   private renderReview() {
-    const input = this.action.expandedInput as TAllAccountsTransferDataEncrypted;
-    const accounts = input.allAccountsBasicInfo ?? [];
+    const legacy = this.action.id === "meteor_wallet_core::transfer_accounts";
+    const verifying =
+      this.action.id === "meteor_wallet_core::new_key_account_transfer_verify_active";
+    const accounts = legacy
+      ? (this.action.expandedInput as TAllAccountsTransferDataEncrypted).allAccountsBasicInfo
+      : verifying
+        ? (this.action.expandedInput as TNewKeyTransferVerifyActiveInputV1).activations
+        : (this.action.expandedInput as TNewKeyTransferStartInputV1).accounts;
     return html`
       <span class="section-kicker">Transfer accounts</span>
-      <p class="review-title">Transfer accounts to Meteor Wallet</p>
-      <span class="account-count">${accounts.length} account${accounts.length === 1 ? "" : "s"} · encrypted end-to-end</span>
+      <p class="review-title">${verifying ? "Verify destination keys" : "Transfer accounts to Meteor Wallet"}</p>
+      <span class="account-count">${accounts.length} account${accounts.length === 1 ? "" : "s"}${legacy ? " · encrypted end-to-end" : " · no signing secrets shared"}</span>
       <div class="account-list" aria-label="Accounts to transfer">
         ${accounts.map(
           (account) => html`
@@ -287,15 +322,21 @@ export class MeteorTransferAccountsContainer extends LitElement {
         )}
       </div>
       <p class="review-note">
-        Your account keys stay encrypted until you reveal the decrypt key to Meteor Wallet on the
-        connected device.
+        ${
+          legacy
+            ? "Your account keys stay encrypted until you reveal the decrypt key to Meteor Wallet on the connected device."
+            : verifying
+              ? "Use the same Meteor Wallet selected earlier. It will prove each finalized AddKey transaction before local recovery and cleanup can continue."
+              : "Meteor creates and stores a recovery signer locally, then returns only its public key. Your current signing key never crosses this connection."
+        }
       </p>
       <div class="options">
         <meteor-action-button
           variant="primary"
-          label="Start secure transfer"
+          label=${verifying ? "Verify destination keys" : "Start secure transfer"}
           @meteor-button-click=${() => {
-            this.screen = "choose_platform";
+            if (this.targetPlatform == null) this.screen = "choose_platform";
+            else void this.startTransfer(this.targetPlatform);
           }}
         ></meteor-action-button>
       </div>
@@ -303,11 +344,15 @@ export class MeteorTransferAccountsContainer extends LitElement {
   }
 
   private renderChoosePlatform() {
+    const newKey = this.action.id !== "meteor_wallet_core::transfer_accounts";
     return html`
       <p class="review-title">Where should your accounts go?</p>
       <p class="review-note">
-        Both options use the same end-to-end encrypted transfer — pick the Meteor Wallet you want
-        to receive the accounts.
+        ${
+          newKey
+            ? "Pick the exact Meteor Wallet that should create and retain the destination signer."
+            : "Both options use the same end-to-end encrypted transfer — pick the Meteor Wallet you want to receive the accounts."
+        }
       </p>
       <div class="options" aria-label="Wallet platform choices">
         <span class="section-kicker">Choose your wallet</span>
@@ -366,7 +411,10 @@ export class MeteorTransferAccountsContainer extends LitElement {
   }
 
   private renderConnect() {
-    if (this.snapshot?.phase === "wallet_action") {
+    if (
+      this.snapshot?.phase === "wallet_action" &&
+      this.action.id === "meteor_wallet_core::transfer_accounts"
+    ) {
       return html`
         <meteor-transfer-key-card
           .session=${this.mobileSession}

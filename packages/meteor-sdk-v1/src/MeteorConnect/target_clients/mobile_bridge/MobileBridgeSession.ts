@@ -93,6 +93,7 @@ export class MobileBridgeSession {
   private partnerRequestId = crypto.randomUUID();
   private selectedWalletLink?: TMeteorBridgeWalletLink;
   private resultSettled = false;
+  private completedConnection?: IMeteorConnection_V2_BridgeMobile;
   private resolveResult!: (value: any) => void;
   private rejectResult!: (reason: unknown) => void;
   private readonly resultPromise = new Promise<any>((resolve, reject) => {
@@ -296,8 +297,14 @@ export class MobileBridgeSession {
       case EPartnerBridgeStep.completed:
         if (this.resultSettled) return;
         try {
+          if (
+            this.prepared.kind.domain === "meteor_wallet_core" &&
+            this.prepared.kind.sharedActionId !== "transfer_accounts"
+          ) {
+            this.completedConnection = this.input.buildConnection();
+          }
           const result = await mobileBridgeResultToSdk(this.prepared, bridge.actionResult, {
-            getConnection: () => this.input.buildConnection(),
+            getConnection: () => this.completedConnection ?? this.input.buildConnection(),
             persistFunctionCallKey: this.input.persistFunctionCallKey,
           });
           this.resultSettled = true;
@@ -424,6 +431,11 @@ export class MobileBridgeSession {
   /** The backend-issued wallet link the deep link / QR was built from (undefined pre-bridge). */
   getSelectedWalletLink(): TMeteorBridgeWalletLink | undefined {
     return this.selectedWalletLink;
+  }
+
+  /** Exact verified wallet identity that authored a completed new-key transfer result. */
+  getCompletedConnection(): IMeteorConnection_V2_BridgeMobile | undefined {
+    return this.completedConnection == null ? undefined : { ...this.completedConnection };
   }
 
   isCommitted(): boolean {
