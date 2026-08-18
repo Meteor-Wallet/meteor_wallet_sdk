@@ -163,8 +163,7 @@ describe("new-key mobile bridge receive boundary", () => {
 });
 
 describe("MeteorConnectNewKeyTransfer journal", () => {
-  const createHarness = () => {
-    const values = new Map<string, unknown>();
+  const createHarness = (values = new Map<string, unknown>()) => {
     const targeted: Array<{ platform: string; wallet?: IMeteorConnection_V2_BridgeMobile }> = [];
     let promptCount = 0;
     const meteorConnect = {
@@ -174,7 +173,7 @@ describe("MeteorConnectNewKeyTransfer journal", () => {
           values.set(key, structuredClone(value));
         },
       },
-      createAction: async (request: { id: string }) => {
+      createAction: async (request: { id: string; input?: { clientTransferId?: string } }) => {
         let target: { platform: string; walletConnection?: IMeteorConnection_V2_BridgeMobile };
         return {
           setTransferTarget: (value: typeof target) => {
@@ -183,9 +182,22 @@ describe("MeteorConnectNewKeyTransfer journal", () => {
           },
           promptForExecution: async () => {
             promptCount += 1;
-            const pending = values.get("newKeyTransferSessions") as Array<{ phase: string }>;
-            expect(pending[0]?.phase).toMatch(/pending|progress/);
-            return request.id.endsWith("_start") ? START_OUTPUT : VERIFY_OUTPUT;
+            const pending = values.get("newKeyTransferSessions") as Array<{
+              clientTransferId: string;
+              phase: string;
+            }>;
+            const currentClientTransferId = request.input?.clientTransferId ?? CLIENT_ID;
+            expect(
+              pending.find((session) => session.clientTransferId === currentClientTransferId)
+                ?.phase,
+            ).toMatch(/pending|progress/);
+            if (!request.id.endsWith("_start")) return VERIFY_OUTPUT;
+            const clientTransferId = request.input?.clientTransferId ?? CLIENT_ID;
+            return {
+              ...START_OUTPUT,
+              clientTransferId,
+              transferSessionId: clientTransferId === CLIENT_ID ? SESSION_ID : "D".repeat(22),
+            };
           },
           getCompletedMobileConnection: () => WALLET_CONNECTION,
         };
@@ -193,7 +205,12 @@ describe("MeteorConnectNewKeyTransfer journal", () => {
     };
     const api = new MeteorConnectNewKeyTransfer(meteorConnect as unknown as MeteorConnect);
     api.configure(true);
-    return { api, targeted, getPromptCount: () => promptCount };
+    return {
+      api,
+      targeted,
+      getPromptCount: () => promptCount,
+      setStoredSessions: (sessions: unknown) => values.set("newKeyTransferSessions", sessions),
+    };
   };
 
   it("commits before prompting, replays once, and rejects changed input under the same id", async () => {
@@ -216,6 +233,46 @@ describe("MeteorConnectNewKeyTransfer journal", () => {
         accounts: [{ ...START_INPUT.accounts[0], accountId: "bob.testnet" }],
       }),
     ).rejects.toThrow("new_key_transfer_client_id_conflict");
+  });
+
+  it("serializes different transfers through the shared journal without losing either session", async () => {
+    const values = new Map<string, unknown>();
+    const firstHarness = createHarness(values);
+    const secondHarness = createHarness(values);
+    await Promise.all([
+      firstHarness.api.start({
+        clientTransferId: CLIENT_ID,
+        targetPlatform: "web",
+        accounts: START_INPUT.accounts,
+      }),
+      secondHarness.api.start({
+        clientTransferId: "C".repeat(22),
+        targetPlatform: "mobile",
+        accounts: START_INPUT.accounts,
+      }),
+    ]);
+    expect(
+      (await firstHarness.api.getSessions()).map((session) => session.clientTransferId).sort(),
+    ).toEqual([CLIENT_ID, "C".repeat(22)].sort());
+  });
+
+  it("fails closed instead of silently clearing a malformed persisted journal", async () => {
+    const harness = createHarness();
+    harness.setStoredSessions([{ formatVersion: 1, clientTransferId: "bad" }]);
+    await expect(harness.api.getSessions()).rejects.toThrow("new_key_transfer_journal_corrupt");
+
+    const strictHarness = createHarness();
+    await strictHarness.api.start({
+      clientTransferId: CLIENT_ID,
+      targetPlatform: "web",
+      accounts: START_INPUT.accounts,
+    });
+    const stored = await strictHarness.api.getSessions();
+    (stored[0] as unknown as Record<string, unknown>).unexpected = true;
+    strictHarness.setStoredSessions(stored);
+    await expect(strictHarness.api.getSessions()).rejects.toThrow(
+      "new_key_transfer_journal_corrupt",
+    );
   });
 
   it("pins verify to the start wallet and preserves sessions after AddKey intent", async () => {

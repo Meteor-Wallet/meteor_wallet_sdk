@@ -2,13 +2,14 @@ import {
   createNewKeyTransferOpaqueId,
   hashNewKeyTransferStartInput,
   newKeyTransferAccountIdentityKey,
+  validateNewKeyTransferStartOutputForInput,
   vMeteorAppId,
+  vNewKeyTransferOpaqueId,
   vNewKeyTransferStartInputV1,
   vNewKeyTransferStartOutputV1,
   vSerializedCryptoKeyDataEd25519_Raw,
 } from "@meteorwallet/connect-shared";
 import * as v from "valibot";
-import type { ExecutableAction } from "../action/ExecutableAction";
 import type { TMCActionRegistry } from "../action/mc_action.combined";
 import type { TMCActionRequestUnion } from "../action/mc_action.types";
 import type { MeteorConnect } from "../MeteorConnect";
@@ -30,6 +31,19 @@ type TVerifyRequest = Extract<
 >;
 
 const vTargetPlatform = v.picklist(["web", "mobile", "web_local_dev"]);
+const vCanonicalInputHash = v.pipe(v.string(), v.length(44), v.regex(/^[A-Za-z0-9+/]{43}=$/u));
+const vAccountIdentityKeys = v.pipe(
+  v.array(
+    v.pipe(
+      v.string(),
+      v.minLength(16),
+      v.maxLength(90),
+      v.regex(/^near::(?:mainnet|testnet)::[a-z0-9._-]{2,64}$/u),
+    ),
+  ),
+  v.maxLength(50),
+  v.check((keys) => new Set(keys).size === keys.length, "Duplicate account identity"),
+);
 const vWalletConnection = v.object({
   executionTarget: v.literal("v2_bridge_mobile"),
   schemaVersion: v.literal(1),
@@ -48,16 +62,100 @@ const vSession = v.object({
     "destination_keys_verified",
   ]),
   targetPlatform: vTargetPlatform,
-  clientTransferId: v.string(),
-  canonicalInputHash: v.string(),
+  clientTransferId: vNewKeyTransferOpaqueId,
+  canonicalInputHash: vCanonicalInputHash,
   startRequest: vNewKeyTransferStartInputV1,
   startOutput: v.optional(vNewKeyTransferStartOutputV1),
   walletConnection: v.optional(vWalletConnection),
-  addKeyIntentAccounts: v.array(v.string()),
-  verifiedAccounts: v.array(v.string()),
-  updatedAt: v.pipe(v.number(), v.integer(), v.minValue(0)),
+  addKeyIntentAccounts: vAccountIdentityKeys,
+  verifiedAccounts: vAccountIdentityKeys,
+  updatedAt: v.pipe(v.number(), v.integer(), v.minValue(1)),
 });
 const vSessions = v.pipe(v.array(vSession), v.maxLength(100));
+const JOURNAL_LOCK_NAME = "meteor-wallet-sdk::new-key-transfer-journal::v1";
+const journalOperationLocks = new Map<string, Promise<unknown>>();
+
+const asRecord = (value: unknown): Record<string, unknown> | undefined =>
+  value != null && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
+
+const hasOnlyKeys = (value: unknown, allowedKeys: readonly string[]): boolean => {
+  const record = asRecord(value);
+  if (record == null) return false;
+  const allowed = new Set(allowedKeys);
+  return Object.keys(record).every((key) => allowed.has(key));
+};
+
+const hasStrictStartRequestShape = (value: unknown): boolean => {
+  const request = asRecord(value);
+  return (
+    request != null &&
+    hasOnlyKeys(request, ["formatVersion", "clientTransferId", "accounts"]) &&
+    Array.isArray(request.accounts) &&
+    request.accounts.every((account) =>
+      hasOnlyKeys(account, ["blockchainId", "networkId", "accountId", "sourcePublicKey"]),
+    )
+  );
+};
+
+const hasStrictStartOutputShape = (value: unknown): boolean => {
+  const output = asRecord(value);
+  return (
+    output != null &&
+    hasOnlyKeys(output, ["formatVersion", "clientTransferId", "transferSessionId", "accounts"]) &&
+    Array.isArray(output.accounts) &&
+    output.accounts.every((account) => {
+      const row = asRecord(account);
+      return row?.ok === true
+        ? hasOnlyKeys(row, [
+            "blockchainId",
+            "networkId",
+            "accountId",
+            "ok",
+            "destinationSignerType",
+            "destinationPublicKey",
+          ])
+        : row?.ok === false &&
+            hasOnlyKeys(row, ["blockchainId", "networkId", "accountId", "ok", "issue"]);
+    })
+  );
+};
+
+const hasStrictStoredSessionShape = (value: unknown): boolean => {
+  const session = asRecord(value);
+  if (
+    session == null ||
+    !hasOnlyKeys(session, [
+      "formatVersion",
+      "phase",
+      "targetPlatform",
+      "clientTransferId",
+      "canonicalInputHash",
+      "startRequest",
+      "startOutput",
+      "walletConnection",
+      "addKeyIntentAccounts",
+      "verifiedAccounts",
+      "updatedAt",
+    ]) ||
+    !hasStrictStartRequestShape(session.startRequest)
+  ) {
+    return false;
+  }
+  if (session.startOutput != null && !hasStrictStartOutputShape(session.startOutput)) return false;
+  return (
+    session.walletConnection == null ||
+    hasOnlyKeys(session.walletConnection, [
+      "executionTarget",
+      "schemaVersion",
+      "bridgeEnvironmentId",
+      "meteorAppId",
+      "partnerClientId",
+      "walletVerifyPublicKey",
+    ])
+  );
+};
 
 const successfulAccountKeys = (session: INewKeyTransferSdkSession): Set<string> =>
   new Set(
@@ -66,6 +164,66 @@ const successfulAccountKeys = (session: INewKeyTransferSdkSession): Set<string> 
       .map(newKeyTransferAccountIdentityKey) ?? [],
   );
 
+const validateStoredSessions = (value: unknown): INewKeyTransferSdkSession[] => {
+  if (!Array.isArray(value) || !value.every(hasStrictStoredSessionShape)) {
+    throw new Error("new_key_transfer_journal_corrupt");
+  }
+  const parsed = v.safeParse(vSessions, value);
+  if (!parsed.success) throw new Error("new_key_transfer_journal_corrupt");
+
+  const clientTransferIds = new Set<string>();
+  const transferSessionIds = new Set<string>();
+  for (const session of parsed.output) {
+    if (
+      clientTransferIds.has(session.clientTransferId) ||
+      session.startRequest.clientTransferId !== session.clientTransferId ||
+      hashNewKeyTransferStartInput(session.startRequest) !== session.canonicalInputHash
+    ) {
+      throw new Error("new_key_transfer_journal_corrupt");
+    }
+    clientTransferIds.add(session.clientTransferId);
+
+    if (session.phase === "start_pending") {
+      if (
+        session.startOutput != null ||
+        session.walletConnection != null ||
+        session.addKeyIntentAccounts.length > 0 ||
+        session.verifiedAccounts.length > 0
+      ) {
+        throw new Error("new_key_transfer_journal_corrupt");
+      }
+      continue;
+    }
+    if (session.startOutput == null || session.walletConnection == null) {
+      throw new Error("new_key_transfer_journal_corrupt");
+    }
+    validateNewKeyTransferStartOutputForInput({
+      request: session.startRequest,
+      output: session.startOutput,
+    });
+    if (transferSessionIds.has(session.startOutput.transferSessionId)) {
+      throw new Error("new_key_transfer_journal_corrupt");
+    }
+    transferSessionIds.add(session.startOutput.transferSessionId);
+
+    const successful = successfulAccountKeys(session);
+    if (
+      session.addKeyIntentAccounts.some((key) => !successful.has(key)) ||
+      session.verifiedAccounts.some((key) => !session.addKeyIntentAccounts.includes(key)) ||
+      (session.phase === "destination_keys_staged" &&
+        (session.addKeyIntentAccounts.length > 0 || session.verifiedAccounts.length > 0)) ||
+      (session.phase === "add_key_in_progress" && session.addKeyIntentAccounts.length === 0) ||
+      (session.phase === "verification_pending" && session.addKeyIntentAccounts.length === 0) ||
+      (session.phase === "destination_keys_verified" &&
+        (session.addKeyIntentAccounts.length === 0 ||
+          session.addKeyIntentAccounts.some((key) => !session.verifiedAccounts.includes(key))))
+    ) {
+      throw new Error("new_key_transfer_journal_corrupt");
+    }
+  }
+  return parsed.output;
+};
+
 /**
  * Secret-free orchestration journal for the new-key transfer. Wallet authorship and output-hash
  * checks remain in the mobile bridge adapter; this layer adds schema/set integrity, replay,
@@ -73,7 +231,6 @@ const successfulAccountKeys = (session: INewKeyTransferSdkSession): Set<string> 
  */
 export class MeteorConnectNewKeyTransfer {
   private enabled = false;
-  private readonly sessionLocks = new Map<string, Promise<unknown>>();
 
   constructor(private readonly meteorConnect: MeteorConnect) {}
 
@@ -87,12 +244,14 @@ export class MeteorConnectNewKeyTransfer {
 
   private async readSessions(): Promise<INewKeyTransferSdkSession[]> {
     const stored = await this.meteorConnect.storage.getJson("newKeyTransferSessions");
-    const parsed = v.safeParse(vSessions, stored);
-    return parsed.success ? parsed.output : [];
+    return stored == null ? [] : validateStoredSessions(stored);
   }
 
   private async writeSessions(sessions: INewKeyTransferSdkSession[]): Promise<void> {
-    await this.meteorConnect.storage.setJson("newKeyTransferSessions", sessions);
+    await this.meteorConnect.storage.setJson(
+      "newKeyTransferSessions",
+      validateStoredSessions(sessions),
+    );
   }
 
   private async replaceSession(session: INewKeyTransferSdkSession): Promise<void> {
@@ -104,21 +263,30 @@ export class MeteorConnectNewKeyTransfer {
     await this.writeSessions(next);
   }
 
-  private async withSessionLock<T>(key: string, operation: () => Promise<T>): Promise<T> {
-    const previous = this.sessionLocks.get(key) ?? Promise.resolve();
+  private async withInProcessLock<T>(key: string, operation: () => Promise<T>): Promise<T> {
+    const previous = journalOperationLocks.get(key) ?? Promise.resolve();
     let release!: () => void;
     const current = new Promise<void>((resolve) => {
       release = resolve;
     });
     const queued = previous.then(() => current);
-    this.sessionLocks.set(key, queued);
+    journalOperationLocks.set(key, queued);
     await previous;
     try {
       return await operation();
     } finally {
       release();
-      if (this.sessionLocks.get(key) === queued) this.sessionLocks.delete(key);
+      if (journalOperationLocks.get(key) === queued) journalOperationLocks.delete(key);
     }
+  }
+
+  private async withJournalLock<T>(operation: () => Promise<T>): Promise<T> {
+    return this.withInProcessLock(JOURNAL_LOCK_NAME, async () => {
+      if (typeof navigator !== "undefined" && navigator.locks != null) {
+        return navigator.locks.request(JOURNAL_LOCK_NAME, { mode: "exclusive" }, operation);
+      }
+      return operation();
+    });
   }
 
   async getSessions(): Promise<INewKeyTransferSdkSession[]> {
@@ -132,7 +300,7 @@ export class MeteorConnectNewKeyTransfer {
       clientTransferId: options.clientTransferId ?? createNewKeyTransferOpaqueId(),
       accounts: options.accounts,
     });
-    return this.withSessionLock(request.clientTransferId, async () => {
+    return this.withJournalLock(async () => {
       const canonicalInputHash = hashNewKeyTransferStartInput(request);
       const existing = (await this.readSessions()).find(
         (session) => session.clientTransferId === request.clientTransferId,
@@ -185,7 +353,7 @@ export class MeteorConnectNewKeyTransfer {
     transferSessionId: string;
     accounts: Array<{ blockchainId: string; networkId: string; accountId: string }>;
   }): Promise<INewKeyTransferSdkSession> {
-    return this.withSessionLock(input.transferSessionId, async () => {
+    return this.withJournalLock(async () => {
       const session = (await this.readSessions()).find(
         (candidate) => candidate.startOutput?.transferSessionId === input.transferSessionId,
       );
@@ -215,7 +383,7 @@ export class MeteorConnectNewKeyTransfer {
     transferSessionId: string;
     accounts: Array<{ blockchainId: string; networkId: string; accountId: string }>;
   }): Promise<INewKeyTransferSdkSession> {
-    return this.withSessionLock(input.transferSessionId, async () => {
+    return this.withJournalLock(async () => {
       const session = (await this.readSessions()).find(
         (candidate) => candidate.startOutput?.transferSessionId === input.transferSessionId,
       );
@@ -255,7 +423,7 @@ export class MeteorConnectNewKeyTransfer {
 
   async verifyActive(options: INewKeyTransferVerifyOptions): Promise<INewKeyTransferVerifyResult> {
     this.requireEnabled();
-    return this.withSessionLock(options.transferSessionId, async () => {
+    return this.withJournalLock(async () => {
       const session = (await this.readSessions()).find(
         (candidate) => candidate.startOutput?.transferSessionId === options.transferSessionId,
       );
@@ -304,7 +472,7 @@ export class MeteorConnectNewKeyTransfer {
   }
 
   async clear(clientTransferId: string): Promise<void> {
-    await this.withSessionLock(clientTransferId, async () => {
+    await this.withJournalLock(async () => {
       const sessions = await this.readSessions();
       const session = sessions.find((candidate) => candidate.clientTransferId === clientTransferId);
       if (session == null) return;
