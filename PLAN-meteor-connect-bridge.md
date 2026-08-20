@@ -1,11 +1,72 @@
 # Meteor Connect Mobile Bridge Integration Plan
 
-**Status:** Implemented in source and locally validated; production enablement remains gated by package publication, compatible backend/mobile deployment, concurrent-channel and browser/real-device qualification, and the maintainer rollout decision<br>
-**Last reviewed:** 2026-07-21 (implementation pass completed across `mc_backend` and `meteor_wallet_sdk`)<br>
+**Status:** Session-protocol migration in progress; the legacy 0.9 implementation described below is
+the audited baseline, not the release target.<br>
+**Last reviewed:** 2026-08-19 (session-v1 migration amendment)<br>
 **Primary scope:** `packages/meteor-sdk-v1/src/MeteorConnect` and its Meteor Connect popup  
 **Reference implementation:** `../mc_backend/packages/demo-partner-web`, `../mc_backend/packages/demo-wallet-expo`, `../mc_backend/packages/meteor-connect-client`, and `../mc_backend/packages/meteor-connect-shared`
 
-## Implementation status
+## 0. Session-protocol migration amendment (authoritative)
+
+`../meteor-connect-bridge/PLAN-multiple-actions-bridge.md` and its remediated
+`REVIEW-refactor-pre-production.md` supersede the legacy bridge lifecycle in the remainder of this
+document. The bridge has no production deployment depending on the old single-action mode, so this
+SDK must ship only the session-native producer surface. Historical `PartnerBridgeClient`,
+`PartnerBridgeStore`, `create_bridge`, `request_action_via_push`, `verify_pin`, `cancel_bridge`, and
+terminal `completed`-store references below describe the implementation being replaced; they are not
+compatibility requirements.
+
+All sibling repositories are explicitly pre-production. The bridge therefore deletes its legacy
+mode and completes D30 first; this SDK then consumes only the final neutral session API. There is no
+adapter, dual-mode interval, or fallback to the old client/store. Ordinary NEAR actions remain
+fail-closed until the receiving wallets have implemented and crash-tested their D33 obligations.
+
+### 0.1 Required SDK architecture
+
+- One coordinator-owned `PartnerSessionClient`, with backend-scoped identity storage,
+  `withPairedWalletMutationLock`, and `withSessionMutationLock` backed by the existing cross-tab
+  lease provider.
+- One SDK-local session projection driven by authenticated session facts and verified result
+  waiters. No package-global bridge store is imported or reset.
+- `createSession()` stages every action. Ordinary one-turn actions and `transfer_accounts` close
+  only through `acknowledgeAndClose(receipt)` after the SDK has validated and durably applied any
+  host-owned result effect.
+- Push targets one exact paired-wallet record through `clientConnectionInfo` plus
+  `notifyWalletForInitialClaim()`. A notification failure retains the same QR/deep-link session.
+- Cancel/refresh maps the authenticated phase to `closeSession()`, `requestCloseAfterTurn()`, or
+  `abandonResultAndClose(receipt)`; local disconnect is never presented as remote cancellation.
+- The SDK persists only non-secret recovery identities and exact signed result/turn receipts.
+  Bridge lease, partner secret, PIN, and action plaintext remain process-local. A terminal or
+  process-lost bridge is recovered through the feature journal and a fresh session.
+- The new-key API keeps one `external_work_v1` session across start result, durable result journal,
+  `acknowledgeAndBeginExternalWork`, caller-owned finalized AddKey proofs, prepared verify turn,
+  current-turn wake, verified result acknowledgement, and close. If the live session is lost, only
+  the verification action is rebuilt in a fresh `single_turn_v1` session pinned to the same wallet.
+- `transfer_accounts` uses `single_turn_v1` + fresh PIN and is considered complete only after the
+  signed result receipt is acknowledged/closed. The transfer encryption key remains ephemeral and
+  never enters the session journal.
+- Wallet protocol v2 is requested, but the SDK rollout flag stays off until compatible wallet
+  builds and the backend are jointly qualified. No production wallet may advertise v2 before all
+  of its admitted action resolvers satisfy D33.
+
+### 0.2 Migration checklist
+
+- [ ] Replace the legacy partner client/store with the session client and authenticated fact
+  projection; add exact-wallet selection and both mutation locks.
+- [ ] Convert QR, PIN, push, result, close, refresh, reconnect, expiry, and terminal error handling
+  to session phases and receipts.
+- [ ] Add durable partner result/application receipts and failure-injection coverage for result
+  validation, local key persistence, lost acknowledgement, reload, and cross-tab contention.
+- [ ] Retain and advance the live new-key session across external work; preserve the existing
+  fresh-session verification fallback and exact-wallet routing.
+- [ ] Update dependencies to the coordinated connect/shared/NiceCode generation and remove every
+  executable legacy import/call.
+- [ ] Update SDK docs/security text and tests; run type-check, unit, build, package, browser, local
+  backend, and real-device gates before enabling the feature.
+- [ ] Consume the coordinated D27 deletion/D30 neutral rename directly and pin the final released
+  package versions after all repository gates pass.
+
+## Implementation status (legacy baseline)
 
 The protocol/backend/client changes and the SDK mobile bridge path described below are now present in
 the two local repositories. The source has passed workspace type checks, upstream package builds,

@@ -1,10 +1,37 @@
 # SDK Plan — Transfer Accounts via Meteor Connect
 
-**Status:** IMPLEMENTED 2026-08-06 (§13 steps 1–7; branch `paul/meteor-connect-bridge`) — remaining: §12's manual E2E release gate against a local backend + meteor-frontend dev, then §13 step 8 (flip `transferAccounts.enabled` default). Playwright popup checks beyond the preview screenshots are also still open.
+**Status:** Legacy implementation complete; session-native transport migration is in progress and
+gates the remaining manual/release checks.
 **Repository:** `meteor_wallet_sdk` — `packages/meteor-sdk-v1/src/MeteorConnect`
-**Protocol source of truth:** `@meteorwallet/connect` / `@meteorwallet/connect-shared` **0.9.0** (already installed) and the completed backend implementation in `mc_backend` (the repo checked out at `../meteor-connect-bridge`; `PLAN-account-transfer.md` — phases 1–5b done, audited)
+**Protocol source of truth:** `../meteor-connect-bridge/PLAN-multiple-actions-bridge.md`, plus the
+current local `@meteorwallet/connect` / `@meteorwallet/connect-shared` session surface. The 0.9.0
+facts below are retained only as the implementation baseline being replaced.
 **Reference implementations:** `mc_backend/packages/demo-partner-web` (partner side — the flow we are productizing), `meteor_wallet/web/packages/meteor-frontend` (the first real receiving wallet), `mc_backend/packages/demo-wallet-web` + `demo-wallet-expo` (receiver references)
 **Prepared:** 2026-08-04 · **Updated:** 2026-08-06 for 0.9.0 — all §14.2 asks resolved upstream: 0.8.0 brought real web app ids + the shared secret encoder and meteor-frontend now identifies as `meteor_wallet_web`/`meteor_wallet_web_dev`; 0.9.0 + the accompanying meteor-frontend work implemented the error-handling feedback (explicit declines, delivery-error surfacing, claim retry, sequential import). Only the richer per-account result shape remains tracked-later.
+
+---
+
+## 0. Session migration amendment (authoritative)
+
+The transfer action now runs as a one-turn session: `single_turn_v1`, `fresh_pin`, protocol v2,
+`transfer_accounts_v1`, claimant-encrypted delivery, and a wallet-owned transactional import
+receipt. The partner uses `PartnerSessionClient.createSession()`, optionally sends one exact-wallet
+claim notification, waits for a cryptographically verified result plus receipt, maps the typed
+output, and atomically acknowledges/closes. It must not use the legacy bridge store or infer remote
+completion from a local disconnect.
+
+The existing key-confinement and source-side non-destructive rules remain unchanged. The encrypted
+transfer key is never persisted or placed in a session record. An ambiguous result acknowledgement
+retries the exact receipt; a process-lost partner cannot recreate the secret payload and must let the
+old bridge expire before the user explicitly rebuilds a fresh encrypted transfer. Receiving wallets
+must commit inventory and the completed import receipt transactionally before returning/replaying
+the exact signed result.
+
+- [ ] Migrate the SDK producer to the session client and receipt-based close.
+- [ ] Migrate Meteor Wallet V1 and V2 receivers to durable transactional import receipts.
+- [ ] Re-run local backend/browser plus real-device process-loss and duplicate-delivery cases.
+- [ ] Keep rollout disabled until the selected D27/D30 hard cut and compatible wallets land; no
+  legacy fallback or compatibility adapter is permitted in any consumer repository.
 
 ---
 
