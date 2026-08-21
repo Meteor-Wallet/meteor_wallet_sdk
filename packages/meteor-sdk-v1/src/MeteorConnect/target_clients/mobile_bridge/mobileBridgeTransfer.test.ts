@@ -1,8 +1,11 @@
 import { describe, expect, it } from "bun:test";
+import { BridgeSessionTerminalError } from "@meteorwallet/connect";
 import {
   act_impl_meteor_wallet_core,
   buildAccountsTransferRequestData,
+  EErr_Bridge_Session,
   EWalletProtocolCapability,
+  merr_bridge_session,
   REQUIRED_METEOR_WALLET_CAPABILITIES,
   type TAllAccountsTransferDataEncrypted,
 } from "@meteorwallet/connect-shared";
@@ -13,8 +16,8 @@ import { MeteorConnectTestClient } from "../test_client/MeteorConnectTestClient"
 import { MeteorConnectV1Client } from "../v1_client/MeteorConnectV1Client";
 import { MeteorConnectMobileBridgeClient } from "./MeteorConnectMobileBridgeClient";
 import type { IMobileBridgeSensitiveTransferSource } from "./MeteorConnectMobileBridgeClient.types";
-import { mobileBridgeResultToSdk } from "./mobileBridgeResultToSdk";
-import { rebaseWalletLinkToLocalDev } from "./MobileBridgeSession";
+import { MOBILE_BRIDGE_ENDING, rebaseWalletLinkToLocalDev } from "./MobileBridgeSession";
+import { meteorWalletCoreOutputToSdk } from "./mobileBridgeOutputToSdk";
 import {
   getActionRequiredWalletCapabilities,
   sdkActionToMobileBridge,
@@ -105,52 +108,47 @@ describe("transfer action mobile-bridge adapters", () => {
     expect(nearCapabilities).toEqual([...REQUIRED_METEOR_WALLET_CAPABILITIES].sort());
   });
 
-  it("hydrates transfer results and maps both signed outputs wire-shaped", async () => {
+  it("binds the request to the attachment's fresh payload, never the initial expandedInput", async () => {
+    // `actionInput` is what the session hands `waitForValidatedResult({ input })`, so it must be
+    // the exact value the wire request was built from. For transfer that is always the fresh
+    // per-bridge ciphertext, never the initial build sitting on the SDK request.
+    const { request, actionInput } = await TRANSFER_REQUEST();
+    const freshPayload = await buildEncryptedInput();
+    const prepared = await sdkActionToMobileBridge(
+      request as any,
+      makeSensitiveSource(freshPayload),
+    );
+    expect(prepared.actionInput).toBe(freshPayload);
+    expect(prepared.actionInput).not.toEqual(actionInput);
+    expect(
+      act_impl_meteor_wallet_core.actionForId("transfer_accounts").serializeInput(freshPayload),
+    ).toEqual(prepared.actionRequest.input);
+  });
+
+  it("maps both signed transfer outputs wire-shaped", async () => {
     const { request, actionInput } = await TRANSFER_REQUEST();
     const prepared = await sdkActionToMobileBridge(
       request as any,
       makeSensitiveSource(actionInput),
     );
-    const context = {
-      getConnection: () => {
-        throw new Error("transfer result mapping must never resolve a wallet connection");
-      },
-    };
     for (const success of [true, false]) {
-      const result = act_impl_meteor_wallet_core.action.transfer_accounts
-        .request(actionInput)
-        .successResult({ success })
-        .toJsonObject();
-      const output = await mobileBridgeResultToSdk(
-        prepared,
-        { result, signatureVerified: true, timestamp: Date.now() },
-        context,
-      );
-      expect(output).toEqual({ success });
+      // The value the session receives from `waitForValidatedResult`: already signature-verified,
+      // already bound to the signed turn, and already through the action's own output schema.
+      const output = act_impl_meteor_wallet_core
+        .actionForId("transfer_accounts")
+        .validateOutput({ success });
+      expect(meteorWalletCoreOutputToSdk(prepared, output)).toEqual({ success });
     }
   });
 
-  it("rejects tampered transfer results", async () => {
-    const { request, actionInput } = await TRANSFER_REQUEST();
-    const prepared = await sdkActionToMobileBridge(
-      request as any,
-      makeSensitiveSource(actionInput),
-    );
-    const result = act_impl_meteor_wallet_core.action.transfer_accounts
-      .request(actionInput)
-      .successResult({ success: true })
-      .toJsonObject();
-    await expect(
-      mobileBridgeResultToSdk(
-        prepared,
-        {
-          result: { ...result, outputHash: "tampered" },
-          signatureVerified: true,
-          timestamp: Date.now(),
-        },
-        { getConnection: () => ({}) as any },
-      ),
-    ).rejects.toThrow("mobile_bridge_output_hash_mismatch");
+  it("refuses a transfer output that fails the action's own schema", async () => {
+    // Signature, turn binding, and the output-hash recompute all moved into the session client
+    // (each surfaces as its `mismatch` arm). The schema check is what still fails closed here.
+    expect(() =>
+      act_impl_meteor_wallet_core
+        .actionForId("transfer_accounts")
+        .validateOutput({ success: "yes" }),
+    ).toThrow();
   });
 });
 
@@ -165,6 +163,47 @@ describe("execution-target domain gating", () => {
     expect(await v1.getExecutionTargetConfigs(transferRequest)).toEqual([]);
     const test = new MeteorConnectTestClient({} as unknown as MeteorConnect);
     expect(await test.getExecutionTargetConfigs(transferRequest)).toEqual([]);
+  });
+
+  it("offers no NEAR target unless experimentalNearOverSession is explicitly on", async () => {
+    // The bridge's `session_policies.ts::hasImplementedRecoverySeams` admits only the three
+    // meteor_wallet_core transfer ids, so a NEAR session is refused server-side with
+    // `action_ineligible`. NEAR keeps running over v1_web / v1_ext instead.
+    const storage = {
+      getItem: async () => null,
+      setItem: async () => {},
+      removeItem: async () => {},
+    };
+    const signInRequest = { id: "near::sign_in", expandedInput: {} } as any;
+    const client = new MeteorConnectMobileBridgeClient({} as unknown as MeteorConnect);
+    client.configure({ enabled: true }, storage);
+    expect(await client.getExecutionTargetConfigs(signInRequest)).toEqual([]);
+
+    const experimental = new MeteorConnectMobileBridgeClient({} as unknown as MeteorConnect);
+    experimental.configure({ enabled: true, experimentalNearOverSession: true }, storage);
+    const configs = await experimental.getExecutionTargetConfigs(signInRequest);
+    expect(configs).toHaveLength(1);
+    expect(configs[0]!.executionTarget).toBe("v2_bridge_mobile");
+
+    // Non-sign-in NEAR actions never had an account-less shell and still do not get one.
+    expect(
+      await experimental.getExecutionTargetConfigs({
+        id: "near::sign_message",
+        expandedInput: {},
+      } as any),
+    ).toEqual([]);
+
+    // A NEAR account whose stored connection still names the session bridge must not re-enter it
+    // while the gate is closed — the gate runs before the stored-connection shortcut.
+    const storedMobileConnection = { executionTarget: "v2_bridge_mobile" };
+    const storedConnection = {
+      id: "near::sign_message",
+      expandedInput: { account: { connection: storedMobileConnection } },
+    } as any;
+    expect(await client.getExecutionTargetConfigs(storedConnection)).toEqual([]);
+    expect(await experimental.getExecutionTargetConfigs(storedConnection)).toEqual([
+      storedMobileConnection as any,
+    ]);
   });
 
   it("mobile client offers transfer targets only when the feature flag is on", async () => {
@@ -192,8 +231,9 @@ describe("ExecutableAction post-execute guard", () => {
       getSnapshot: () => ({
         phase: "wallet_action",
         push: "not_attempted",
+        linkPhase: "live",
+        linkRedialAttempt: 0,
         pinAttemptsUsed: 0,
-        reconnecting: false,
       }),
       cancel: async () => "cancelled_before_commit",
       isCommitted: () => true,
@@ -229,40 +269,80 @@ describe("ExecutableAction post-execute guard", () => {
 });
 
 describe("transfer outcome mapping", () => {
-  it("maps flow endings to resolved outcomes", () => {
+  it("maps this SDK's own flow endings to resolved outcomes", () => {
     expect(mapRejectionToOutcome(new Error("Action was cancelled"))).toEqual({
       status: "cancelled",
     });
-    expect(mapRejectionToOutcome(new Error("mobile_bridge_cancelled"))).toEqual({
+    expect(mapRejectionToOutcome(new Error(MOBILE_BRIDGE_ENDING.cancelled))).toEqual({
       status: "cancelled",
     });
-    expect(mapRejectionToOutcome(new Error("mobile_bridge_expired"))).toEqual({
+    expect(mapRejectionToOutcome(new Error(MOBILE_BRIDGE_ENDING.expired))).toEqual({
       status: "expired",
     });
-    expect(mapRejectionToOutcome(new Error("PIN attempts exceeded"))).toEqual({
+    expect(mapRejectionToOutcome(new Error(MOBILE_BRIDGE_ENDING.pinAttemptsExceeded))).toEqual({
       status: "failed",
       reason: "pin_attempts_exhausted",
     });
-    expect(mapRejectionToOutcome(new Error("wallet_update_required"))).toEqual({
-      status: "failed",
-      reason: "wallet_update_required",
-    });
-    expect(mapRejectionToOutcome(new Error("mobile_bridge_failed"))).toEqual({
+    expect(mapRejectionToOutcome(new Error(MOBILE_BRIDGE_ENDING.failed))).toEqual({
       status: "failed",
       reason: "bridge_failed",
     });
+    expect(mapRejectionToOutcome(new Error(MOBILE_BRIDGE_ENDING.disposed))).toEqual({
+      status: "failed",
+      reason: "bridge_failed",
+    });
+    // A signed typed-error result. A real transfer decline is successResult({ success: false }),
+    // so an error result is a wallet-side failure, not a decline.
+    expect(
+      mapRejectionToOutcome(new Error(`${MOBILE_BRIDGE_ENDING.walletDeclined}: some_id — nope`)),
+    ).toEqual({ status: "failed", reason: "bridge_failed" });
   });
 
-  it("rethrows integration errors and classifies backend rejections", () => {
-    expect(() => mapRejectionToOutcome(new Error("mobile_bridge_action_result_mismatch"))).toThrow(
-      "mobile_bridge_action_result_mismatch",
+  it("classifies typed protocol rejections by id, never by message", () => {
+    expect(
+      mapRejectionToOutcome(
+        merr_bridge_session.fromId(EErr_Bridge_Session.wallet_update_required, {
+          requiredWalletProtocolVersion: 2,
+          requiredWalletCapabilities: [],
+        }),
+      ),
+    ).toEqual({ status: "failed", reason: "wallet_update_required" });
+    expect(
+      mapRejectionToOutcome(merr_bridge_session.fromId(EErr_Bridge_Session.pin_incorrect)),
+    ).toEqual({ status: "failed", reason: "pin_attempts_exhausted" });
+    expect(
+      mapRejectionToOutcome(merr_bridge_session.fromId(EErr_Bridge_Session.idle_expired)),
+    ).toEqual({ status: "expired" });
+    expect(
+      mapRejectionToOutcome(merr_bridge_session.fromId(EErr_Bridge_Session.absolute_expired)),
+    ).toEqual({ status: "expired" });
+    expect(
+      mapRejectionToOutcome(merr_bridge_session.fromId(EErr_Bridge_Session.turn_limit_reached)),
+    ).toEqual({ status: "failed", reason: "bridge_failed" });
+  });
+
+  it("maps a terminal bridge release by its reason", () => {
+    expect(
+      mapRejectionToOutcome(new BridgeSessionTerminalError({ reason: "bridge_gone" })),
+    ).toEqual({ status: "expired" });
+    expect(
+      mapRejectionToOutcome(new BridgeSessionTerminalError({ reason: "retry_budget" })),
+    ).toEqual({ status: "failed", reason: "bridge_failed" });
+  });
+
+  it("throws integration-level rejections and anything it does not recognize", () => {
+    expect(() =>
+      mapRejectionToOutcome(merr_bridge_session.fromId(EErr_Bridge_Session.action_ineligible)),
+    ).toThrow("transfer_accounts_backend_rejected: action_ineligible");
+    expect(() =>
+      mapRejectionToOutcome(merr_bridge_session.fromId(EErr_Bridge_Session.session_disabled)),
+    ).toThrow("transfer_accounts_backend_rejected: session_disabled");
+    expect(() => mapRejectionToOutcome(new Error(MOBILE_BRIDGE_ENDING.resultMismatch))).toThrow(
+      MOBILE_BRIDGE_ENDING.resultMismatch,
     );
     expect(() =>
-      mapRejectionToOutcome(new Error("[merr_bridge](invalid_action_request) Bad request")),
-    ).toThrow("transfer_accounts_backend_rejected: invalid_action_request");
-    expect(() =>
-      mapRejectionToOutcome(new Error("[merr_bridge](idempotency_conflict) Conflict")),
-    ).toThrow("transfer_accounts_backend_rejected: idempotency_conflict");
+      mapRejectionToOutcome(new Error("mobile_bridge_transfer_attachment_missing")),
+    ).toThrow("mobile_bridge_transfer_attachment_missing");
     expect(() => mapRejectionToOutcome(new Error("totally_unknown_error"))).toThrow(
       "totally_unknown_error",
     );

@@ -19,11 +19,17 @@ function createAction(): ExecutableAction<any> {
 }
 
 describe("ExecutableAction cancellation", () => {
-  it("rejects the local request when a committed mobile bridge can no longer be cancelled", async () => {
+  it("still sends the phase-safe close for a committed bridge, then disposes once", async () => {
     const action = createAction();
     let disposeCalls = 0;
+    let abandonCalls = 0;
     (action as any).preparedMobileSession = {
-      isCommitted: () => true,
+      // A wallet-held request is no longer walked away from: `abandon` sends the one close verb
+      // §5.7 permits for its phase, so nothing is left parked holding a signed result.
+      abandon: async () => {
+        abandonCalls += 1;
+      },
+      getExternalWorkHold: () => undefined,
       dispose: async () => {
         disposeCalls += 1;
       },
@@ -37,18 +43,19 @@ describe("ExecutableAction cancellation", () => {
     expect((await localResult)?.message).toBe("Action was cancelled");
     await action.disposePreparedMobileSession();
 
+    expect(abandonCalls).toBe(1);
     expect(disposeCalls).toBe(1);
   });
 
-  it("rejects locally without waiting for a slow remote bridge cancellation", async () => {
+  it("rejects locally without waiting for a slow remote bridge close", async () => {
     const action = createAction();
-    let finishRemoteCancellation!: () => void;
-    const remoteCancellation = new Promise<"cancelled_before_commit">((resolve) => {
-      finishRemoteCancellation = () => resolve("cancelled_before_commit");
+    let finishRemoteClose!: () => void;
+    const remoteClose = new Promise<void>((resolve) => {
+      finishRemoteClose = () => resolve();
     });
     (action as any).preparedMobileSession = {
-      isCommitted: () => false,
-      cancel: () => remoteCancellation,
+      abandon: () => remoteClose,
+      getExternalWorkHold: () => undefined,
       dispose: async () => {},
     };
     const localResult = action.waitForExecutionOutput().then(
@@ -58,7 +65,28 @@ describe("ExecutableAction cancellation", () => {
 
     const cancellation = action.cancelAction();
     expect((await localResult)?.message).toBe("Action was cancelled");
-    finishRemoteCancellation();
+    finishRemoteClose();
     await cancellation;
+  });
+
+  it("hands a held external-work session to the AddKey window instead of disconnecting it", async () => {
+    const action = createAction();
+    let disposeCalls = 0;
+    let uiObserversReleased = 0;
+    action.setTransferTarget({ platform: "web", retainSessionForExternalWork: true });
+    (action as any).preparedMobileSession = {
+      getExternalWorkHold: () => ({ bridgeId: "b1" }),
+      releaseUiObservers: () => {
+        uiObserversReleased += 1;
+      },
+      dispose: async () => {
+        disposeCalls += 1;
+      },
+    };
+
+    await action.disposePreparedMobileSession();
+
+    expect(uiObserversReleased).toBe(1);
+    expect(disposeCalls).toBe(0);
   });
 });

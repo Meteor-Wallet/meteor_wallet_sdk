@@ -1,5 +1,5 @@
+import { EStorageAdapterType, StorageAdapter } from "@meteorwallet/connect";
 import { EPartnerOrigin, type TPartnerMetadata } from "@meteorwallet/connect-shared";
-import { EStorageAdapterType, StorageAdapter } from "@nice-code/util";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { base64url } from "@scure/base";
 import type { ILocalStorageInterface } from "../../../ported_common/utils/storage/storage.types";
@@ -30,6 +30,13 @@ export function normalizeBridgeBackendUrl(input: string): string {
   return url.toString().replace(/\/$/, "");
 }
 
+/**
+ * Per-backend identity namespace for the SDK's own coordination records (fencing generation,
+ * live-session heartbeats, the lease register). `PartnerSessionClient` derives an equivalent
+ * scope of its own from `backendUrl` (`deriveBackendStorageScope`), but this one also owns the
+ * on-disk `met_bridge_partner::<env>::` layout already shipped to installs, and the lease names
+ * the client never sees — so it stays.
+ */
 export function createBridgeEnvironmentId(backendUrl: string): string {
   return base64url.encode(sha256(new TextEncoder().encode(normalizeBridgeBackendUrl(backendUrl))));
 }

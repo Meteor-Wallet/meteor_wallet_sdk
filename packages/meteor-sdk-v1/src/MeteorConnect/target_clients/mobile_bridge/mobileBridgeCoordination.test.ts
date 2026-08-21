@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+import { StorageAdapter } from "@meteorwallet/connect";
 import type { IEnumerableLocalStorageInterface } from "../../../ported_common/utils/storage/storage.types";
 import { StorageBakeryBridgeLeaseProvider } from "./mobileBridgeLease";
 import { createMobileBridgeStorage } from "./mobileBridgeStorage";
@@ -79,6 +80,22 @@ describe("Meteor mobile bridge coordination", () => {
     expect(await production.hasOtherLiveSessions("tab-a")).toBe(false);
     await session.stop();
     expect(await production.hasOtherLiveSessions()).toBe(false);
+  });
+
+  it("hands PartnerSessionClient the adapter class that client library itself exports", () => {
+    // `StorageAdapter` reaches this SDK through `@meteorwallet/connect`, which re-exports the one
+    // `@nice-code/util` copy the client was compiled against. A second hoisted copy would still
+    // type-check and would still LOOK like a StorageAdapter at runtime, while the client rejected
+    // it — this is the drift tripwire for that.
+    const context = createMobileBridgeStorage(memoryStorage(), "https://bridge.example");
+    expect(context.storageAdapter).toBeInstanceOf(StorageAdapter);
+    // `durable` is read off the METHODS (where it belongs) — the hand-rolled adapter form most
+    // often got this wrong, and the client relies on it to know the store survives a reload.
+    expect(context.storageAdapter.durable).toBe(true);
+    // The client nests its own `deriveBackendStorageScope` namespace under this prefix, so the
+    // already-shipped on-disk layout is preserved rather than re-homed.
+    expect(context.rootPrefix.startsWith("met_bridge_partner::")).toBe(true);
+    expect(context.storageAdapter.keyPrefix).toBe(context.rootPrefix);
   });
 
   it("comprehensive reset enumerates the namespace instead of trusting indexes", async () => {

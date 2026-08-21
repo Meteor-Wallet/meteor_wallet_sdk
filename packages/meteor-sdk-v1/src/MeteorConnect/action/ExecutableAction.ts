@@ -3,13 +3,15 @@ import type { IRenderActionUi_Input } from "../action_ui/action_ui.types";
 import { MeteorLogger } from "../logging/MeteorLogger";
 import type { MeteorConnect } from "../MeteorConnect";
 import type {
-  IMeteorConnection_V2_BridgeMobile,
   IMeteorConnectAccount,
+  IMeteorConnection_V2_BridgeMobile,
   TMeteorConnectionExecutionTarget,
   TMeteorExecutionTargetConfig,
 } from "../MeteorConnect.types.ts";
 import type {
+  IMobileBridgeExternalWorkHold,
   IMobileBridgeSensitiveTransferSource,
+  TMobileBridgeExternalWorkJournal,
   TTransferTargetPlatform,
 } from "../target_clients/mobile_bridge/MeteorConnectMobileBridgeClient.types";
 import type { MobileBridgeSession } from "../target_clients/mobile_bridge/MobileBridgeSession";
@@ -51,6 +53,12 @@ export class ExecutableAction<R extends TMCActionRequestUnion<TMCActionRegistry>
   private transferTargetPlatform?: TTransferTargetPlatform;
   /** New-key verify actions are pinned to the exact wallet that completed start. */
   private transferTargetWalletConnection?: IMeteorConnection_V2_BridgeMobile;
+  /** Journal-before-hold seam; set only for `new_key_account_transfer_start`. */
+  private externalWorkJournal?: TMobileBridgeExternalWorkJournal;
+  /** Set for a verification turn that must ride the session the start turn is still holding. */
+  private continueExternalWorkHold?: IMobileBridgeExternalWorkHold;
+  /** Keep the prepared session alive past this action's teardown (the AddKey window). */
+  private retainSessionForExternalWork = false;
 
   // private onCancelAction?: () => void;
 
@@ -94,12 +102,39 @@ export class ExecutableAction<R extends TMCActionRequestUnion<TMCActionRegistry>
   setTransferTarget(input: {
     platform: TTransferTargetPlatform;
     walletConnection?: IMeteorConnection_V2_BridgeMobile;
+    /**
+     * `new_key_account_transfer_start` only: the seam that durably journals the wallet's signed
+     * result BEFORE the bounded external-work hold begins (D33). Supplying it is what keeps the
+     * session open for the AddKey window instead of closing it.
+     */
+    externalWorkJournal?: TMobileBridgeExternalWorkJournal;
+    /** Verification turn only: install this request on the session still holding that bridge. */
+    continueExternalWorkHold?: IMobileBridgeExternalWorkHold;
+    /** Keep the prepared session alive after this action finishes (start → AddKey → verify). */
+    retainSessionForExternalWork?: boolean;
   }): void {
     if (this.prepareMobilePromise != null || this.execute_promise != null) {
       throw new Error("mobile_bridge_target_after_prepare");
     }
     this.transferTargetPlatform = input.platform;
     this.transferTargetWalletConnection = input.walletConnection;
+    this.externalWorkJournal = input.externalWorkJournal;
+    this.continueExternalWorkHold = input.continueExternalWorkHold;
+    this.retainSessionForExternalWork = input.retainSessionForExternalWork === true;
+  }
+
+  /** The external-work hold the prepared session parked in, when it did. */
+  getExternalWorkHold(): IMobileBridgeExternalWorkHold | undefined {
+    return this.preparedMobileSession?.getExternalWorkHold();
+  }
+
+  private mobileBridgeTarget() {
+    return {
+      transferTargetPlatform: this.transferTargetPlatform,
+      walletConnection: this.transferTargetWalletConnection,
+      journalBeforeExternalWorkHold: this.externalWorkJournal,
+      continueExternalWorkHold: this.continueExternalWorkHold,
+    };
   }
 
   getTransferTargetPlatform(): TTransferTargetPlatform | undefined {
@@ -126,8 +161,7 @@ export class ExecutableAction<R extends TMCActionRequestUnion<TMCActionRegistry>
         .prepareRequest(
           this.getExpandedRequest(),
           this.#sensitiveTransferSource,
-          this.transferTargetPlatform,
-          this.transferTargetWalletConnection,
+          this.mobileBridgeTarget(),
         )
         .then((session) => {
           this.preparedMobileSession = session;
@@ -141,6 +175,8 @@ export class ExecutableAction<R extends TMCActionRequestUnion<TMCActionRegistry>
   private watchMobileSession(session: MobileBridgeSession): void {
     this.unsubscribeMobile?.();
     this.unsubscribeMobile = session.subscribe((snapshot) => {
+      // Deliberately an allowlist of the two phases that mean "the wallet now owns the request":
+      // `result_ready` and `external_work` come AFTER it and must never re-trigger execution.
       if (
         !this.cancelled &&
         (snapshot.phase === "wallet_verification" || snapshot.phase === "wallet_action") &&
@@ -159,8 +195,7 @@ export class ExecutableAction<R extends TMCActionRequestUnion<TMCActionRegistry>
     const session = await this.meteorConnect.mobileBridgeClient.refreshRequest(
       this.getExpandedRequest(),
       this.#sensitiveTransferSource,
-      this.transferTargetPlatform,
-      this.transferTargetWalletConnection,
+      this.mobileBridgeTarget(),
     );
     this.preparedMobileSession = session;
     this.prepareMobilePromise = Promise.resolve(session);
@@ -174,8 +209,7 @@ export class ExecutableAction<R extends TMCActionRequestUnion<TMCActionRegistry>
     const session = await this.meteorConnect.mobileBridgeClient.prepareRequest(
       this.getExpandedRequest(),
       this.#sensitiveTransferSource,
-      this.transferTargetPlatform,
-      this.transferTargetWalletConnection,
+      this.mobileBridgeTarget(),
     );
     this.preparedMobileSession = session;
     this.prepareMobilePromise = Promise.resolve(session);
@@ -436,19 +470,16 @@ Available targets: [${this.connectionTargetConfig.allExecutionTargets.map((c) =>
         // if the network outcome was ambiguous.
       }
     }
-    if (session?.isCommitted()) {
-      return;
-    }
-    if (session != null) {
-      try {
-        const cancellation = await session.cancel();
-        if (cancellation === "target_already_committed") return;
-      } catch (error) {
-        // An unknown/failed cancellation never authorizes a legacy target. It is still terminal
-        // for this caller and the idempotent bridge remains recoverable/expiring server-side.
-        this.logger.err("Failed to cancel abandoned mobile bridge request", error);
-        return;
-      }
+    if (session == null) return;
+    try {
+      // Abandonment always ends in the close verb the §5.7 matrix permits for the current phase —
+      // including the receipt-bound `abandonResultAndClose` for a session already holding the
+      // wallet's signed result, which the old "committed means walk away" shortcut left parked.
+      await session.abandon();
+    } catch (error) {
+      // An unknown/failed close never authorizes a legacy target. It is still terminal for this
+      // caller and the idempotent bridge remains recoverable/expiring server-side.
+      this.logger.err("Failed to close abandoned mobile bridge request", error);
     }
   }
 
@@ -457,6 +488,18 @@ Available targets: [${this.connectionTargetConfig.allExecutionTargets.map((c) =>
     this.unsubscribeMobile = undefined;
     const cancelPromise = this.cancelPromise?.catch(() => {});
     const preparedSession = this.preparedMobileSession;
+    if (
+      this.retainSessionForExternalWork &&
+      preparedSession?.getExternalWorkHold() != null &&
+      !this.cancelled
+    ) {
+      // The AddKey window owns this session now. Its UI is finished, but disconnecting the bridge
+      // here would abandon a hold the wallet has already been told to keep — and force it to mint
+      // a second destination key for the verification turn.
+      preparedSession.releaseUiObservers();
+      await cancelPromise;
+      return;
+    }
     if (preparedSession != null) {
       // releaseSession fences the old client slot synchronously; the next request can open its UI
       // while preparation waits for this disconnect to drain.

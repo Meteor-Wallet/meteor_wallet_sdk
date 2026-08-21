@@ -14,7 +14,8 @@
  * - `view`        — set to "get-meteor" to open on the Get Meteor Wallet screen.
  * - `mobileUa`    — screenshot.mjs uses a mobile user agent for this scenario.
  * - `settleMs`    — how long screenshot.mjs waits before capturing (default 900).
- * - `snapshot`    — IMobileBridgeSnapshot fields the mock mobile session emits.
+ * - `snapshot`    — IMobileBridgeSnapshot fields the mock mobile session emits. `facts` is
+ *                   derived from `snapshot.phase` by the preview entry unless a scenario sets it.
  * - `element`     — container element tag (default "meteor-action-ui-container"; transfer
  *                   scenarios use "meteor-transfer-accounts-container").
  * - `transfer`    — transfer-container state: { accounts: [{accountId, networkId}],
@@ -29,6 +30,8 @@ const DEEP_LINK =
   "https://link.meteorwallet.app/bridge?requestId=8f3a9c2e-1b4d-4e7a-9c5f-2d6e8a0b1c3d" +
   "&version=2&origin=https%3A%2F%2Fdemo-dapp.example.com";
 const EXPIRES_SOON = () => Date.now() + 4 * 60_000 + 48_000;
+/** The absolute wall no refresh moves — comfortably beyond the idle deadline in most scenarios. */
+const HARD_STOP = () => Date.now() + 25 * 60_000;
 
 /** @type {Array<Record<string, any>>} */
 export const SCENARIOS = [
@@ -40,9 +43,11 @@ export const SCENARIOS = [
       phase: "waiting_for_wallet",
       push: "not_attempted",
       deepLink: DEEP_LINK,
-      expiresAt: EXPIRES_SOON(),
+      idleExpiresAt: EXPIRES_SOON(),
+      absoluteExpiresAt: HARD_STOP(),
       pinAttemptsUsed: 0,
-      reconnecting: false,
+      linkPhase: "live",
+      linkRedialAttempt: 0,
     },
   },
   {
@@ -54,9 +59,11 @@ export const SCENARIOS = [
       phase: "waiting_for_wallet",
       push: "not_attempted",
       deepLink: DEEP_LINK,
-      expiresAt: EXPIRES_SOON(),
+      idleExpiresAt: EXPIRES_SOON(),
+      absoluteExpiresAt: HARD_STOP(),
       pinAttemptsUsed: 0,
-      reconnecting: false,
+      linkPhase: "live",
+      linkRedialAttempt: 0,
     },
   },
   {
@@ -69,9 +76,11 @@ export const SCENARIOS = [
       phase: "waiting_for_wallet",
       push: "delivered",
       deepLink: DEEP_LINK,
-      expiresAt: EXPIRES_SOON(),
+      idleExpiresAt: EXPIRES_SOON(),
+      absoluteExpiresAt: HARD_STOP(),
       pinAttemptsUsed: 0,
-      reconnecting: false,
+      linkPhase: "live",
+      linkRedialAttempt: 0,
     },
   },
   {
@@ -83,9 +92,11 @@ export const SCENARIOS = [
       phase: "waiting_for_wallet",
       push: "not_delivered",
       deepLink: DEEP_LINK,
-      expiresAt: EXPIRES_SOON(),
+      idleExpiresAt: EXPIRES_SOON(),
+      absoluteExpiresAt: HARD_STOP(),
       pinAttemptsUsed: 0,
-      reconnecting: false,
+      linkPhase: "live",
+      linkRedialAttempt: 0,
     },
   },
   {
@@ -97,9 +108,11 @@ export const SCENARIOS = [
       phase: "wallet_action",
       push: "delivered",
       deepLink: DEEP_LINK,
-      expiresAt: EXPIRES_SOON(),
+      idleExpiresAt: EXPIRES_SOON(),
+      absoluteExpiresAt: HARD_STOP(),
       pinAttemptsUsed: 0,
-      reconnecting: false,
+      linkPhase: "live",
+      linkRedialAttempt: 0,
     },
   },
   {
@@ -111,9 +124,11 @@ export const SCENARIOS = [
       phase: "wallet_verification",
       push: "delivered",
       deepLink: DEEP_LINK,
-      expiresAt: EXPIRES_SOON(),
+      idleExpiresAt: EXPIRES_SOON(),
+      absoluteExpiresAt: HARD_STOP(),
       pinAttemptsUsed: 0,
-      reconnecting: false,
+      linkPhase: "live",
+      linkRedialAttempt: 0,
     },
   },
   {
@@ -125,10 +140,12 @@ export const SCENARIOS = [
       phase: "wallet_verification",
       push: "delivered",
       deepLink: DEEP_LINK,
-      expiresAt: EXPIRES_SOON(),
+      idleExpiresAt: EXPIRES_SOON(),
+      absoluteExpiresAt: HARD_STOP(),
       pinAttemptsUsed: 1,
       pinError: "Incorrect PIN",
-      reconnecting: false,
+      linkPhase: "live",
+      linkRedialAttempt: 0,
     },
   },
   {
@@ -140,7 +157,8 @@ export const SCENARIOS = [
       phase: "completed",
       push: "delivered",
       pinAttemptsUsed: 0,
-      reconnecting: false,
+      linkPhase: "live",
+      linkRedialAttempt: 0,
     },
   },
   {
@@ -152,8 +170,12 @@ export const SCENARIOS = [
       phase: "failed",
       push: "delivered",
       pinAttemptsUsed: 0,
-      reconnecting: false,
-      error: "The request was rejected in Meteor Mobile.",
+      linkPhase: "detached",
+      linkRedialAttempt: 0,
+      // Classified copy the panel renders verbatim; `error` is the untouched original message.
+      errorHeadline: "The request was rejected in Meteor Mobile.",
+      errorDetail: "Nothing was signed. Start the request again when you are ready.",
+      error: "[bridge_session](action_declined) wallet declined the action",
     },
   },
   {
@@ -165,9 +187,11 @@ export const SCENARIOS = [
       phase: "waiting_for_wallet",
       push: "not_attempted",
       deepLink: DEEP_LINK,
-      expiresAt: EXPIRES_SOON(),
+      idleExpiresAt: EXPIRES_SOON(),
+      absoluteExpiresAt: HARD_STOP(),
       pinAttemptsUsed: 0,
-      reconnecting: false,
+      linkPhase: "live",
+      linkRedialAttempt: 0,
       identityResetRequired: true,
     },
   },
@@ -180,9 +204,11 @@ export const SCENARIOS = [
       phase: "waiting_for_wallet",
       push: "not_attempted",
       deepLink: DEEP_LINK,
-      expiresAt: EXPIRES_SOON(),
+      idleExpiresAt: EXPIRES_SOON(),
+      absoluteExpiresAt: HARD_STOP(),
       pinAttemptsUsed: 0,
-      reconnecting: false,
+      linkPhase: "live",
+      linkRedialAttempt: 0,
     },
   },
   {
@@ -194,9 +220,59 @@ export const SCENARIOS = [
       phase: "waiting_for_wallet",
       push: "not_attempted",
       deepLink: DEEP_LINK,
-      expiresAt: EXPIRES_SOON(),
+      idleExpiresAt: EXPIRES_SOON(),
+      absoluteExpiresAt: HARD_STOP(),
       pinAttemptsUsed: 0,
-      reconnecting: false,
+      linkPhase: "live",
+      linkRedialAttempt: 0,
+    },
+  },
+  {
+    name: "link-reconnecting",
+    description: "Bridge link dropped — the SDK's bounded redial ladder is running",
+    targets: ALL_TARGETS,
+    knownTarget: "v2_bridge_mobile",
+    snapshot: {
+      phase: "waiting_for_wallet",
+      push: "not_attempted",
+      deepLink: DEEP_LINK,
+      idleExpiresAt: EXPIRES_SOON(),
+      absoluteExpiresAt: HARD_STOP(),
+      pinAttemptsUsed: 0,
+      linkPhase: "reconnecting",
+      linkRedialAttempt: 3,
+      linkRetryInMs: 4_000,
+    },
+  },
+  {
+    name: "link-offline",
+    description: "Redial budget exhausted — user-mediated Reconnect is the only way back",
+    targets: ALL_TARGETS,
+    knownTarget: "v2_bridge_mobile",
+    snapshot: {
+      phase: "waiting_for_wallet",
+      push: "not_attempted",
+      deepLink: DEEP_LINK,
+      idleExpiresAt: EXPIRES_SOON(),
+      absoluteExpiresAt: HARD_STOP(),
+      pinAttemptsUsed: 0,
+      linkPhase: "offline",
+      linkRedialAttempt: 8,
+    },
+  },
+  {
+    name: "result-ready",
+    description: "Wallet answered — the only close verb left is the destructive one",
+    targets: ALL_TARGETS,
+    knownTarget: "v2_bridge_mobile",
+    snapshot: {
+      phase: "result_ready",
+      push: "delivered",
+      idleExpiresAt: EXPIRES_SOON(),
+      absoluteExpiresAt: HARD_STOP(),
+      pinAttemptsUsed: 0,
+      linkPhase: "live",
+      linkRedialAttempt: 0,
     },
   },
   ...makeTransferScenarios(),
@@ -218,20 +294,32 @@ function makeTransferScenarios() {
       phase: snapshotPhase,
       push: "not_attempted",
       deepLink: DEEP_LINK,
-      expiresAt: EXPIRES_SOON(),
+      idleExpiresAt: EXPIRES_SOON(),
+      absoluteExpiresAt: HARD_STOP(),
       pinAttemptsUsed: 0,
-      reconnecting: false,
+      linkPhase: "live",
+      linkRedialAttempt: 0,
     },
     transfer: { accounts: TRANSFER_ACCOUNTS, ...transfer },
     ...extra,
   });
   return [
-    base("transfer-review", "Transfer: staged-account review before bridge creation", "initializing", {
-      screen: "review",
-    }),
-    base("transfer-choose", "Transfer: wallet-platform choice (Meteor Web vs Mobile)", "initializing", {
-      screen: "choose",
-    }),
+    base(
+      "transfer-review",
+      "Transfer: staged-account review before bridge creation",
+      "initializing",
+      {
+        screen: "review",
+      },
+    ),
+    base(
+      "transfer-choose",
+      "Transfer: wallet-platform choice (Meteor Web vs Mobile)",
+      "initializing",
+      {
+        screen: "choose",
+      },
+    ),
     base(
       "transfer-get-meteor",
       "Transfer: Get Meteor Wallet sub-page (extension excluded)",
@@ -239,14 +327,24 @@ function makeTransferScenarios() {
       { screen: "choose" },
       { view: "get-meteor" },
     ),
-    base("transfer-connect", "Transfer: QR / open-link waiting stage (web target)", "waiting_for_wallet", {
-      screen: "connect",
-      platform: "web",
-    }),
-    base("transfer-connect-mobile", "Transfer: QR / open-link waiting stage (mobile target)", "waiting_for_wallet", {
-      screen: "connect",
-      platform: "mobile",
-    }),
+    base(
+      "transfer-connect",
+      "Transfer: QR / open-link waiting stage (web target)",
+      "waiting_for_wallet",
+      {
+        screen: "connect",
+        platform: "web",
+      },
+    ),
+    base(
+      "transfer-connect-mobile",
+      "Transfer: QR / open-link waiting stage (mobile target)",
+      "waiting_for_wallet",
+      {
+        screen: "connect",
+        platform: "mobile",
+      },
+    ),
     base("transfer-pin", "Transfer: PIN verification stage", "wallet_verification", {
       screen: "connect",
     }),

@@ -3,8 +3,32 @@ import { act_impl_near, EMeteorAppId } from "@meteorwallet/connect-shared";
 import { KeyPair } from "@near-js/crypto";
 import { actionCreators } from "@near-js/transactions";
 import type { IMeteorConnection_V2_BridgeMobile } from "../../MeteorConnect.types";
-import { mobileBridgeResultToSdk } from "./mobileBridgeResultToSdk";
+import type {
+  IMobileBridgePreparedAction,
+  TMobileNearActionId,
+} from "./MeteorConnectMobileBridgeClient.types";
+import { nearOutputToSdk } from "./mobileBridgeOutputToSdk";
 import { nearActionToConnectorAction, sdkActionToMobileBridge } from "./sdkActionToMobileBridge";
+
+/**
+ * What `PartnerSessionClient.waitForValidatedResult` hands the SDK: the wallet's signed result
+ * after the client has already verified the signature, matched the action domain/id, bound the
+ * result envelope to the signed turn, and run the action's own output schema. Reproducing that
+ * last step here keeps these adapter tests on the same value the runtime sees — the checks above
+ * it are the client's and are no longer this layer's to make.
+ */
+function nearActionId(prepared: IMobileBridgePreparedAction): TMobileNearActionId {
+  if (prepared.kind.domain !== "near") throw new Error("expected a NEAR prepared action");
+  return prepared.kind.sharedActionId;
+}
+
+function validatedOutput(
+  prepared: IMobileBridgePreparedAction,
+  wireResult: { result: { ok: boolean; output?: unknown } },
+): unknown {
+  if (!wireResult.result.ok) throw new Error("expected a successful signed result");
+  return act_impl_near.actionForId(nearActionId(prepared)).validateOutput(wireResult.result.output);
+}
 
 const account = {
   identifier: {
@@ -122,11 +146,9 @@ describe("Meteor mobile bridge NEAR adapters", () => {
         },
       ])
       .toJsonObject();
-    const converted = await mobileBridgeResultToSdk(
-      prepared,
-      { result, signatureVerified: true, timestamp: Date.now() },
-      { getConnection: () => mobileConnection },
-    );
+    const converted = await nearOutputToSdk(prepared, validatedOutput(prepared, result), {
+      getConnection: () => mobileConnection,
+    });
     expect(converted.identifier.accountId).toBe("alice.testnet");
     expect(converted.publicKeys).toEqual([]);
     expect(converted.connection).toEqual(mobileConnection);
@@ -152,11 +174,9 @@ describe("Meteor mobile bridge NEAR adapters", () => {
       .successResult([{ accountId: "alice.testnet", publicKey: walletPrimaryKey }])
       .toJsonObject();
 
-    const converted = await mobileBridgeResultToSdk(
-      prepared,
-      { result, signatureVerified: true, timestamp: Date.now() },
-      { getConnection: () => mobileConnection },
-    );
+    const converted = await nearOutputToSdk(prepared, validatedOutput(prepared, result), {
+      getConnection: () => mobileConnection,
+    });
 
     expect(converted.publicKeys).toEqual([
       {
@@ -167,26 +187,28 @@ describe("Meteor mobile bridge NEAR adapters", () => {
     ]);
   });
 
-  it("rejects a tampered signed output hash", async () => {
+  it("refuses an output that fails the action's own schema before any hydration runs", async () => {
+    // Signature, turn binding, and the output-hash recompute are the session client's job now
+    // (`waitForValidatedResult` returns a `mismatch` arm for each). What still fails closed at
+    // this boundary is the action's own output schema — the same check the client runs, asserted
+    // here on the exact value the adapter would otherwise be handed.
     const prepared = await sdkActionToMobileBridge({
       id: "near::sign_in",
       expandedInput: { target: { blockchain: "near", network: "testnet" } },
     });
-    const result = act_impl_near.action.sign_in
-      .request({ network: "testnet" })
-      .successResult([{ accountId: "alice.testnet" }])
-      .toJsonObject();
+    expect(() =>
+      act_impl_near.actionForId(nearActionId(prepared)).validateOutput([{ notAnAccount: 1 }]),
+    ).toThrow();
+  });
+
+  it("rejects a sign-in result that carries no accounts at all", async () => {
+    const prepared = await sdkActionToMobileBridge({
+      id: "near::sign_in",
+      expandedInput: { target: { blockchain: "near", network: "testnet" } },
+    });
     await expect(
-      mobileBridgeResultToSdk(
-        prepared,
-        {
-          result: { ...result, outputHash: "tampered" },
-          signatureVerified: true,
-          timestamp: Date.now(),
-        },
-        { getConnection: () => mobileConnection },
-      ),
-    ).rejects.toThrow("mobile_bridge_output_hash_mismatch");
+      nearOutputToSdk(prepared, [], { getConnection: () => mobileConnection }),
+    ).rejects.toThrow("mobile_bridge_sign_in_returned_no_accounts");
   });
 
   it("rejects a validly signed result produced by the wrong NEAR account", async () => {
@@ -217,11 +239,9 @@ describe("Meteor mobile bridge NEAR adapters", () => {
       })
       .toJsonObject();
     await expect(
-      mobileBridgeResultToSdk(
-        prepared,
-        { result, signatureVerified: true, timestamp: Date.now() },
-        { getConnection: () => mobileConnection },
-      ),
+      nearOutputToSdk(prepared, validatedOutput(prepared, result), {
+        getConnection: () => mobileConnection,
+      }),
     ).rejects.toThrow("mobile_bridge_result_account_mismatch");
   });
 
@@ -258,11 +278,9 @@ describe("Meteor mobile bridge NEAR adapters", () => {
       ])
       .toJsonObject();
     await expect(
-      mobileBridgeResultToSdk(
-        prepared,
-        { result, signatureVerified: true, timestamp: Date.now() },
-        { getConnection: () => mobileConnection },
-      ),
+      nearOutputToSdk(prepared, validatedOutput(prepared, result), {
+        getConnection: () => mobileConnection,
+      }),
     ).rejects.toThrow("mobile_bridge_result_account_mismatch");
   });
 });

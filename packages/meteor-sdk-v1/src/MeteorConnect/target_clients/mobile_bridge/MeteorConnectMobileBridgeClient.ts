@@ -1,7 +1,7 @@
 import {
-  EPartnerClientStatus,
-  PartnerBridgeClient,
-  PartnerBridgeStore,
+  PartnerSessionClient,
+  SessionLocalGuardError,
+  type TPartnerPairedWallet,
 } from "@meteorwallet/connect";
 import {
   EBridgeLinkType,
@@ -9,8 +9,6 @@ import {
   hasRequiredWalletCapabilities,
   METEOR_WALLET_PROTOCOL_VERSION,
 } from "@meteorwallet/connect-shared";
-import type { TLinkEvent } from "@nice-code/action";
-import type { TRealmDiagnosticEvent, TRealmStatus } from "@nice-code/realm";
 import type { ILocalStorageInterface } from "../../../ported_common/utils/storage/storage.types";
 import type { TMCActionOutput, TMCActionRegistry } from "../../action/mc_action.combined";
 import type { TMCActionRequestUnionExpandedInput } from "../../action/mc_action.types";
@@ -25,6 +23,7 @@ import type {
 import { MeteorConnectClientBase } from "../base/MeteorConnectClientBase";
 import type {
   IMobileBridgePreparedAction,
+  IMobileBridgeRequestTarget,
   IMobileBridgeSensitiveTransferSource,
   TTransferTargetPlatform,
 } from "./MeteorConnectMobileBridgeClient.types";
@@ -46,25 +45,24 @@ import {
 
 const activeClientsByStorage = new WeakMap<object, Map<string, MeteorConnectMobileBridgeClient>>();
 
-class SdkPartnerBridgeClient extends PartnerBridgeClient {
-  onConnectionChange?: (reconnecting: boolean, error?: unknown) => void;
+/** Wall-clock deadline for each HTTP carrier request — a hung fetch must never park a prompt. */
+const BRIDGE_HTTP_REQUEST_TIMEOUT_MS = 15_000;
+/**
+ * Client-side bounded-retry policy: after this many consecutive redials in one outage the SDK
+ * releases the link itself (`linkStatus` → "offline") instead of dialing until the library floor.
+ * `connectBridgeLink()` revives it.
+ */
+const BRIDGE_MAX_REDIAL_ATTEMPTS = 8;
 
-  protected onBridgeLinkEvent(event: TLinkEvent): void {
-    this.onConnectionChange?.(event.type !== "link_up");
-  }
-
-  protected onBridgeRealmStatus(status: TRealmStatus, meta: { hasBeenLive: boolean }): void {
-    this.onConnectionChange?.(status === "connecting" && meta.hasBeenLive);
-  }
-
-  protected onBridgeRealmAttachError(error: unknown): void {
-    this.onConnectionChange?.(false, error);
-  }
-
-  protected onBridgeRealmDiagnostic(event: TRealmDiagnosticEvent): void {
-    this.onConnectionChange?.(true, new Error(`mobile_bridge_realm_${event.type}`));
-  }
-}
+/**
+ * The only custom schemes an `app_deep_link` wallet link may open. The link itself is
+ * backend-issued and matched exactly before this check; the set is the second gate that stops any
+ * other scheme (`javascript:`, `data:`, …) from reaching the native opener.
+ */
+const ALLOWED_NATIVE_APP_SCHEMES: ReadonlySet<string> = new Set([
+  "meteorwallet:",
+  "meteorwalletdev:",
+]);
 
 export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
   readonly clientName = "Meteor Connect Mobile Bridge Client";
@@ -75,7 +73,7 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
   > &
     IMeteorConnectMobileBridgeConfig;
   private storage?: IMobileBridgeStorageContext;
-  private bridgeClient?: SdkPartnerBridgeClient;
+  private sessionClient?: PartnerSessionClient;
   private initializePromise?: Promise<void>;
   private currentSession?: MobileBridgeSession;
   private currentToken?: string;
@@ -151,28 +149,27 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
         try {
           await identityLease.assertOwned();
           this.fencingGeneration = await this.storage.getFencingGeneration();
-          this.bridgeClient = new SdkPartnerBridgeClient({
+          // One plain client per environment — no subclass (0.12 has none): observation is
+          // `client.events`, and the bounded-redial ladder the SDK used to hand-roll is
+          // `maxRedialAttempts` + `client.linkStatus`. `backendStorageScope` stays unset: the
+          // default `deriveBackendStorageScope(backendUrl)` already isolates identity per
+          // backend, and the adapter's own `met_bridge_partner::<env>::` prefix nests under it.
+          this.sessionClient = new PartnerSessionClient({
             backendUrl: this.storage.backendUrl,
+            httpRequestTimeoutMs: BRIDGE_HTTP_REQUEST_TIMEOUT_MS,
+            maxRedialAttempts: BRIDGE_MAX_REDIAL_ATTEMPTS,
             partnerMetadata: normalizePartnerMetadata(this.config!.partnerMetadata),
             storageAdapter: this.storage.storageAdapter,
-            clearIdentityStorage: this.storage.clearIdentityStorage,
-            withPairedWalletMutationLock: async (operation) => {
-              const lease = await leaseProvider.acquire(
-                `${this.storage!.environmentId}:paired-wallets`,
-              );
-              try {
-                await lease.assertOwned();
-                await this.assertCurrentGeneration();
-                return await operation();
-              } finally {
-                await lease.release();
-              }
-            },
+            // Both durable-mutation locks route through the SDK's own lease provider: the Web
+            // Locks default the client would otherwise pick is unavailable on the AsyncStorage-like
+            // and opaque-origin hosts this client also runs on.
+            withPairedWalletMutationLock: (operation) =>
+              this.withBridgeLease(`${this.storage!.environmentId}:paired-wallets`, operation),
+            withSessionMutationLock: (operation) =>
+              this.withBridgeLease(`${this.storage!.environmentId}:session-context`, operation),
           });
-          this.bridgeClient.onConnectionChange = (reconnecting, error) =>
-            this.currentSession?.setReconnecting(reconnecting, error);
-          this.bridgeClient.apply();
-          await this.bridgeClient.initialize_client();
+          this.sessionClient.apply();
+          await this.sessionClient.initializeClient();
         } finally {
           await identityLease.release();
         }
@@ -181,11 +178,26 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
       }
     })().catch((error) => {
       this.releaseCoordinatorOwnership();
-      this.bridgeClient = undefined;
+      this.sessionClient = undefined;
       this.initializePromise = undefined;
       throw error;
     });
     return this.initializePromise;
+  }
+
+  /**
+   * Serialize one durable mutation behind a named lease, re-checking the identity fence inside it.
+   * A stale generation must never write through a lease it acquired before the reset.
+   */
+  private async withBridgeLease<T>(name: string, operation: () => Promise<T>): Promise<T> {
+    const lease = await this.leaseProvider!.acquire(name);
+    try {
+      await lease.assertOwned();
+      await this.assertCurrentGeneration();
+      return await operation();
+    } finally {
+      await lease.release();
+    }
   }
 
   private createStorageLeaseProvider(
@@ -234,6 +246,14 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
     request: R,
   ): Promise<TMeteorExecutionTargetConfig[]> {
     if (!this.config?.enabled) return [];
+    // NEAR is session-ineligible: the backend's `session_policies.ts::hasImplementedRecoverySeams`
+    // admits only the three meteor_wallet_core transfer ids, so `createSession` refuses every
+    // `act_impl_near` action with `action_ineligible`. Gated FIRST so a NEAR account whose stored
+    // connection still names `v2_bridge_mobile` cannot re-enter the session bridge either. NEAR
+    // keeps working unchanged over the `v1_web` / `v1_ext` targets.
+    if (request.id.startsWith("near::") && this.config.experimentalNearOverSession !== true) {
+      return [];
+    }
     const accountConnection = (request.expandedInput as any).account?.connection;
     if (accountConnection != null && accountConnection.executionTarget !== "v2_bridge_mobile") {
       return [];
@@ -306,7 +326,7 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
       schemaVersion: 1,
       bridgeEnvironmentId: this.storage?.environmentId ?? "pending",
       meteorAppId: this.config!.meteorAppId,
-      partnerClientId: this.bridgeClient?.get_partner_client_id() ?? "pending",
+      partnerClientId: this.partnerClientId() ?? "pending",
       walletVerifyPublicKey: "pending",
     };
   }
@@ -321,12 +341,12 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
     if (
       connection.schemaVersion !== 1 ||
       connection.bridgeEnvironmentId !== this.storage!.environmentId ||
-      connection.partnerClientId !== this.bridgeClient!.get_partner_client_id()
+      connection.partnerClientId !== this.partnerClientId()
     ) {
       return undefined;
     }
-    const paired = await this.bridgeClient!.get_paired_wallets();
-    return paired.pairedWallets.find(
+    const paired = await this.sessionClient!.getPairedWallets();
+    return paired.find(
       (wallet) =>
         wallet.walletVerifyPublicKey === connection.walletVerifyPublicKey &&
         wallet.meteorAppId === connection.meteorAppId &&
@@ -342,13 +362,15 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
   async prepareRequest(
     request: TMCActionRequestUnionExpandedInput<TMCActionRegistry>,
     sensitiveTransferSource?: IMobileBridgeSensitiveTransferSource,
-    transferTargetPlatform?: TTransferTargetPlatform,
-    targetWalletConnection?: IMeteorConnection_V2_BridgeMobile,
+    target: IMobileBridgeRequestTarget = {},
   ): Promise<MobileBridgeSession> {
+    const { transferTargetPlatform, walletConnection: targetWalletConnection } = target;
     await this.initializeBridgeClient();
     await this.sessionDisposalPromise?.catch((error) => {
       this.logger.err("Previous mobile bridge session disposal failed", error);
     });
+    const continued = await this.continueExternalWorkHold(request, target);
+    if (continued != null) return continued;
     if (this.currentSession != null) {
       const existing = this.currentSession.getSnapshot();
       if (!["completed", "failed", "cancelled"].includes(existing.phase)) {
@@ -365,7 +387,7 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
     this.currentToken = token;
     const session = new MobileBridgeSession({
       token,
-      client: this.bridgeClient!,
+      client: this.sessionClient!,
       prepared,
       targetMeteorAppIds: this.targetMeteorAppIdsFor(
         prepared,
@@ -382,8 +404,12 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
             }
           : undefined,
       pushWallet,
+      // Only a wallet-pinned request binds the session to one claimant server-side; an ordinary
+      // push wake is an optimisation and must never narrow who may claim the bridge.
+      pinnedWallet: targetWalletConnection == null ? undefined : pushWallet,
+      journalBeforeExternalWorkHold: target.journalBeforeExternalWorkHold,
       isCurrent: (candidate) => candidate === this.currentToken,
-      buildConnection: () => this.buildConnection(),
+      buildConnection: (wallet) => this.buildConnection(wallet),
       persistFunctionCallKey: async (network, accountId, keyPair) => {
         await this.meteorConnect.nearKeyStoreProvider
           .getKeyStore()
@@ -415,10 +441,46 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
     return session;
   }
 
-  private buildConnection(): IMeteorConnection_V2_BridgeMobile {
-    const wallet = this.bridgeClient?.get_active_paired_wallet();
-    const partnerClientId = this.bridgeClient?.get_partner_client_id();
-    if (wallet == null || partnerClientId == null || this.storage == null || this.config == null) {
+  /**
+   * Install a request as the next turn of the retained external-work hold. Only the exact session
+   * that is still holding the named bridge may carry it: anything else (a disposed session, a
+   * spent hold, a different bridge) falls through to a fresh session, which is the documented
+   * recovery path — a lease is never replayed.
+   */
+  private async continueExternalWorkHold(
+    request: TMCActionRequestUnionExpandedInput<TMCActionRegistry>,
+    target: IMobileBridgeRequestTarget,
+  ): Promise<MobileBridgeSession | undefined> {
+    const requested = target.continueExternalWorkHold;
+    if (requested == null) return undefined;
+    const session = this.currentSession;
+    const held = session?.getExternalWorkHold();
+    if (session == null || held == null || held.bridgeId !== requested.bridgeId) return undefined;
+    const prepared = await sdkActionToMobileBridge(request);
+    await session.beginNextTurn(prepared);
+    return session;
+  }
+
+  /**
+   * The persistent client id, or undefined before one has been assigned. The getter throws a
+   * typed local guard when the identity has not been provisioned yet, so it is always fenced.
+   */
+  private partnerClientId(): string | undefined {
+    if (this.sessionClient == null || !this.sessionClient.hasPersistentClientId()) return undefined;
+    try {
+      return this.sessionClient.clientPersistentId;
+    } catch (error) {
+      if (error instanceof SessionLocalGuardError) return undefined;
+      throw error;
+    }
+  }
+
+  /** The connection describing one paired wallet — 0.12 has no "active paired wallet" of its own. */
+  private buildConnection(
+    wallet: Pick<TPartnerPairedWallet, "meteorAppId" | "walletVerifyPublicKey">,
+  ): IMeteorConnection_V2_BridgeMobile {
+    const partnerClientId = this.partnerClientId();
+    if (partnerClientId == null || this.storage == null || this.config == null) {
       throw new Error("mobile_bridge_active_wallet_unavailable");
     }
     return {
@@ -462,17 +524,11 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
   async refreshRequest(
     request: TMCActionRequestUnionExpandedInput<TMCActionRegistry>,
     sensitiveTransferSource?: IMobileBridgeSensitiveTransferSource,
-    transferTargetPlatform?: TTransferTargetPlatform,
-    targetWalletConnection?: IMeteorConnection_V2_BridgeMobile,
+    target: IMobileBridgeRequestTarget = {},
   ): Promise<MobileBridgeSession> {
     const current = this.currentSession;
     if (current == null) {
-      return this.prepareRequest(
-        request,
-        sensitiveTransferSource,
-        transferTargetPlatform,
-        targetWalletConnection,
-      );
+      return this.prepareRequest(request, sensitiveTransferSource, target);
     }
     const cancellation = await current.cancel();
     if (cancellation === "target_already_committed") {
@@ -481,43 +537,43 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
     await current.dispose();
     this.currentSession = undefined;
     this.currentToken = undefined;
-    return this.prepareRequest(
-      request,
-      sensitiveTransferSource,
-      transferTargetPlatform,
-      targetWalletConnection,
-    );
+    return this.prepareRequest(request, sensitiveTransferSource, target);
   }
 
+  /**
+   * The connection of the wallet that completed the current session. Only the NEAR account
+   * actions consume it (and only behind `experimentalNearOverSession`); an account-less transfer
+   * never reaches here.
+   */
   getActiveConnection(): IMeteorConnection_V2_BridgeMobile {
-    return this.buildConnection();
+    const connection = this.currentSession?.getCompletedConnection();
+    if (connection == null) throw new Error("mobile_bridge_active_wallet_unavailable");
+    return connection;
   }
 
   openCurrentSessionInApp(): void {
     const opener = this.config?.nativeAppOpener ?? directBrowserNativeAppOpener;
     const session = this.currentSession;
     session?.openInApp((link) => {
+      // Both branches allow exactly the backend-issued wallet URL, extended only by the SDK's own
+      // `#partnerSecret` fragment. The allowlist derives from the SELECTED walletLink — never
+      // from a partner-supplied URL, and never from `config.meteorAppId`, which describes the
+      // configured mobile wallet rather than the wallet this particular session targets.
       const selectedLink = session.getSelectedWalletLink();
-      if (selectedLink?.linkType === EBridgeLinkType.web_app_url) {
-        // Web-wallet targets (e.g. transfer → meteor-frontend): allow exactly the
-        // backend-issued wallet URL, extended only by our own #partnerSecret fragment. The
-        // allowlist derives from walletLinks — never a partner-supplied URL.
-        const protocol = new URL(link).protocol;
-        if (
-          (protocol !== "https:" && protocol !== "http:") ||
-          !link.startsWith(selectedLink.linkString)
-        ) {
+      if (selectedLink == null || !link.startsWith(selectedLink.linkString)) {
+        throw new Error("mobile_bridge_native_scheme_not_allowed");
+      }
+      const protocol = new URL(link).protocol;
+      if (selectedLink.linkType === EBridgeLinkType.web_app_url) {
+        if (protocol !== "https:" && protocol !== "http:") {
           throw new Error("mobile_bridge_native_scheme_not_allowed");
         }
         window.open(link, "_blank", "noopener");
         return;
       }
-      const protocol = new URL(link).protocol;
-      const expectedProtocol =
-        this.config?.meteorAppId === EMeteorAppId.meteor_wallet_mobile_dev
-          ? "meteorwalletdev:"
-          : "meteorwallet:";
-      if (protocol !== expectedProtocol) throw new Error("mobile_bridge_native_scheme_not_allowed");
+      if (!ALLOWED_NATIVE_APP_SCHEMES.has(protocol)) {
+        throw new Error("mobile_bridge_native_scheme_not_allowed");
+      }
       opener.open(link);
     });
   }
@@ -534,12 +590,16 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
       if (await this.storage!.hasOtherLiveSessions())
         throw new Error("mobile_bridge_other_tab_active");
       const nextGeneration = (await this.storage!.getFencingGeneration()) + 1;
-      await this.bridgeClient!.reset_partner_identity();
+      await this.sessionClient!.resetClient();
+      // `resetClient()` clears only the client's own identity subtree; the comprehensive wipe of
+      // this SDK's namespace (paired wallets, session contexts, lease registers) is ours to do,
+      // and the bumped fencing generation is written back after it.
+      await this.storage!.clearIdentityStorage();
       await this.storage!.setFencingGeneration(nextGeneration);
       this.fencingGeneration = nextGeneration;
       this.currentSession = undefined;
       this.currentToken = undefined;
-      await this.bridgeClient!.initialize_client();
+      await this.sessionClient!.initializeClient();
     } finally {
       await lease.release();
     }
@@ -568,14 +628,13 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
     await this.currentSession?.dispose();
     await this.sessionDisposalPromise?.catch(() => {});
     this.currentSession = undefined;
-    await this.bridgeClient?.disconnect_bridge().catch(() => {});
-    this.bridgeClient = undefined;
+    await this.sessionClient?.disconnectBridge().catch(() => {});
+    this.sessionClient = undefined;
     this.initializePromise = undefined;
     this.releaseCoordinatorOwnership();
     this.leaseProvider = undefined;
     this.fencingGeneration = undefined;
     this.storageImplementation = undefined;
     this.storageIdentity = undefined;
-    PartnerBridgeStore.replace({ client: { status: EPartnerClientStatus.uninitialized } });
   }
 }

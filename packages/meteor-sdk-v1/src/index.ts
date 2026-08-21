@@ -1,4 +1,11 @@
-export { EMeteorAppId, TRANSFER_ACCOUNTS_MAX_ACCOUNTS } from "@meteorwallet/connect-shared";
+// The AddKey chain seam a host implements for `newKeyTransfer.runAddKeys`. The SDK owns the D33
+// journal; the source full-access signing material stays with the host and never reaches it.
+export type {
+  IAddKeyJournalChain,
+  IAddKeyJournalJob,
+  IAddKeySignedTransaction,
+} from "@meteorwallet/connect-shared";
+export { EMeteorAppId } from "@meteorwallet/connect-shared";
 export { setEnvConfig } from "./envConfig";
 export * from "./MeteorConnect/action/ExecutableAction";
 export * from "./MeteorConnect/action/mc_action.combined";
@@ -8,6 +15,9 @@ export * from "./MeteorConnect/MeteorConnect.types";
 export * from "./MeteorConnect/new_key_transfer/new_key_transfer.types";
 export * from "./MeteorConnect/target_clients/mobile_bridge/mobileBridgeLease";
 export { parseTransferSecretInput } from "./MeteorConnect/transfer_accounts/TransferAccountsStaging";
+// Pinned locally rather than re-exported from connect-shared: the bound lives on that package's
+// `/internal` subpath now, and public SDK API must not depend on an internal subpath.
+export { TRANSFER_ACCOUNTS_MAX_ACCOUNTS } from "./MeteorConnect/transfer_accounts/transfer_accounts.limits";
 // Transfer accounts: public types + the live-detection helper ONLY. The key handle, the
 // sensitive attachment, and anything carrying the transfer decrypt key are deliberately NOT
 // exported (see scripts/check-key-confinement.ts).

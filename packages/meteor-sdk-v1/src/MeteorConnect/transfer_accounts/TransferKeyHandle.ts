@@ -1,4 +1,7 @@
-import type { MobileBridgeSession } from "../target_clients/mobile_bridge/MobileBridgeSession";
+import type {
+  MobileBridgeSession,
+  TMobileBridgePhase,
+} from "../target_clients/mobile_bridge/MobileBridgeSession";
 
 export interface ITransferKeyRevealPayload {
   /** The raw mck1 key string — QR content, verbatim. */
@@ -11,7 +14,19 @@ function groupKeyForDisplay(key: string): string {
   return key.match(/.{1,4}/g)?.join(" ") ?? key;
 }
 
-const TERMINAL_PHASES = ["completed", "failed", "cancelled"];
+/**
+ * Every phase from which the key can never legitimately be revealed again. `result_ready` and
+ * `external_work` are on this list, not just the terminal three: once the wallet has answered the
+ * turn the key has done its job, and the session may stay open for a while afterwards (the
+ * acknowledgement round trip, or an external-work hold). The key dies at the earliest safe point.
+ */
+const WIPE_PHASES: readonly TMobileBridgePhase[] = [
+  "result_ready",
+  "external_work",
+  "completed",
+  "failed",
+  "cancelled",
+];
 
 /**
  * The only holder of a transfer decrypt key (§ transfer key lifecycle). Bound to exactly one
@@ -34,7 +49,7 @@ export class TransferKeyHandle {
     this.#boundSession = session;
     // The handle's lifetime never outlives its bridge: wipe on every terminal phase.
     const unsubscribe = session.subscribe((snapshot) => {
-      if (TERMINAL_PHASES.includes(snapshot.phase)) {
+      if (WIPE_PHASES.includes(snapshot.phase)) {
         this.wipe();
         unsubscribe();
       }

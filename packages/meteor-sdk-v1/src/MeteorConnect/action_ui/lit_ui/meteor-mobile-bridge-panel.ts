@@ -1,3 +1,9 @@
+import {
+  describeCloseOptions,
+  isTerminalPhase,
+  type TSessionCloseOperation,
+} from "@meteorwallet/connect";
+import { EErr_Bridge_Session } from "@meteorwallet/connect-shared";
 import { css, html, LitElement } from "lit";
 import { property, query, state } from "lit/decorators.js";
 import { keyed } from "lit/directives/keyed.js";
@@ -8,6 +14,31 @@ import type {
 } from "../../target_clients/mobile_bridge/MobileBridgeSession";
 import { isMobile } from "../utils/isMobile";
 import { customElement } from "./custom-element";
+
+/**
+ * Button copy for the ONE close operation §5.7 permits the partner in the current phase. The
+ * matrix itself is never re-derived here — `describeCloseOptions` names the operation and this
+ * map only labels it, so a new operation upstream is a compile error rather than a wrong button.
+ */
+const CLOSE_OPERATION_COPY: Record<
+  TSessionCloseOperation,
+  { label: string; note?: string; confirmLabel?: string; confirmNote?: string }
+> = {
+  close_session: { label: "Cancel request" },
+  request_close_after_turn: {
+    label: "Cancel request",
+    note: "The wallet is holding this request — the connection closes as soon as it is done with it.",
+  },
+  abandon_result_and_close: {
+    label: "Discard result & close",
+    confirmLabel: "Discard the signed result",
+    confirmNote:
+      "The wallet already answered this request. Discarding throws that signed result away — it cannot be recovered, and the request has to be made again.",
+  },
+  // Wallet-role operations; unreachable from this partner-side panel, present for exhaustiveness.
+  wallet_abandon_action_and_close: { label: "Close" },
+  request_close_after_result_ack: { label: "Close" },
+};
 
 const svg_qr_glyph = html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3.5" width="6.4" height="6.4" rx="1.4"/><rect x="14.1" y="3.5" width="6.4" height="6.4" rx="1.4"/><rect x="3.5" y="14.1" width="6.4" height="6.4" rx="1.4"/><path d="M14.1 14.1h2.6v2.6h-2.6zM17.9 17.9h2.6v2.6h-2.6z"/></svg>`;
 
@@ -28,6 +59,9 @@ export class MeteorMobileBridgePanel extends LitElement {
   @state() private interactionError?: string;
   @state() private resetConfirmation = false;
   @state() private resetPending = false;
+  @state() private closeConfirmation = false;
+  @state() private closePending = false;
+  @state() private reconnectPending = false;
   @state() private now = Date.now();
   @state() private presentedPushStage: "sending" | "sent" | "review" = "sending";
   @query("#mobile-bridge-qr") private qrTarget?: HTMLDivElement;
@@ -75,6 +109,7 @@ export class MeteorMobileBridgePanel extends LitElement {
     .status { margin: 0; font-size: .82rem; line-height: 1.15rem; color: var(--mc-body); }
     .muted { color: var(--mc-muted); font-size: .73rem; line-height: .95rem; }
     .error { color: rgb(var(--mc-red)); font-size: .76rem; line-height: 1rem; }
+    .fineprint { margin: 0; color: var(--mc-muted); font-size: .66rem; line-height: .9rem; word-break: break-word; opacity: .85; }
 
     /* ---------- Buttons (mirrors meteor-action-button) ---------- */
     button { display: inline-flex; align-items: center; justify-content: center; gap: .4rem; min-height: 2.55rem; border: 0; border-radius: .65rem; padding: .68rem .95rem; box-sizing: border-box; font-family: inherit; font-size: .84rem; font-weight: 700; letter-spacing: .035rem; line-height: 1em; white-space: nowrap; cursor: pointer; color: white; background: linear-gradient(135deg, rgba(var(--mc-primary-a), .8) 0%, rgba(var(--mc-primary-b), .7) 100%); filter: drop-shadow(0 3px 10px rgba(0, 0, 0, .2)); transition: transform 120ms ease, background 120ms ease; }
@@ -111,6 +146,9 @@ export class MeteorMobileBridgePanel extends LitElement {
     .qr { width: 128px; height: 128px; display: grid; place-items: center; padding: 0; box-sizing: border-box; border-radius: 10px; background: white; overflow: hidden; }
     .countdown { display: inline-flex; align-items: center; gap: .4rem; font-size: .71rem; color: var(--mc-muted); font-variant-numeric: tabular-nums; }
     .countdown.urgent { color: rgb(var(--mc-amber)); }
+    .live-footer { display: flex; flex-direction: column; align-items: center; gap: .45rem; width: 100%; }
+    .link-offline { display: flex; flex-direction: column; align-items: center; gap: .4rem; }
+    .close-control { display: flex; flex-direction: column; align-items: center; gap: .35rem; text-align: center; }
     .countdown-ring { width: .58rem; height: .58rem; border-radius: 50%; border: 2px solid currentColor; border-top-color: transparent; opacity: .75; animation: spin 2.4s linear infinite; }
 
     /* ---------- Stage cards (push / review / pin / status) ---------- */
@@ -247,6 +285,7 @@ export class MeteorMobileBridgePanel extends LitElement {
       this.boundSession = this.session;
       this.presentedPushStage = "sending";
       this.presentationStartedAt = Date.now();
+      this.closeConfirmation = false;
       if (this.presentationTimer != null) clearTimeout(this.presentationTimer);
     }
     this.unsubscribe?.();
@@ -358,8 +397,7 @@ export class MeteorMobileBridgePanel extends LitElement {
       this.openInApp?.();
       this.interactionError = undefined;
     } catch {
-      this.interactionError =
-        `${this.walletLabel} could not be opened automatically. Scan the QR code instead.`;
+      this.interactionError = `${this.walletLabel} could not be opened automatically. Scan the QR code instead.`;
       this.showQr = true;
     }
   }
@@ -393,6 +431,52 @@ export class MeteorMobileBridgePanel extends LitElement {
     }
   }
 
+  /**
+   * The one close operation §5.7 permits the partner right now, or null when none does — either
+   * the facts are terminal or the phase authorizes no partner close. Never re-derived from the
+   * projected flow phase: `describeCloseOptions` mirrors the server's own authorization, so a
+   * button drawn from it can never click into `close_not_permitted`.
+   */
+  private closeOptions(snapshot: IMobileBridgeSnapshot) {
+    const facts = snapshot.facts;
+    if (facts == null || isTerminalPhase(facts)) return null;
+    const options = describeCloseOptions(facts, "partner");
+    return options.operation == null ? null : { ...options, operation: options.operation };
+  }
+
+  private async performClose(destructive: boolean): Promise<void> {
+    if (this.closePending) return;
+    if (destructive && !this.closeConfirmation) {
+      this.closeConfirmation = true;
+      return;
+    }
+    this.closePending = true;
+    try {
+      // `abandon()` sends exactly the operation `describeCloseOptions` named — the SDK owns the
+      // verb and its signed challenge; this panel only labels and triggers it.
+      await this.session?.abandon();
+      this.closeConfirmation = false;
+      this.interactionError = undefined;
+    } catch {
+      this.interactionError = "The request could not be closed. Please try again.";
+    } finally {
+      this.closePending = false;
+    }
+  }
+
+  private async reconnectLink(): Promise<void> {
+    if (this.reconnectPending) return;
+    this.reconnectPending = true;
+    try {
+      await this.session?.reconnectLink();
+      this.interactionError = undefined;
+    } catch {
+      this.interactionError = `The secure connection to ${this.walletLabel} could not be restored. Please try again.`;
+    } finally {
+      this.reconnectPending = false;
+    }
+  }
+
   private statusText(snapshot: IMobileBridgeSnapshot): string {
     switch (snapshot.phase) {
       case "initializing":
@@ -407,6 +491,10 @@ export class MeteorMobileBridgePanel extends LitElement {
         return "Enter the 4-digit PIN shown on your phone.";
       case "wallet_action":
         return `Review and approve this request in ${this.walletLabel}.`;
+      case "result_ready":
+        return `Saving the signed result from ${this.walletLabel}…`;
+      case "external_work":
+        return "Adding the new key on-chain…";
       case "completed":
         return `Completed in ${this.walletLabel}.`;
       case "failed":
@@ -427,6 +515,80 @@ export class MeteorMobileBridgePanel extends LitElement {
       <span class="countdown-ring" aria-hidden="true"></span>
       ${label} ${this.formatCountdown(secondsLeft)}
     </span>`;
+  }
+
+  /**
+   * Bridge-link health, straight off `linkStatusChanged`. `detached`/`live`/`joining` say nothing —
+   * a healthy link is not news. `reconnecting` reports the SDK's own bounded redial ladder
+   * (attempt + countdown), `offline` is where that ladder gave up and the user-mediated
+   * `connectBridgeLink()` takes over, and `rejected` is handled ahead of this by the
+   * identity-reset screen (redialing cannot help a refused identity).
+   */
+  private renderLinkStatus(snapshot: IMobileBridgeSnapshot) {
+    if (snapshot.linkPhase === "reconnecting") {
+      const retryIn =
+        snapshot.linkRetryInMs == null
+          ? ""
+          : ` · retrying in ${Math.ceil(snapshot.linkRetryInMs / 1000)}s`;
+      const attempt =
+        snapshot.linkRedialAttempt > 0 ? ` (attempt ${snapshot.linkRedialAttempt})` : "";
+      return html`<span class="pill warn" role="status">
+        <span class="mini-loader" aria-hidden="true"></span>
+        <span>Reconnecting securely${attempt}${retryIn}</span>
+      </span>`;
+    }
+    if (snapshot.linkPhase !== "offline") return "";
+    return html`<div class="link-offline">
+      <span class="pill bad" role="status">
+        <span class="pill-dot"></span>
+        <span>Connection lost — automatic retries stopped</span>
+      </span>
+      <button class="ghost" ?disabled=${this.reconnectPending} @click=${() => void this.reconnectLink()}>
+        ${this.reconnectPending ? html`<span class="spinner" role="status" aria-label="Reconnecting"></span>` : "Reconnect"}
+      </button>
+    </div>`;
+  }
+
+  /**
+   * The close control, labelled from the §5.7 matrix rather than a hard-coded "Cancel". A
+   * destructive operation (discarding a signed result the wallet already produced) asks first.
+   */
+  private renderCloseControl(snapshot: IMobileBridgeSnapshot) {
+    const options = this.closeOptions(snapshot);
+    if (options == null) return "";
+    const copy = CLOSE_OPERATION_COPY[options.operation];
+    const confirming = options.destructive && this.closeConfirmation;
+    const note = confirming ? copy.confirmNote : copy.note;
+    return html`<div class="close-control">
+      ${note ? html`<span class="muted">${note}</span>` : ""}
+      <button
+        class="ghost"
+        ?disabled=${this.closePending}
+        @click=${() => void this.performClose(options.destructive)}
+      >
+        ${
+          this.closePending
+            ? html`<span class="spinner" role="status" aria-label="Closing"></span>`
+            : confirming
+              ? (copy.confirmLabel ?? copy.label)
+              : copy.label
+        }
+      </button>
+    </div>`;
+  }
+
+  /**
+   * Everything that is true of a live session regardless of which stage is on screen: link health
+   * and the phase-correct close verb. Terminal panels omit it — `closeOptions` already returns
+   * null for terminal facts, and a released link has nothing to report.
+   */
+  private renderLiveFooter(snapshot: IMobileBridgeSnapshot) {
+    const link = this.renderLinkStatus(snapshot);
+    const close = this.renderCloseControl(snapshot);
+    // "" — not an empty element — so the caller can tell whether the fixed-height stage panels
+    // need to grow for it.
+    if (link === "" && close === "") return "";
+    return html`<div class="live-footer">${link}${close}</div>`;
   }
 
   private renderPushStage(
@@ -604,6 +766,8 @@ export class MeteorMobileBridgePanel extends LitElement {
     tone: "good" | "neutral" | "bad",
     title: string,
     subtitle?: string,
+    /** The untouched original error message — searchable fine print, never the headline. */
+    fineprint?: string,
   ) {
     return keyed(
       key,
@@ -622,6 +786,7 @@ export class MeteorMobileBridgePanel extends LitElement {
         }
         <h2 class="review-title" style="font-size:1.02rem; line-height:1.2rem;">${title}</h2>
         ${subtitle ? html`<p class="review-subtitle">${subtitle}</p>` : ""}
+        ${fineprint ? html`<p class="fineprint">${fineprint}</p>` : ""}
       </div>`,
     );
   }
@@ -660,10 +825,23 @@ export class MeteorMobileBridgePanel extends LitElement {
           </section>`;
     }
     const mobile = isMobile();
-    const secondsLeft =
-      snapshot.expiresAt == null
+    // The ticker follows the IDLE deadline — the one a successful transition (or a refreshed code)
+    // pushes out. The absolute deadline is the wall nothing moves, so once it is the binding one
+    // the copy has to stop promising that a refresh buys more time.
+    const idleSecondsLeft =
+      snapshot.idleExpiresAt == null
         ? undefined
-        : Math.max(0, Math.ceil((snapshot.expiresAt - this.now) / 1000));
+        : Math.max(0, Math.ceil((snapshot.idleExpiresAt - this.now) / 1000));
+    const hardStopSecondsLeft =
+      snapshot.absoluteExpiresAt == null
+        ? undefined
+        : Math.max(0, Math.ceil((snapshot.absoluteExpiresAt - this.now) / 1000));
+    const hardStopBinding =
+      hardStopSecondsLeft != null &&
+      (idleSecondsLeft == null || hardStopSecondsLeft <= idleSecondsLeft);
+    const secondsLeft = hardStopBinding ? hardStopSecondsLeft : idleSecondsLeft;
+    const liveFooter = this.renderLiveFooter(snapshot);
+    const stagePanelClass = `panel stage-panel${liveFooter === "" ? "" : " auto"}`;
     const showRequestAccess = snapshot.deepLink != null && snapshot.phase === "waiting_for_wallet";
     const showRequestQr = showRequestAccess && this.showQr;
     const inPushPresentation =
@@ -682,24 +860,27 @@ export class MeteorMobileBridgePanel extends LitElement {
     }
 
     if (inPushPresentation) {
-      return html`<section class="panel stage-panel" aria-live="polite" aria-label="${this.walletLabel}">
+      return html`<section class=${stagePanelClass} aria-live="polite" aria-label="${this.walletLabel}">
         ${this.renderPushStage(
           snapshot,
           this.presentedPushStage === "sending" ? "sending" : "sent",
           secondsLeft,
         )}
+        ${liveFooter}
       </section>`;
     }
 
     if (snapshot.phase === "wallet_verification") {
       return html`<section class="panel stage-panel auto" aria-live="polite" aria-label="${this.walletLabel}">
         ${this.renderPinStage(snapshot)}
+        ${liveFooter}
       </section>`;
     }
 
     if (snapshot.phase === "wallet_action") {
-      return html`<section class="panel stage-panel" aria-live="polite" aria-label="${this.walletLabel}">
+      return html`<section class=${stagePanelClass} aria-live="polite" aria-label="${this.walletLabel}">
         ${this.renderReviewStage()}
+        ${liveFooter}
       </section>`;
     }
 
@@ -708,8 +889,9 @@ export class MeteorMobileBridgePanel extends LitElement {
       snapshot.push === "not_delivered" &&
       ["creating_bridge", "waiting_for_wallet"].includes(snapshot.phase)
     ) {
-      return html`<section class="panel stage-panel" aria-live="polite" aria-label="${this.walletLabel}">
+      return html`<section class=${stagePanelClass} aria-live="polite" aria-label="${this.walletLabel}">
         ${this.renderPushStage(snapshot, "unavailable", secondsLeft)}
+        ${liveFooter}
       </section>`;
     }
 
@@ -720,17 +902,22 @@ export class MeteorMobileBridgePanel extends LitElement {
     }
 
     if (snapshot.phase === "failed" || snapshot.phase === "cancelled") {
-      const failureDetail =
-        snapshot.error === "wallet_update_required"
-          ? `Update ${this.walletLabel} to continue with this request.`
-          : snapshot.error;
+      // The classifier already produced the copy (headline/detail); the only branch left is the
+      // one typed id with a remedy of its own, and it is matched by ID, never by message.
+      const walletUpdateRequired =
+        snapshot.errorIds?.includes(EErr_Bridge_Session.wallet_update_required) === true;
       return html`<section class="panel stage-panel slim" aria-live="polite" aria-label="${this.walletLabel}">
         ${this.renderStatusStage(
           `mobile-${snapshot.phase}`,
           "cross",
           "bad",
-          this.statusText(snapshot),
-          failureDetail,
+          walletUpdateRequired
+            ? `Update ${this.walletLabel} to continue`
+            : (snapshot.errorHeadline ?? this.statusText(snapshot)),
+          walletUpdateRequired
+            ? `This request needs a newer ${this.walletLabel} than the one that answered it.`
+            : snapshot.errorDetail,
+          snapshot.error,
         )}
       </section>`;
     }
@@ -741,7 +928,7 @@ export class MeteorMobileBridgePanel extends LitElement {
           <span class="title">${this.walletLabel}</span>
           <p class="status">${this.statusText(snapshot)}</p>
         </div>
-        ${snapshot.reconnecting ? html`<span class="pill"><span class="mini-loader" aria-hidden="true"></span><span>Reconnecting securely…</span></span>` : ""}
+        ${this.renderLinkStatus(snapshot)}
         ${showRequestAccess && snapshot.push === "delivered" ? html`<span class="pill good"><span class="pill-dot"></span><span>Notification sent — QR remains available</span></span>` : ""}
         ${showRequestAccess && snapshot.push === "not_delivered" ? html`<span class="pill warn"><span class="pill-dot"></span><span>Notification unavailable — use the code below</span></span>` : ""}
         ${
@@ -760,18 +947,27 @@ export class MeteorMobileBridgePanel extends LitElement {
                     : ""
                 }
               </div>
-              ${this.renderCountdown(secondsLeft)}
+              ${this.renderCountdown(secondsLeft, hardStopBinding ? "Request expires in" : "Code expires in")}
               ${
-                secondsLeft != null && secondsLeft <= 60
-                  ? html`<button class="ghost" @click=${() => void this.refreshMobileCode()}>Refresh code</button>`
-                  : ""
+                hardStopBinding
+                  ? html`<span class="muted">This request has reached its maximum lifetime — a new code cannot extend it.</span>`
+                  : secondsLeft != null && secondsLeft <= 60
+                    ? html`<button class="ghost" @click=${() => void this.refreshMobileCode()}>Refresh code</button>`
+                    : ""
               }
             </div>
           </div>`
             : ""
         }
         ${this.interactionError ? html`<span class="error">${this.interactionError}</span>` : ""}
-        ${snapshot.error ? html`<span class="error">${snapshot.error === "wallet_update_required" ? `Update ${this.walletLabel} to continue with this request.` : snapshot.error}</span>` : ""}
+        ${
+          snapshot.errorHeadline == null
+            ? ""
+            : html`<span class="error">${snapshot.errorHeadline}</span>
+                ${snapshot.errorDetail ? html`<span class="muted">${snapshot.errorDetail}</span>` : ""}
+                ${snapshot.error ? html`<span class="fineprint">${snapshot.error}</span>` : ""}`
+        }
+        ${this.renderCloseControl(snapshot)}
       </section>
     `;
   }

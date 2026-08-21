@@ -125,7 +125,13 @@ export interface IMeteorConnectTypedStorage {
    * reset, and staged secrets must never share that fate implicitly.
    */
   stagedTransferAccounts: unknown;
-  /** Secret-free, validated new-key transfer orchestration journal. */
+  /**
+   * Secret-free, validated new-key transfer orchestration journal. The shared AddKey journal
+   * machinery keeps its own three slots beside this one — `newKeyTransferAddKeyJournal`,
+   * `newKeyTransferStartResultJournal` and `newKeyTransferPendingVerify` — written as raw strings
+   * through the storage adapter (they are serialized by connect-shared, not by this map), under
+   * the same `met_data_` prefix so a partner-identity reset cannot wipe AddKey recovery.
+   */
   newKeyTransferSessions: unknown;
 }
 
@@ -209,4 +215,13 @@ export interface IMeteorConnectMobileBridgeConfig {
     originUrl?: string;
   };
   transferAccounts?: IMeteorConnectTransferAccountsConfig;
+  /**
+   * Offer `v2_bridge_mobile` for NEAR actions again. Off by default and NOT production-ready:
+   * the bridge backend's `session_policies.ts::hasImplementedRecoverySeams` admits only
+   * `meteor_wallet_core::{transfer_accounts, new_key_account_transfer_start,
+   * new_key_account_transfer_verify_active}`, so `createSession` rejects every `act_impl_near`
+   * action with `action_ineligible`. The NEAR request/result adapters stay intact behind this
+   * flag; NEAR itself keeps working unchanged over the `v1_web` / `v1_ext` targets.
+   */
+  experimentalNearOverSession?: boolean;
 }

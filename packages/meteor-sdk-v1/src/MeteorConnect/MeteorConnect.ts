@@ -113,6 +113,10 @@ export class MeteorConnect {
           mobileBridge?.meteorAppId ??
           (this.isDevelopment ? "meteor_wallet_mobile_dev" : "meteor_wallet_mobile"),
         partnerMetadata: mobileBridge?.partnerMetadata,
+        // Part of the fingerprint on purpose: it decides whether NEAR is offered over the session
+        // bridge at all, so two initialize() calls that disagree must be a mismatch, never a
+        // silently mixed client.
+        experimentalNearOverSession: mobileBridge?.experimentalNearOverSession ?? false,
         leaseProvider: objectFingerprint(mobileBridge?.leaseProvider),
         nativeAppOpener: objectFingerprint(mobileBridge?.nativeAppOpener),
         nearKeyStoreProvider: objectFingerprint(nearKeyStoreProvider),
@@ -210,6 +214,10 @@ export class MeteorConnect {
 
   async disposeMobileBridge(): Promise<void> {
     await this.clients.mobileBridge.dispose();
+    // Staged plaintext secrets are held in memory by this instance; disposal is the point they
+    // stop being reachable. Persisted staging (opt-in) is deliberately left alone — dropping it
+    // here would destroy data the host asked to keep.
+    this.transferAccounts.dropStagedFromMemory();
     this.initializeFingerprint = undefined;
     this.initializePromise = undefined;
   }

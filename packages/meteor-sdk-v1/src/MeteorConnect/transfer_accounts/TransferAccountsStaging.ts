@@ -1,18 +1,20 @@
 import {
   buildAccountSecretData,
-  stringifyCanonicalJson,
   type TAccountBasicData,
   type TAccountSecretData,
   type TAccountTransferDataDecrypted,
   TRANSFER_ACCOUNTS_ACCOUNT_ID_PATTERN,
-  TRANSFER_ACCOUNTS_MAX_ACCOUNTS,
-  TRANSFER_ACCOUNTS_MAX_SECRETS_PER_ACCOUNT,
-  vAccountBasicData,
   vAccountTransferDataDecrypted,
 } from "@meteorwallet/connect-shared";
+import {
+  TRANSFER_ACCOUNTS_MAX_SECRETS_PER_ACCOUNT,
+  vAccountBasicData,
+} from "@meteorwallet/connect-shared/internal";
+import { stringifyCanonicalJson } from "@nice-code/util";
 import * as v from "valibot";
 import type { ITypedStorageHelper } from "../../ported_common/utils/storage/TypedStorageHelper";
 import type { IMeteorConnectTypedStorage } from "../MeteorConnect.types";
+import { TRANSFER_ACCOUNTS_MAX_ACCOUNTS } from "./transfer_accounts.limits";
 import type {
   IStageTransferAccountInput,
   TParseTransferSecretInputResult,
@@ -26,7 +28,10 @@ import type {
  */
 export function parseTransferSecretInput(secretInput: string): TParseTransferSecretInputResult {
   const result = buildAccountSecretData({ secretInput });
-  if (result.ok) return { type: result.secret.type };
+  // `=== true` rather than a bare truthiness check: this file is compiled by sibling packages
+  // whose tsconfigs leave `strictNullChecks` off, and only an explicit literal comparison narrows
+  // a boolean-discriminated union there.
+  if (result.ok === true) return { type: result.secret.type };
   return { type: "invalid", reason: result.reason };
 }
 
@@ -108,7 +113,7 @@ export class TransferAccountsStaging {
       secretInput: input.secretInput,
       derivationPath: input.derivationPath,
     });
-    if (!secretResult.ok) {
+    if (secretResult.ok === false) {
       switch (secretResult.reason) {
         case "empty_secret_input":
           return {

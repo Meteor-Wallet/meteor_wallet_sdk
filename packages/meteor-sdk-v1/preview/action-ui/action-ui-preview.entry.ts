@@ -7,6 +7,7 @@
  *
  * Open `?scenario=<name>` to pick a scenario (see scenarios.mjs for the list).
  */
+import { ESessionPhase, type TSessionFacts } from "@meteorwallet/connect-shared";
 import type { ExecutableAction } from "../../src/MeteorConnect/action/ExecutableAction";
 import type { TMeteorConnectionExecutionTarget } from "../../src/MeteorConnect/MeteorConnect.types";
 import type {
@@ -49,7 +50,36 @@ const style = document.createElement("style");
 style.textContent = GILROY_FONT_FAMILY_DATA_URL_STYLESHEET;
 document.head.appendChild(style);
 
-function makeMockSession(snapshot: IMobileBridgeSnapshot): MobileBridgeSession {
+/**
+ * The SDK flow phases that correspond 1:1 to an authenticated session phase. The panel derives its
+ * close verb from `describeCloseOptions(facts, "partner")`, so a preview without facts would show
+ * no close button at all — these let every live scenario render the real matrix.
+ */
+const PREVIEW_SESSION_PHASE: Partial<Record<IMobileBridgeSnapshot["phase"], ESessionPhase>> = {
+  creating_bridge: ESessionPhase.initializing,
+  waiting_for_wallet: ESessionPhase.waiting_for_wallet,
+  wallet_verification: ESessionPhase.wallet_verification,
+  wallet_action: ESessionPhase.wallet_action,
+  result_ready: ESessionPhase.result_ready,
+  external_work: ESessionPhase.external_work,
+  failed: ESessionPhase.failed,
+  cancelled: ESessionPhase.closed,
+  completed: ESessionPhase.closed,
+};
+
+function previewFacts(snapshot: IMobileBridgeSnapshot): TSessionFacts | undefined {
+  if (snapshot.facts != null) return snapshot.facts;
+  const phase = PREVIEW_SESSION_PHASE[snapshot.phase];
+  if (phase == null) return undefined;
+  return {
+    phase,
+    idleExpiresAt: snapshot.idleExpiresAt ?? Date.now() + 300_000,
+    absoluteExpiresAt: snapshot.absoluteExpiresAt ?? Date.now() + 1_800_000,
+  } as TSessionFacts;
+}
+
+function makeMockSession(input: IMobileBridgeSnapshot): MobileBridgeSession {
+  const snapshot: IMobileBridgeSnapshot = { ...input, facts: previewFacts(input) };
   return {
     subscribe(listener: (s: IMobileBridgeSnapshot) => void) {
       listener({ ...snapshot });
@@ -57,6 +87,8 @@ function makeMockSession(snapshot: IMobileBridgeSnapshot): MobileBridgeSession {
     },
     getSnapshot: () => ({ ...snapshot }),
     submitPin: async (_pin: string) => {},
+    reconnectLink: async () => {},
+    abandon: async () => {},
     isCommitted: () => false,
   } as unknown as MobileBridgeSession;
 }

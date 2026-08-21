@@ -1,15 +1,11 @@
-import type { IPartnerActionResult } from "@meteorwallet/connect";
 import {
-  act_impl_meteor_wallet_core,
-  act_impl_near,
   validateNewKeyTransferStartOutputForInput,
   validateNewKeyTransferVerifyActiveOutputForInput,
   vNewKeyTransferStartInputV1,
-  vNewKeyTransferVerifyActiveInputV1,
 } from "@meteorwallet/connect-shared";
+import { vNewKeyTransferVerifyActiveInputV1 } from "@meteorwallet/connect-shared/internal";
 import { KeyType, PublicKey } from "@near-js/crypto";
 import { DelegateAction, SCHEMA, Signature, SignedDelegate } from "@near-js/transactions";
-import { isActionPayload_Result_JsonObject } from "@nice-code/action";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { base64 } from "@scure/base";
 import { deserialize, serialize } from "borsh";
@@ -19,6 +15,17 @@ import type {
   IMobileBridgePreparedAction,
   IMobileBridgeResultContext,
 } from "./MeteorConnectMobileBridgeClient.types";
+
+/**
+ * The SDK-shaped mapping of an ALREADY-VERIFIED wallet output.
+ *
+ * Everything the 0.9 receive boundary used to do by hand — wallet signature verification, action
+ * domain/id matching, result-envelope identity against the signed turn, and the output-hash
+ * recompute — now happens inside `PartnerSessionClient.waitForValidatedResult()` before a result
+ * is ever exposed. What remains here has no SDK equivalent: the business-level output-vs-input
+ * binding for the new-key transfer ids, and the NEAR account-identity checks + hydration into the
+ * SDK's own account/signature shapes.
+ */
 
 function requireTargetAccount(prepared: IMobileBridgePreparedAction): string {
   const accountId = (prepared.sdkRequest.expandedInput as any).account?.identifier?.accountId;
@@ -68,60 +75,50 @@ function decodeSignedDelegate(encoded: string): SignedDelegate {
   });
 }
 
-export async function mobileBridgeResultToSdk(
+/**
+ * meteor_wallet_core outputs. `transfer_accounts` stays wire-shaped `{ success: boolean }` —
+ * outcome mapping lives in the transfer wrapper so adapter/registry semantics stay uniform. The
+ * two new-key ids are bound back to their request's account set, which the session client does
+ * not (and cannot) do.
+ */
+export function meteorWalletCoreOutputToSdk(
   prepared: IMobileBridgePreparedAction,
-  partnerResult: IPartnerActionResult,
+  output: unknown,
+): unknown {
+  if (prepared.kind.domain !== "meteor_wallet_core") {
+    throw new Error("mobile_bridge_unsupported_action_result");
+  }
+  switch (prepared.kind.sharedActionId) {
+    case "transfer_accounts":
+      return output;
+    case "new_key_account_transfer_start":
+      return validateNewKeyTransferStartOutputForInput({
+        request: v.parse(vNewKeyTransferStartInputV1, prepared.sdkRequest.expandedInput),
+        output,
+      });
+    case "new_key_account_transfer_verify_active":
+      return validateNewKeyTransferVerifyActiveOutputForInput({
+        request: v.parse(vNewKeyTransferVerifyActiveInputV1, prepared.sdkRequest.expandedInput),
+        output,
+      });
+    default:
+      throw new Error("mobile_bridge_unsupported_action_result");
+  }
+}
+
+/**
+ * NEAR outputs. Unreachable in production while `experimentalNearOverSession` is off (the bridge
+ * refuses `act_impl_near` sessions with `action_ineligible`) — kept intact and tested so the path
+ * is ready the day `session_policies.ts::hasImplementedRecoverySeams` admits NEAR.
+ */
+export async function nearOutputToSdk(
+  prepared: IMobileBridgePreparedAction,
+  rawOutput: unknown,
   context: IMobileBridgeResultContext,
 ): Promise<any> {
-  // Shared verification — identical for every domain.
-  if (partnerResult.signatureVerified !== true) {
-    throw new Error("mobile_bridge_wallet_signature_invalid");
-  }
-  const serialized = partnerResult.result;
-  if (!isActionPayload_Result_JsonObject(serialized)) {
-    throw new Error("mobile_bridge_invalid_action_result");
-  }
-  if (
-    serialized.domain !== prepared.actionRequest.domain ||
-    serialized.id !== prepared.actionRequest.id
-  ) {
-    throw new Error("mobile_bridge_action_result_mismatch");
-  }
-
-  // Per-domain hydration: each domain impl recomputes/verifies the output hash for its own shape.
-  if (prepared.kind.domain === "meteor_wallet_core") {
-    const hydrated: any = act_impl_meteor_wallet_core.hydrateResultPayload(serialized as any);
-    if (hydrated.outputHash !== serialized.outputHash) {
-      throw new Error("mobile_bridge_output_hash_mismatch");
-    }
-    if (!hydrated.result.ok) throw hydrated.result.error;
-    switch (prepared.kind.sharedActionId) {
-      case "transfer_accounts":
-        // Wire-shaped { success: boolean } — outcome mapping lives in the transfer wrapper, so
-        // adapter/registry semantics stay uniform with every other action.
-        return hydrated.result.output;
-      case "new_key_account_transfer_start":
-        return validateNewKeyTransferStartOutputForInput({
-          request: v.parse(vNewKeyTransferStartInputV1, prepared.sdkRequest.expandedInput),
-          output: hydrated.result.output,
-        });
-      case "new_key_account_transfer_verify_active":
-        return validateNewKeyTransferVerifyActiveOutputForInput({
-          request: v.parse(vNewKeyTransferVerifyActiveInputV1, prepared.sdkRequest.expandedInput),
-          output: hydrated.result.output,
-        });
-      default:
-        throw new Error("mobile_bridge_unsupported_action_result");
-    }
-  }
-
   const kind = prepared.kind;
-  const hydrated: any = act_impl_near.hydrateResultPayload(serialized as any);
-  if (hydrated.outputHash !== serialized.outputHash) {
-    throw new Error("mobile_bridge_output_hash_mismatch");
-  }
-  if (!hydrated.result.ok) throw hydrated.result.error;
-  const output: any = hydrated.result.output;
+  if (kind.domain !== "near") throw new Error("mobile_bridge_unsupported_action_result");
+  const output: any = rawOutput;
   const input: any = prepared.sdkRequest.expandedInput;
 
   if (kind.sharedActionId === "sign_in" || kind.sharedActionId === "sign_in_and_sign_message") {

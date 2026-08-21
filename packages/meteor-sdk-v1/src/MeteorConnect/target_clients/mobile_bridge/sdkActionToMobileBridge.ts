@@ -1,12 +1,12 @@
+import type { IActionPayload_Request_JsonObject } from "@meteorwallet/connect";
 import {
   act_impl_meteor_wallet_core,
   act_impl_near,
   type EWalletProtocolCapability,
-  getServerRequiredWalletCapabilities,
   REQUIRED_METEOR_WALLET_CAPABILITIES,
 } from "@meteorwallet/connect-shared";
+import { getServerRequiredWalletCapabilities } from "@meteorwallet/connect-shared/internal";
 import { KeyPair } from "@near-js/crypto";
-import type { IActionPayload_Request_JsonObject } from "@nice-code/action";
 import { base64 } from "@scure/base";
 import { convertOldFunctionCallKeyDefToNew } from "../../../near_utils/convertOldFunctionCallKeyDefToNew";
 import type { TNearNativeAction } from "../../../near_utils/meteor_actions.types";
@@ -136,6 +136,7 @@ export async function sdkActionToMobileBridge(
     return {
       sdkRequest,
       kind: { domain: "meteor_wallet_core", sharedActionId: "transfer_accounts" },
+      actionInput,
       actionRequest: act_impl_meteor_wallet_core.action.transfer_accounts
         .request(actionInput)
         .toJsonObject(),
@@ -145,6 +146,7 @@ export async function sdkActionToMobileBridge(
     return {
       sdkRequest,
       kind: { domain: "meteor_wallet_core", sharedActionId: "new_key_account_transfer_start" },
+      actionInput: sdkRequest.expandedInput,
       actionRequest: act_impl_meteor_wallet_core.action.new_key_account_transfer_start
         .request(sdkRequest.expandedInput)
         .toJsonObject(),
@@ -157,6 +159,7 @@ export async function sdkActionToMobileBridge(
         domain: "meteor_wallet_core",
         sharedActionId: "new_key_account_transfer_verify_active",
       },
+      actionInput: sdkRequest.expandedInput,
       actionRequest: act_impl_meteor_wallet_core.action.new_key_account_transfer_verify_active
         .request(sdkRequest.expandedInput)
         .toJsonObject(),
@@ -165,6 +168,12 @@ export async function sdkActionToMobileBridge(
   return nearActionToMobileBridge(sdkRequest);
 }
 
+/**
+ * NEAR over the session bridge is gated off in production (`experimentalNearOverSession`): the
+ * backend's `hasImplementedRecoverySeams` admits only the three `meteor_wallet_core` transfer
+ * ids, so `createSession` refuses every `act_impl_near` action with `action_ineligible`. The
+ * adapters below stay intact and correct for the day that gate opens.
+ */
 async function nearActionToMobileBridge(
   sdkRequest: TMCActionRequestUnionExpandedInput<TMCActionRegistry>,
 ): Promise<IMobileBridgePreparedAction> {
@@ -180,15 +189,25 @@ async function nearActionToMobileBridge(
   }
 
   switch (sdkRequest.id) {
-    case "near::sign_in":
+    case "near::sign_in": {
+      const actionInput = { network: input.target.network, addFunctionCallKey };
       return {
         sdkRequest,
         kind: { domain: "near", sharedActionId: "sign_in", pendingFunctionCallKey },
-        actionRequest: act_impl_near.action.sign_in
-          .request({ network: input.target.network, addFunctionCallKey })
-          .toJsonObject(),
+        actionInput,
+        actionRequest: act_impl_near.action.sign_in.request(actionInput).toJsonObject(),
       };
-    case "near::sign_in_and_sign_message":
+    }
+    case "near::sign_in_and_sign_message": {
+      const actionInput = {
+        network: input.target.network,
+        addFunctionCallKey,
+        messageParams: {
+          message: input.messageParams.message,
+          recipient: input.messageParams.recipient,
+          nonceBase64: base64.encode(input.messageParams.nonce),
+        },
+      };
       return {
         sdkRequest,
         kind: {
@@ -197,30 +216,32 @@ async function nearActionToMobileBridge(
           pendingFunctionCallKey,
           retainedMessageState: input.messageParams.state,
         },
+        actionInput,
         actionRequest: act_impl_near.action.sign_in_and_sign_message
-          .request({
-            network: input.target.network,
-            addFunctionCallKey,
-            messageParams: {
-              message: input.messageParams.message,
-              recipient: input.messageParams.recipient,
-              nonceBase64: base64.encode(input.messageParams.nonce),
-            },
-          })
+          .request(actionInput)
           .toJsonObject(),
       };
-    case "near::sign_out":
+    }
+    case "near::sign_out": {
+      const actionInput = {
+        accountId: input.account.identifier.accountId,
+        network: input.account.identifier.network,
+      };
       return {
         sdkRequest,
         kind: { domain: "near", sharedActionId: "sign_out" },
-        actionRequest: act_impl_near.action.sign_out
-          .request({
-            accountId: input.account.identifier.accountId,
-            network: input.account.identifier.network,
-          })
-          .toJsonObject(),
+        actionInput,
+        actionRequest: act_impl_near.action.sign_out.request(actionInput).toJsonObject(),
       };
-    case "near::sign_message":
+    }
+    case "near::sign_message": {
+      const actionInput = {
+        signerId: input.account.identifier.accountId,
+        network: input.account.identifier.network,
+        message: input.messageParams.message,
+        recipient: input.messageParams.recipient,
+        nonceBase64: base64.encode(input.messageParams.nonce),
+      };
       return {
         sdkRequest,
         kind: {
@@ -228,16 +249,10 @@ async function nearActionToMobileBridge(
           sharedActionId: "sign_message",
           retainedMessageState: input.messageParams.state,
         },
-        actionRequest: act_impl_near.action.sign_message
-          .request({
-            signerId: input.account.identifier.accountId,
-            network: input.account.identifier.network,
-            message: input.messageParams.message,
-            recipient: input.messageParams.recipient,
-            nonceBase64: base64.encode(input.messageParams.nonce),
-          })
-          .toJsonObject(),
+        actionInput,
+        actionRequest: act_impl_near.action.sign_message.request(actionInput).toJsonObject(),
       };
+    }
     case "near::sign_transactions": {
       if (input.transactions.length === 0) throw new Error("mobile_bridge_empty_transactions");
       const transactions = input.transactions.map((transaction: any) => ({
@@ -249,49 +264,57 @@ async function nearActionToMobileBridge(
         network: input.account.identifier.network,
       };
       if (transactions.length === 1) {
+        const actionInput = { ...common, ...transactions[0] };
         return {
           sdkRequest,
           kind: { domain: "near", sharedActionId: "sign_and_send_transaction" },
+          actionInput,
           actionRequest: act_impl_near.action.sign_and_send_transaction
-            .request({ ...common, ...transactions[0] })
+            .request(actionInput)
             .toJsonObject(),
         };
       }
+      const actionInput = { ...common, transactions };
       return {
         sdkRequest,
         kind: { domain: "near", sharedActionId: "sign_and_send_transactions" },
+        actionInput,
         actionRequest: act_impl_near.action.sign_and_send_transactions
-          .request({ ...common, transactions })
+          .request(actionInput)
           .toJsonObject(),
       };
     }
-    case "near::sign_delegate_actions":
+    case "near::sign_delegate_actions": {
+      const actionInput = {
+        signerId: input.account.identifier.accountId,
+        network: input.account.identifier.network,
+        delegateActions: input.delegateActions.map((delegateAction: any) => ({
+          receiverId: delegateAction.receiverId,
+          actions: delegateAction.actions.map(nearActionToConnectorAction),
+        })),
+      };
       return {
         sdkRequest,
         kind: { domain: "near", sharedActionId: "sign_delegate_actions" },
+        actionInput,
         actionRequest: act_impl_near.action.sign_delegate_actions
-          .request({
-            signerId: input.account.identifier.accountId,
-            network: input.account.identifier.network,
-            delegateActions: input.delegateActions.map((delegateAction: any) => ({
-              receiverId: delegateAction.receiverId,
-              actions: delegateAction.actions.map(nearActionToConnectorAction),
-            })),
-          })
+          .request(actionInput)
           .toJsonObject(),
       };
-    case "near::verify_owner":
+    }
+    case "near::verify_owner": {
+      const actionInput = {
+        accountId: input.account.identifier.accountId,
+        network: input.account.identifier.network,
+        message: input.message,
+      };
       return {
         sdkRequest,
         kind: { domain: "near", sharedActionId: "verify_owner" },
-        actionRequest: act_impl_near.action.verify_owner
-          .request({
-            accountId: input.account.identifier.accountId,
-            network: input.account.identifier.network,
-            message: input.message,
-          })
-          .toJsonObject(),
+        actionInput,
+        actionRequest: act_impl_near.action.verify_owner.request(actionInput).toJsonObject(),
       };
+    }
     default:
       throw new Error("mobile_bridge_unsupported_sdk_action");
   }

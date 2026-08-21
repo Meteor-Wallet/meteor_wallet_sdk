@@ -170,9 +170,11 @@ export class MeteorTransferKeyCard extends LitElement {
   }
 
   private renderCountdown() {
-    const expiresAt = this.snapshot?.expiresAt;
-    if (expiresAt == null) return nothing;
-    const remaining = Math.max(0, Math.floor((expiresAt - this.now) / 1000));
+    // The idle deadline is the one the user can still influence (each accepted transition pushes
+    // it out); the absolute wall is reported by the bridge panel, not duplicated on the key card.
+    const idleExpiresAt = this.snapshot?.idleExpiresAt;
+    if (idleExpiresAt == null) return nothing;
+    const remaining = Math.max(0, Math.floor((idleExpiresAt - this.now) / 1000));
     const minutes = Math.floor(remaining / 60);
     const seconds = `${remaining % 60}`.padStart(2, "0");
     return html`<span class=${`countdown${remaining <= 30 ? " urgent" : ""}`}>
