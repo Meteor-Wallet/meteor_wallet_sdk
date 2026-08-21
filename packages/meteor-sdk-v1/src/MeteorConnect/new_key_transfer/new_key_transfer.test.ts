@@ -837,6 +837,33 @@ describe("MeteorConnectNewKeyTransfer external-work hold", () => {
     expect(recovery.orphanedSignedAddKey).toBe(false);
   });
 
+  it("reports no hold when the replaying process is not the one holding it", async () => {
+    // The hold is memory-only: it lives in the instance that opened the bridge, never in the
+    // journal. A second process replaying the same start therefore gets the SAME signed output
+    // back — the wallet is not asked twice — but must be told `externalWorkHeld: false`, because
+    // the bridge it would try to continue belongs to someone else. Reporting `true` here would
+    // send it down the same-session verification path with no session to verify on.
+    const values = new Map<string, unknown>();
+    const holder = createHarness({ sessions: values, outputs: [START_OUTPUT] });
+    const started = await holder.api.start({
+      clientTransferId: CLIENT_ID,
+      targetPlatform: "web",
+      accounts: START_INPUT.accounts,
+    });
+    expect(started.externalWorkHeld).toBe(true);
+
+    const other = createHarness({ sessions: values, outputs: [] });
+    const replayed = await other.api.start({
+      clientTransferId: CLIENT_ID,
+      targetPlatform: "web",
+      accounts: START_INPUT.accounts,
+    });
+
+    expect(replayed.output).toEqual(START_OUTPUT);
+    expect(other.getPromptCount()).toBe(0);
+    expect(replayed.externalWorkHeld).toBe(false);
+  });
+
   it("refuses the hold — and closes the turn — when the journal write fails", async () => {
     const harness = createHarness({ outputs: [START_OUTPUT] });
     harness.storage.implementation.setItem = async () => {
