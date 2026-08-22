@@ -1,5 +1,19 @@
 // The AddKey chain seam a host implements for `newKeyTransfer.runAddKeys`. The SDK owns the D33
 // journal; the source full-access signing material stays with the host and never reaches it.
+
+/**
+ * The canonical Meteor Connect backends, for `initialize({ mobileBridge: { backendUrl } })`.
+ *
+ * Re-exported so an integration names its backend instead of hardcoding a hostname — the default
+ * when `backendUrl` is omitted is production, and a development integration otherwise has nowhere
+ * to read the development URL from. `deriveLocalBackendUrl(hostname)` builds the local
+ * `wrangler dev` URL for a page served from that host; call it only on a development build.
+ */
+export {
+  deriveLocalBackendUrl,
+  METEOR_CONNECT_BACKENDS,
+  type TMeteorConnectBackendEnvironment,
+} from "@meteorwallet/connect";
 export type {
   IAddKeyJournalChain,
   IAddKeyJournalJob,

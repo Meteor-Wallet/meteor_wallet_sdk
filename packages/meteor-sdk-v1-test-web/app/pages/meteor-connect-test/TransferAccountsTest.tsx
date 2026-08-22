@@ -3,7 +3,11 @@ import type {
   TStagedTransferAccountSummary,
   TTransferAccountsOutcome,
 } from "@meteorwallet/sdk";
-import { parseTransferSecretInput, TRANSFER_ACCOUNTS_MAX_ACCOUNTS } from "@meteorwallet/sdk";
+import {
+  METEOR_CONNECT_BACKENDS,
+  parseTransferSecretInput,
+  TRANSFER_ACCOUNTS_MAX_ACCOUNTS,
+} from "@meteorwallet/sdk";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Button } from "~/ui/Button";
@@ -24,12 +28,19 @@ export const TransferAccountsTest = ({
   backendUrl: string;
 }) => {
   const usingLocalBackend = backendUrl.includes("localhost") || backendUrl.includes("127.0.0.1");
-  const switchBackend = (target: "local" | "production") => {
+  const usingProductionBackend = backendUrl === METEOR_CONNECT_BACKENDS.production;
+  // `development` is the default, so it is the absence of the param rather than a value.
+  const switchBackend = (target: "local" | "development" | "production") => {
     const url = new URL(window.location.href);
-    if (target === "local") url.searchParams.set("backend", "local");
-    else url.searchParams.delete("backend");
+    if (target === "development") url.searchParams.delete("backend");
+    else url.searchParams.set("backend", target);
     window.location.href = url.toString();
   };
+  const switchLink = (target: "local" | "development" | "production", label: string) => (
+    <button className={"underline cursor-pointer"} onClick={() => switchBackend(target)}>
+      {label}
+    </button>
+  );
   const queryClient = useQueryClient();
   const [accountId, setAccountId] = useState("");
   const [secretInput, setSecretInput] = useState("");
@@ -126,20 +137,23 @@ export const TransferAccountsTest = ({
       </p>
       {usingLocalBackend ? (
         <p className={"text-sm text-green-700"}>
-          Using local mc backend at <code>{backendUrl}</code> — run it with{" "}
-          <code>bun dev</code> in <code>../meteor-connect-bridge/packages/meteor-connect-backend</code>.{" "}
-          <button className={"underline cursor-pointer"} onClick={() => switchBackend("production")}>
-            Switch to production backend
-          </button>
+          Using the local mc backend at <code>{backendUrl}</code> — run it with <code>bun dev</code>{" "}
+          in <code>../meteor-connect-bridge/packages/meteor-connect-backend</code>.{" "}
+          {switchLink("development", "Switch to development")} ·{" "}
+          {switchLink("production", "production")}
+        </p>
+      ) : usingProductionBackend ? (
+        <p className={"text-sm text-amber-700"}>
+          ⚠ Using the PRODUCTION backend — real user sessions live here. If bridge creation fails
+          with a CORS error, the request is being stopped at the Cloudflare edge (WAF block on{" "}
+          <code>mc.meteorwallet.app</code> — preflights can never pass a challenge), not by the
+          worker. {switchLink("development", "Switch back to development")} ·{" "}
+          {switchLink("local", "local")}
         </p>
       ) : (
-        <p className={"text-sm text-amber-700"}>
-          ⚠ Using the production backend. If bridge creation fails with a CORS error, the request
-          is being stopped at the Cloudflare edge (WAF block on <code>mc.meteorwallet.app</code> —
-          preflights can never pass a challenge), not by the worker.{" "}
-          <button className={"underline cursor-pointer"} onClick={() => switchBackend("local")}>
-            Switch to local backend (reloads)
-          </button>
+        <p className={"text-sm text-green-700"}>
+          Using the development backend at <code>{backendUrl}</code> — the default for this harness.{" "}
+          {switchLink("local", "Switch to local")} · {switchLink("production", "production")}
         </p>
       )}
 
@@ -176,7 +190,9 @@ export const TransferAccountsTest = ({
         )}
         <div className={"flex flex-row flex-wrap gap-3 items-center"}>
           <Button
-            disabled={stageMutation.isPending || accountId.trim() === "" || secretInput.trim() === ""}
+            disabled={
+              stageMutation.isPending || accountId.trim() === "" || secretInput.trim() === ""
+            }
             onClick={() => stageMutation.mutate()}
           >
             Stage account secret
@@ -188,8 +204,8 @@ export const TransferAccountsTest = ({
             {addFakeBatchMutation.isPending ? "Adding fake accounts..." : "Add 5 fake accounts"}
           </Button>
           <span className={"text-xs text-gray-500"}>
-            Volume testing: each click stages 5 diverse fake accounts (12/24-word mnemonics,
-            custom derivation path, private keys, implicit-style id, one multi-secret account).
+            Volume testing: each click stages 5 diverse fake accounts (12/24-word mnemonics, custom
+            derivation path, private keys, implicit-style id, one multi-secret account).
           </span>
         </div>
       </div>
@@ -235,8 +251,8 @@ export const TransferAccountsTest = ({
         </Button>
         {staged.length > TRANSFER_ACCOUNTS_MAX_ACCOUNTS && (
           <span className={"text-xs text-amber-700"}>
-            The protocol caps one transfer at {TRANSFER_ACCOUNTS_MAX_ACCOUNTS} accounts — the
-            demo sends the first {TRANSFER_ACCOUNTS_MAX_ACCOUNTS}.
+            The protocol caps one transfer at {TRANSFER_ACCOUNTS_MAX_ACCOUNTS} accounts — the demo
+            sends the first {TRANSFER_ACCOUNTS_MAX_ACCOUNTS}.
           </span>
         )}
         <Button

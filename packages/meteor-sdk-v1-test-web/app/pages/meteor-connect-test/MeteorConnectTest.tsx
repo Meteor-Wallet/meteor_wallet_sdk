@@ -1,5 +1,10 @@
 import type { IMeteorConnectAccount } from "@meteorwallet/sdk";
-import { EMeteorAppId, MeteorConnect, webpage_local_storage } from "@meteorwallet/sdk";
+import {
+  EMeteorAppId,
+  METEOR_CONNECT_BACKENDS,
+  MeteorConnect,
+  webpage_local_storage,
+} from "@meteorwallet/sdk";
 import { actionCreators } from "@near-js/transactions";
 import { parseNearAmount } from "@near-js/utils";
 import { QueryClient, QueryClientProvider, useMutation, useQuery } from "@tanstack/react-query";
@@ -18,22 +23,33 @@ import { Button } from "~/ui/Button";
 import { SignDelegateActionTest } from "./SignDelegateActionTest";
 import { TransferAccountsTest } from "./TransferAccountsTest";
 
-const PRODUCTION_BACKEND_URL = "https://mc.meteorwallet.app";
 const LOCAL_BACKEND_URL = "http://localhost:8787";
 
 /**
- * Backend selection via URL (?backend=local | ?backend=<url>), read once at init — the SDK pins
- * its config per instance (`mobile_bridge_config_mismatch` on change), so switching backends is
- * a full navigation, not a live toggle. Local = the mc_backend worker (`wrangler dev`, :8787)
- * from ../meteor-connect-bridge. Note (2026-08-06): production `mc.meteorwallet.app` hard-blocks
- * requests at the Cloudflare edge (WAF "you have been blocked" page, even on OPTIONS preflights,
- * which surfaces in the browser as a CORS failure) — zone security config, not worker code.
+ * Backend selection via URL, read once at init — the SDK pins its config per instance
+ * (`mobile_bridge_config_mismatch` on change), so switching backends is a full navigation, not a
+ * live toggle.
+ *
+ *   (default)             the DEVELOPMENT backend — what this harness is for
+ *   ?backend=local        the mc_backend worker (`wrangler dev`, :8787) from ../meteor-connect-bridge
+ *   ?backend=production   the production backend
+ *   ?backend=<url>        anything else, verbatim
+ *
+ * The default is development, not production, for two reasons. It is the backend this harness is
+ * meant to exercise — production carries real user sessions and nothing here should reach it by
+ * merely loading the page. And production `mc.meteorwallet.app` hard-blocks these requests at the
+ * Cloudflare edge anyway (WAF "you have been blocked", even on OPTIONS preflights, which surfaces
+ * in the browser as a CORS failure — zone security config, not worker code), so the old default
+ * could not complete a bridge at all.
  */
 const resolveBackendUrl = (): string => {
-  if (typeof window === "undefined") return PRODUCTION_BACKEND_URL;
+  if (typeof window === "undefined") return METEOR_CONNECT_BACKENDS.development;
   const requested = new URLSearchParams(window.location.search).get("backend");
-  if (requested == null) return PRODUCTION_BACKEND_URL;
-  return requested === "local" ? LOCAL_BACKEND_URL : requested;
+  if (requested == null) return METEOR_CONNECT_BACKENDS.development;
+  if (requested === "local") return LOCAL_BACKEND_URL;
+  if (requested === "production") return METEOR_CONNECT_BACKENDS.production;
+  if (requested === "development") return METEOR_CONNECT_BACKENDS.development;
+  return requested;
 };
 
 const MOBILE_BRIDGE_BACKEND_URL = resolveBackendUrl();
