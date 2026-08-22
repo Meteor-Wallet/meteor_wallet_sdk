@@ -20,6 +20,7 @@ import {
 } from "~/pages/meteor-sdk-test/guestbook";
 import { NetworkSelector } from "~/pages/near-connect/NetworkSelector";
 import { Button } from "~/ui/Button";
+import { NewKeyTransferTest } from "./NewKeyTransferTest";
 import { SignDelegateActionTest } from "./SignDelegateActionTest";
 import { TransferAccountsTest } from "./TransferAccountsTest";
 
@@ -176,6 +177,7 @@ const MeteorConnectTestInitialized = ({ meteorConnect }: { meteorConnect: Meteor
         network={network}
         backendUrl={MOBILE_BRIDGE_BACKEND_URL}
       />
+      <NewKeyTransferTest meteorConnect={meteorConnect} />
       {account == null ? (
         <div className={"p-5 flex flex-row flex-wrap gap-5 items-start"}>
           <Button

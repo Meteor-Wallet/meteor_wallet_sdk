@@ -19,7 +19,24 @@ export type {
   IAddKeyJournalJob,
   IAddKeySignedTransaction,
 } from "@meteorwallet/connect-shared";
-export { EMeteorAppId } from "@meteorwallet/connect-shared";
+/**
+ * Turning a staged account secret into a NEAR signer — what an `IAddKeyJournalChain` needs to sign
+ * an AddKey with the SOURCE account's own full-access key.
+ *
+ * `getStagedWithSecrets()` hands a host the secrets; without these it has no supported way to
+ * derive a key from one. Use the signing helper only inside a local signer boundary: never
+ * serialize, log, or transmit its private half.
+ */
+export {
+  deriveNearPublicKeyFromAccountSecret,
+  deriveNearSigningKeyFromAccountSecret,
+  EMeteorAppId,
+  formatNearEd25519PublicKey,
+  type TAccountSecretData,
+  type TAccountTransferDataDecrypted,
+  type TDeriveNearPublicKeyFromSecretResult,
+  type TDeriveNearSigningKeyFromSecretResult,
+} from "@meteorwallet/connect-shared";
 export { setEnvConfig } from "./envConfig";
 export * from "./MeteorConnect/action/ExecutableAction";
 export * from "./MeteorConnect/action/mc_action.combined";
