@@ -6,7 +6,7 @@
       "name": "@meteorwallet/public-sdk-repo",
       "devDependencies": {
         "@biomejs/biome": "2.1.4",
-        "@nice-code/commander": "0.82.0",
+        "@nice-code/commander": "0.86.0",
         "@types/bun": "latest",
         "@types/chrome": "0.1.3",
         "tsdown": "0.14.1",
@@ -62,7 +62,7 @@
         "@near-js/transactions": "2.2.5",
         "@near-js/types": "2.2.5",
         "@near-js/utils": "2.2.5",
-        "@nice-code/util": "0.82.0",
+        "@nice-code/util": "0.86.0",
         "@noble/hashes": "2.0.1",
         "@noble/post-quantum": "^0.6.1",
         "@scure/base": "2.0.0",
@@ -477,7 +477,7 @@
 
     "@nice-code/action": ["@nice-code/action@0.82.0", "", { "dependencies": { "@nice-code/common-errors": "0.82.0", "@nice-code/error": "0.82.0", "@nice-code/util": "0.82.0", "@nice-code/wire": "0.82.0", "@standard-schema/spec": "^1.1.0", "@tanstack/react-virtual": "^3.14.5", "http-status-codes": "^2.3.0", "lucide-react": "1.17.0", "msgpackr": "2.0.4", "nanoid": "^5.1.16", "source-map-js": "^1.2.1", "std-env": "^4.1.0" }, "peerDependencies": { "@tanstack/react-query": "^5.101.2", "react": ">=19", "react-dom": ">=19", "valibot": "^1.4.2" } }, "sha512-o9mKgXsQDAQj08QI/X3hgo5blNh5ceLy5rDVrkIriVP8j8NOJSdIKvtcbcf3Bgwtdw+2RL4Dd5MM4Hb611YVVQ=="],
 
-    "@nice-code/commander": ["@nice-code/commander@0.82.0", "", { "dependencies": { "@nice-code/process": "0.82.0", "jiti": "^2.7.0", "ws": "^8.18.0" }, "bin": { "nice-commander": "build/cli.mjs" } }, "sha512-Yfh+LJ6ML/3PSVXRkroUlHFPp0hYs2mZ/vpqUUjziUv3nEEgiLFP0D0ETFD8f5qUGw2XgiBMz206Ch87fFgsiQ=="],
+    "@nice-code/commander": ["@nice-code/commander@0.86.0", "", { "dependencies": { "@nice-code/process": "0.86.0", "jiti": "^2.7.0", "ws": "^8.18.0" }, "bin": { "nice-commander": "build/cli.mjs" } }, "sha512-fruZvBF8FjSyPDZqZb8TeqWcijqG+ctRsBnGBZRVVibXgVS+R6GmCRvHvrfpqGeaIoi7+my99jPZgVgGEDzlCw=="],
 
     "@nice-code/common-errors": ["@nice-code/common-errors@0.82.0", "", { "dependencies": { "@hono/standard-validator": "^0.2.3", "@nice-code/error": "0.82.0", "@standard-schema/spec": "^1.1.0", "http-status-codes": "^2.3.0" }, "peerDependencies": { "hono": "^4.12.27", "valibot": "^1.4.2" } }, "sha512-INeK5mVjPtxmZTgI6zyww4Xpz36dvHqqNQ/vs8eGt709zd3KCZ1FOcKBX6sHUt9l1LDjOQ4LPHKP1OB4hhxdIQ=="],
 
@@ -485,13 +485,13 @@
 
     "@nice-code/error": ["@nice-code/error@0.82.0", "", {}, "sha512-pqxyIe4ETdmXZx7ZToWd2jdmXxOfITnKDa1pmYliTmNnkTVTi7Ke1oreITaVRuMFTMj2PMBdRl5qWAofjZ7eAQ=="],
 
-    "@nice-code/process": ["@nice-code/process@0.82.0", "", { "optionalDependencies": { "koffi": "^3.1.2" } }, "sha512-uET7R3HWmoSUouIkS4KbCHI2swdWa0VXSDbhjcmXEkCmtfInBrEVZZ2VG09k9J/nlBv+atcjg0dDIf9bfBHEcQ=="],
+    "@nice-code/process": ["@nice-code/process@0.86.0", "", { "optionalDependencies": { "koffi": "^3.1.2" } }, "sha512-LuO3Hel8HjmRaJV5SYi9o/dFChTrDY40CS7IxN0vEVQc6+pDQOWQg6kkoEEkwO2dDhu0gXUk41Dp1RwH9X7j9g=="],
 
     "@nice-code/realm": ["@nice-code/realm@0.82.0", "", { "dependencies": { "@nice-code/common-errors": "0.82.0", "@nice-code/error": "0.82.0", "@nice-code/state": "0.82.0", "@nice-code/util": "0.82.0", "@nice-code/wire": "0.82.0", "@standard-schema/spec": "^1.1.0", "immer": "11.1.11", "msgpackr": "2.0.4" }, "peerDependencies": { "react": ">=19", "react-dom": ">=19", "valibot": "^1.4.2" }, "optionalPeers": ["react", "react-dom"] }, "sha512-Eiix/ElA+5xbrWXDe7RRlyDVHdRVQj4kxQyhTsIZF0XdZFuJ8JfBslqLc84ChtYxwMLEsj3SufIPJOD/99mL2A=="],
 
     "@nice-code/state": ["@nice-code/state@0.82.0", "", { "dependencies": { "@nice-code/devtools-core": "0.82.0", "@nice-code/error": "0.82.0", "@tanstack/react-virtual": "^3.14.5", "fast-equals": "6.0.0", "immer": "11.1.11" }, "peerDependencies": { "react": ">=19", "react-dom": ">=19" }, "optionalPeers": ["react", "react-dom"] }, "sha512-iF9PPJQ/bfOtZEN1GOCyivCCNAZP/Lge/v4R1SKkr5iRKX8SCdb0vr+Gf9ykxZy1EBAqEQZ9UFzrxvpHHIxm9g=="],
 
-    "@nice-code/util": ["@nice-code/util@0.82.0", "", { "dependencies": { "@scure/base": "^2.2.0", "@standard-schema/spec": "^1.1.0", "nanoid": "^5.1.16", "valibot": "^1.4.2" } }, "sha512-jCJqWTypfRCeUnK6qGG4l1rQpjfpjwscqT6qxw142dxP8Qa8qBzka6Fv+bDP0niOFllhHL/XSnGOIfsIslqqYw=="],
+    "@nice-code/util": ["@nice-code/util@0.86.0", "", { "dependencies": { "@scure/base": "^2.2.0", "@standard-schema/spec": "^1.1.0", "nanoid": "^5.1.16", "valibot": "^1.4.2" } }, "sha512-yydYpjDXvsW2VQSChVb4ylJ3kP20fqXZIT9OoapN8PyPDcd/7oI7R9tyPC1HxcOI+iM5fiNIz/+nF9VblHV93g=="],
 
     "@nice-code/wire": ["@nice-code/wire@0.82.0", "", { "dependencies": { "@nice-code/error": "0.82.0", "@nice-code/util": "0.82.0", "msgpackr": "2.0.4", "nanoid": "^5.1.16" }, "peerDependencies": { "valibot": "^1.4.2" } }, "sha512-GUuIioi4Fs+PT7eHUB8/HXvLdv7z/r0A+EyU6YPiamAxCqGI0wCU22D8b/Gl1mP5ZGq+5NZKwXAFxUzB/CAszg=="],
 
@@ -1873,9 +1873,13 @@
 
     "@isaacs/cliui/wrap-ansi": ["wrap-ansi@8.1.0", "", { "dependencies": { "ansi-styles": "^6.1.0", "string-width": "^5.0.1", "strip-ansi": "^7.0.1" } }, "sha512-si7QWI6zUMq56bESFvagtmzMdGOtoxfR+Sez11Mobfc7tm+VkUckk9bW2UeffTGVUbOksxmSw0AA2gs8g71NCQ=="],
 
+    "@meteorwallet/connect/@nice-code/util": ["@nice-code/util@0.82.0", "", { "dependencies": { "@scure/base": "^2.2.0", "@standard-schema/spec": "^1.1.0", "nanoid": "^5.1.16", "valibot": "^1.4.2" } }, "sha512-jCJqWTypfRCeUnK6qGG4l1rQpjfpjwscqT6qxw142dxP8Qa8qBzka6Fv+bDP0niOFllhHL/XSnGOIfsIslqqYw=="],
+
     "@meteorwallet/connect/nanoid": ["nanoid@5.1.16", "", { "bin": { "nanoid": "bin/nanoid.js" } }, "sha512-kVrnsrJqMR8+oLJnGEmSWw9BivK5mt7H3FZatVRjrc5wGqFYuBxX1yG7+A7Gi5AefkX6t/oCkizcQgpu0cY1dQ=="],
 
     "@meteorwallet/connect-shared/@meteorwallet/utils": ["@meteorwallet/utils@1.31.0", "", { "dependencies": { "@noble/ciphers": "1.0.0", "@noble/hashes": "1.5.0", "@tanstack/query-core": "5.51.5", "@tanstack/react-query": "5.51.5", "big.js": "6.2.2", "bs58": "6.0.0" } }, "sha512-8qlkE5Npj/Y2O7cvXpJPtZxKxhCU9PEyt7Xtyk608NQoi7qufYTM3hRd0WPd6+d8uhqzpaTlpCN1TXDQMcN4dA=="],
+
+    "@meteorwallet/connect-shared/@nice-code/util": ["@nice-code/util@0.82.0", "", { "dependencies": { "@scure/base": "^2.2.0", "@standard-schema/spec": "^1.1.0", "nanoid": "^5.1.16", "valibot": "^1.4.2" } }, "sha512-jCJqWTypfRCeUnK6qGG4l1rQpjfpjwscqT6qxw142dxP8Qa8qBzka6Fv+bDP0niOFllhHL/XSnGOIfsIslqqYw=="],
 
     "@meteorwallet/errors/zod": ["zod@3.24.4", "", {}, "sha512-OdqJE9UDRPwWsrHjLN2F8bPxvwJBK22EHLWtanu0LSYr5YqzsaaW3RMgmjwr8Rypg5k+meEJdSPXJZXE/yqOMg=="],
 
@@ -1915,11 +1919,17 @@
 
     "@near-wallet-selector/react-hook/near-api-js": ["near-api-js@5.0.0", "", { "dependencies": { "@near-js/accounts": "1.3.0", "@near-js/crypto": "1.4.0", "@near-js/keystores": "0.2.0", "@near-js/keystores-browser": "0.2.0", "@near-js/keystores-node": "0.1.0", "@near-js/providers": "1.0.0", "@near-js/signers": "0.2.0", "@near-js/transactions": "1.3.0", "@near-js/types": "0.3.0", "@near-js/utils": "1.0.0", "@near-js/wallet-account": "1.3.0", "@noble/curves": "1.2.0", "borsh": "1.0.0", "depd": "2.0.0", "http-errors": "1.7.2", "near-abi": "0.1.1", "node-fetch": "2.6.7" } }, "sha512-JQBWG2TGSNx4EJKFtsz2lhadFYtZofyJjwigIqlKjBXQluG5DepM5ZdPJSTZ3R526OoqOcGq7MeZMYlW+hn2nw=="],
 
+    "@nice-code/action/@nice-code/util": ["@nice-code/util@0.82.0", "", { "dependencies": { "@scure/base": "^2.2.0", "@standard-schema/spec": "^1.1.0", "nanoid": "^5.1.16", "valibot": "^1.4.2" } }, "sha512-jCJqWTypfRCeUnK6qGG4l1rQpjfpjwscqT6qxw142dxP8Qa8qBzka6Fv+bDP0niOFllhHL/XSnGOIfsIslqqYw=="],
+
     "@nice-code/action/nanoid": ["nanoid@5.1.16", "", { "bin": { "nanoid": "bin/nanoid.js" } }, "sha512-kVrnsrJqMR8+oLJnGEmSWw9BivK5mt7H3FZatVRjrc5wGqFYuBxX1yG7+A7Gi5AefkX6t/oCkizcQgpu0cY1dQ=="],
+
+    "@nice-code/realm/@nice-code/util": ["@nice-code/util@0.82.0", "", { "dependencies": { "@scure/base": "^2.2.0", "@standard-schema/spec": "^1.1.0", "nanoid": "^5.1.16", "valibot": "^1.4.2" } }, "sha512-jCJqWTypfRCeUnK6qGG4l1rQpjfpjwscqT6qxw142dxP8Qa8qBzka6Fv+bDP0niOFllhHL/XSnGOIfsIslqqYw=="],
 
     "@nice-code/util/@scure/base": ["@scure/base@2.2.0", "", {}, "sha512-b8XEupJibegiXV+tDUseI8oLQc8ei3d/4Jkb2RpbHh3MfE054ov3uIz2dhFkB3FI8iwYkEh0gGCApkrYggkPNg=="],
 
     "@nice-code/util/nanoid": ["nanoid@5.1.16", "", { "bin": { "nanoid": "bin/nanoid.js" } }, "sha512-kVrnsrJqMR8+oLJnGEmSWw9BivK5mt7H3FZatVRjrc5wGqFYuBxX1yG7+A7Gi5AefkX6t/oCkizcQgpu0cY1dQ=="],
+
+    "@nice-code/wire/@nice-code/util": ["@nice-code/util@0.82.0", "", { "dependencies": { "@scure/base": "^2.2.0", "@standard-schema/spec": "^1.1.0", "nanoid": "^5.1.16", "valibot": "^1.4.2" } }, "sha512-jCJqWTypfRCeUnK6qGG4l1rQpjfpjwscqT6qxw142dxP8Qa8qBzka6Fv+bDP0niOFllhHL/XSnGOIfsIslqqYw=="],
 
     "@nice-code/wire/nanoid": ["nanoid@5.1.16", "", { "bin": { "nanoid": "bin/nanoid.js" } }, "sha512-kVrnsrJqMR8+oLJnGEmSWw9BivK5mt7H3FZatVRjrc5wGqFYuBxX1yG7+A7Gi5AefkX6t/oCkizcQgpu0cY1dQ=="],
 
@@ -2187,6 +2197,12 @@
 
     "@meteorwallet/connect-shared/@meteorwallet/utils/@tanstack/react-query": ["@tanstack/react-query@5.51.5", "", { "dependencies": { "@tanstack/query-core": "5.51.5" }, "peerDependencies": { "react": "^18.0.0" } }, "sha512-jaYYPGF55HT3DSV2NxFHa7zGRUm6LiRENw1rspkzqNiOU93umP5YCdE/l4S61/ZdLnjzwYIM4FU96EQt+imq5Q=="],
 
+    "@meteorwallet/connect-shared/@nice-code/util/@scure/base": ["@scure/base@2.2.0", "", {}, "sha512-b8XEupJibegiXV+tDUseI8oLQc8ei3d/4Jkb2RpbHh3MfE054ov3uIz2dhFkB3FI8iwYkEh0gGCApkrYggkPNg=="],
+
+    "@meteorwallet/connect-shared/@nice-code/util/nanoid": ["nanoid@5.1.16", "", { "bin": { "nanoid": "bin/nanoid.js" } }, "sha512-kVrnsrJqMR8+oLJnGEmSWw9BivK5mt7H3FZatVRjrc5wGqFYuBxX1yG7+A7Gi5AefkX6t/oCkizcQgpu0cY1dQ=="],
+
+    "@meteorwallet/connect/@nice-code/util/@scure/base": ["@scure/base@2.2.0", "", {}, "sha512-b8XEupJibegiXV+tDUseI8oLQc8ei3d/4Jkb2RpbHh3MfE054ov3uIz2dhFkB3FI8iwYkEh0gGCApkrYggkPNg=="],
+
     "@meteorwallet/sdk/tsdown/ansis": ["ansis@4.2.0", "", {}, "sha512-HqZ5rWlFjGiV0tDm3UxxgNRqsOTniqoKZu0pIAfh7TZQMGuZK+hH0drySty0si0QXj1ieop4+SkSfPZBPPkHig=="],
 
     "@meteorwallet/sdk/tsdown/hookable": ["hookable@6.0.1", "", {}, "sha512-uKGyY8BuzN/a5gvzvA+3FVWo0+wUjgtfSdnmjtrOVwQCZPHpHDH2WRO3VZSOeluYrHoDCiXFffZXs8Dj1ULWtw=="],
@@ -2248,6 +2264,14 @@
     "@near-wallet-selector/react-hook/near-api-js/@noble/curves": ["@noble/curves@1.2.0", "", { "dependencies": { "@noble/hashes": "1.3.2" } }, "sha512-oYclrNgRaM9SsBUBVbb8M6DTV7ZHRTKugureoYEncY5c65HOmRzvSiTE3y5CYaPYJA/GVkrhXEoF0M3Ya9PMnw=="],
 
     "@near-wallet-selector/react-hook/near-api-js/near-abi": ["near-abi@0.1.1", "", { "dependencies": { "@types/json-schema": "^7.0.11" } }, "sha512-RVDI8O+KVxRpC3KycJ1bpfVj9Zv+xvq9PlW1yIFl46GhrnLw83/72HqHGjGDjQ8DtltkcpSjY9X3YIGZ+1QyzQ=="],
+
+    "@nice-code/action/@nice-code/util/@scure/base": ["@scure/base@2.2.0", "", {}, "sha512-b8XEupJibegiXV+tDUseI8oLQc8ei3d/4Jkb2RpbHh3MfE054ov3uIz2dhFkB3FI8iwYkEh0gGCApkrYggkPNg=="],
+
+    "@nice-code/realm/@nice-code/util/@scure/base": ["@scure/base@2.2.0", "", {}, "sha512-b8XEupJibegiXV+tDUseI8oLQc8ei3d/4Jkb2RpbHh3MfE054ov3uIz2dhFkB3FI8iwYkEh0gGCApkrYggkPNg=="],
+
+    "@nice-code/realm/@nice-code/util/nanoid": ["nanoid@5.1.16", "", { "bin": { "nanoid": "bin/nanoid.js" } }, "sha512-kVrnsrJqMR8+oLJnGEmSWw9BivK5mt7H3FZatVRjrc5wGqFYuBxX1yG7+A7Gi5AefkX6t/oCkizcQgpu0cY1dQ=="],
+
+    "@nice-code/wire/@nice-code/util/@scure/base": ["@scure/base@2.2.0", "", {}, "sha512-b8XEupJibegiXV+tDUseI8oLQc8ei3d/4Jkb2RpbHh3MfE054ov3uIz2dhFkB3FI8iwYkEh0gGCApkrYggkPNg=="],
 
     "@tailwindcss/oxide-wasm32-wasi/@napi-rs/wasm-runtime/@emnapi/core": ["@emnapi/core@1.4.3", "", { "dependencies": { "@emnapi/wasi-threads": "1.0.2", "tslib": "^2.4.0" } }, "sha512-4m62DuCE07lw01soJwPiBGC0nAww0Q+RY70VZ+n49yDIO13yyinhbWCeNnaob0lakDtWQzSdtNWzJeOJt2ma+g=="],
 

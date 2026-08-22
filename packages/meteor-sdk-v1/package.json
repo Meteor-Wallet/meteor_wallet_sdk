@@ -51,7 +51,7 @@
     "@meteorwallet/utils": "1.28.0-0",
     "@meteorwallet/connect": "0.12.0",
     "@meteorwallet/connect-shared": "0.12.0",
-    "@nice-code/util": "0.82.0",
+    "@nice-code/util": "0.86.0",
     "@near-js/accounts": "2.2.5",
     "@near-js/crypto": "2.2.5",
     "@near-js/transactions": "2.2.5",
