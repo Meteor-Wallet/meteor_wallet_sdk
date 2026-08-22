@@ -339,8 +339,10 @@ function createBridgeDouble(outputs: unknown[]) {
         initialTurn: { envelope: {}, signatureBase64: "" },
       } as unknown as ICreatedPartnerSession;
     },
-    // Every claim rewrites the claiming wallet's paired record with a fresh `pairedAt`; that is
-    // how the session names its claimant against the baseline it took before creation.
+    // The session's own claimant (0.13+).
+    get claimedWallet(): TPartnerPairedWallet {
+      return { ...PAIRED_WALLET, pairedAt: (pairedAtTicks += 1) };
+    },
     getPairedWallets: async (): Promise<TPartnerPairedWallet[]> => [
       { ...PAIRED_WALLET, pairedAt: (pairedAtTicks += 1) },
     ],
@@ -363,7 +365,7 @@ function createBridgeDouble(outputs: unknown[]) {
       trace.events.push("verb:acknowledgeAndClose");
       trace.closedReceipts.push(receipt);
       return sessionFactsFor(ESessionPhase.closed);
-    }),
+    }, { selfInitiated: true }),
     acknowledgeAndBeginExternalWork: base.verb(
       (receipt: ISessionResultReceipt, journaledResultHash: string) => {
         trace.events.push("verb:acknowledgeAndBeginExternalWork");
@@ -382,7 +384,9 @@ function createBridgeDouble(outputs: unknown[]) {
       return { envelope: {}, signatureBase64: "" } as unknown as IPreparedSessionTurn;
     },
     submitPreparedAction: base.verb(() => sessionFactsFor(ESessionPhase.wallet_action)),
-    closePhaseSafe: base.verb(() => sessionFactsFor(ESessionPhase.closed)),
+    closePhaseSafe: base.verb(() => sessionFactsFor(ESessionPhase.closed), {
+      selfInitiated: true,
+    }),
     // The client drops the binding's facts here, so a fresh session starts from nothing.
     disconnectBridge: async (): Promise<void> => {
       base.releaseBinding();

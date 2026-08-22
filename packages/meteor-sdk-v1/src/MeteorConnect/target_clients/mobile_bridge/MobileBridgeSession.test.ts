@@ -114,9 +114,14 @@ function createClientDouble(
       // The client drops the binding's facts here, so a fresh session starts from nothing.
       base.releaseBinding();
     },
-    // Every claim rewrites the claiming wallet's paired record with a fresh `pairedAt`, which is
-    // how the session identifies the claimant against its pre-session baseline. `pairedWallets`
-    // overrides that to model a session nobody claimed.
+    // The session's own claimant (0.13+). `pairedWallets: []` models a session nobody claimed —
+    // the client leaves `claimedWallet` undefined until a claim binds one.
+    get claimedWallet(): TPartnerPairedWallet | undefined {
+      const paired = overrides.pairedWallets ?? [
+        { ...PAIRED_WALLET, pairedAt: (pairedAtTicks += 1) },
+      ];
+      return paired[0];
+    },
     getPairedWallets: async (): Promise<TPartnerPairedWallet[]> =>
       overrides.pairedWallets ?? [{ ...PAIRED_WALLET, pairedAt: (pairedAtTicks += 1) }],
     // `createSession` binds the session and stages its initial turn, accepting the facts it is
@@ -133,8 +138,8 @@ function createClientDouble(
     waitForValidatedResult:
       overrides.waitForValidatedResult ??
       (() => new Promise<TValidatedSessionResult<unknown>>(() => {})),
-    acknowledgeAndClose: base.verb(acknowledgeAndClose),
-    closePhaseSafe: base.verb(closePhaseSafe),
+    acknowledgeAndClose: base.verb(acknowledgeAndClose, { selfInitiated: true }),
+    closePhaseSafe: base.verb(closePhaseSafe, { selfInitiated: true }),
   };
   return { client, emit: base.emit };
 }
@@ -364,7 +369,7 @@ describe("MobileBridgeSession terminal outcomes", () => {
     const double = createClientDouble();
     const session = createSession({ client: double.client });
     const result = rejectionOf(session);
-    double.emit("terminal", { outcome: { reason: "bridge_gone" } });
+    double.emit("terminal", { outcome: { reason: "bridge_gone", selfInitiated: false } });
     expect(session.getSnapshot().terminalReason).toBe("bridge_gone");
     expect((await result)?.message).toBe("mobile_bridge_expired");
   });
@@ -373,7 +378,7 @@ describe("MobileBridgeSession terminal outcomes", () => {
     const double = createClientDouble();
     const session = createSession({ client: double.client });
     const result = rejectionOf(session);
-    double.emit("terminal", { outcome: { reason: "retry_budget" } });
+    double.emit("terminal", { outcome: { reason: "retry_budget", selfInitiated: false } });
     expect(session.getSnapshot().terminalReason).toBe("retry_budget");
     expect((await result)?.message).toBe("mobile_bridge_failed");
   });
@@ -383,7 +388,8 @@ describe("MobileBridgeSession terminal outcomes", () => {
     const session = createSession({ client: double.client });
     const result = rejectionOf(session);
     double.emit("terminal", {
-      outcome: { reason: "terminal_status", statusId: ESessionPhase.closed },
+      // Counterparty close: NOT self-initiated — that distinction is the whole point here.
+      outcome: { reason: "terminal_status", statusId: ESessionPhase.closed, selfInitiated: false },
     });
     expect((await result)?.message).toBe("mobile_bridge_cancelled");
   });
@@ -476,7 +482,13 @@ describe("MobileBridgeSession session creation", () => {
     const url = new URL(deepLink.slice(0, deepLink.indexOf("#")));
     expect(url.origin).toBe("https://localhost:3001");
     expect(url.searchParams.get("bridgeLease")).toBe("lease1");
-    expect(url.searchParams.get("mcBackend")).toBe("https://mc.meteorwallet.app");
+    // 0.13: the backend hint moved out of the query and into the fragment, where the wallet must
+    // resolve it against its own allowlist rather than trusting the link.
+    expect(url.searchParams.get("mcBackend")).toBeNull();
+    // The option is `backendUrlHint`; on the wire it is the fragment key `backendUrl`.
+    expect(new URLSearchParams(deepLink.slice(deepLink.indexOf("#") + 1)).get("backendUrl")).toBe(
+      "https://mc.meteorwallet.app",
+    );
     // The opener allowlist follows the rewritten link, not the backend-issued one.
     expect(session.getSelectedWalletLink()?.linkString).toBe(url.toString());
   });
@@ -726,7 +738,7 @@ describe("MobileBridgeSession explicit close verbs", () => {
     double.client.events.on("factsChanged", ({ facts, source }) => {
       // The realm-sourced failure arrives while the acknowledgement is still awaiting.
       if (source !== "action" || facts.phase !== ESessionPhase.closed) return;
-      double.emit("terminal", { outcome: { reason: "bridge_gone" } });
+      double.emit("terminal", { outcome: { reason: "bridge_gone", selfInitiated: false } });
     });
     await session.startPreparation();
 
@@ -827,11 +839,13 @@ describe("MobileBridgeSession claimed-wallet resolution", () => {
     });
   });
 
-  it("fails closed when no paired record proves which wallet claimed the session", async () => {
-    // Nothing re-paired, so the claimant cannot be named. Guessing here would bind a later
-    // `..._verify_active` turn to the wrong wallet, so it must throw instead.
+  it("fails closed when the client names no claimant for the session", async () => {
+    // No claim is bound, so the claimant cannot be named. Guessing would bind a later
+    // `..._verify_active` turn to the wrong wallet, so it must throw instead. (Pre-0.13 this was
+    // detected by diffing the paired ledger against a pre-session baseline; the client now answers
+    // it directly, but the fail-closed rule is unchanged.)
     const double = createClientDouble({
-      pairedWallets: [PAIRED_WALLET],
+      pairedWallets: [],
       waitForValidatedResult: async () => ({
         status: "ok",
         output: { formatVersion: 1, accounts: [] },

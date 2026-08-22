@@ -40,24 +40,15 @@ import { meteorWalletCoreOutputToSdk, nearOutputToSdk } from "./mobileBridgeOutp
  * "https://wallet-dev…/bridge_request?x=y" + "https://localhost:3001"
  * → "https://localhost:3001/bridge_request?x=y".
  *
- * `mcBackendHintUrl` (the partner's bridge backend) rides along as an `mcBackend` query param:
- * a locally served wallet derives its backend from its own hostname, which is wrong whenever the
- * partner used any other backend — dev wallet builds honor the hint so the claim lands on the
- * bridge that actually exists. Never added to non-rebased (deployed) links.
- *
- * TODO(connect>0.12): replace with resolveTrustedBackendUrlHint + buildWalletLinkUrl's
- * `backendUrlHint` — neither exists in 0.12.0.
+ * Only the ORIGIN moves. Which backend the session lives on is advertised separately, through
+ * `buildWalletLinkUrl`'s `backendUrlHint` (0.13+) — a locally served wallet derives its backend
+ * from its own hostname, which is wrong whenever the partner used any other one. That hint rides
+ * the link fragment and is resolved on the wallet side against ITS OWN allowlist via
+ * `resolveTrustedBackendUrlHint`, so a link can never talk a wallet into dialing an arbitrary host.
  */
-export function rebaseWalletLinkToLocalDev(
-  linkString: string,
-  localBaseUrl: string,
-  mcBackendHintUrl?: string,
-): string {
+export function rebaseWalletLinkToLocalDev(linkString: string, localBaseUrl: string): string {
   const link = new URL(linkString);
   const base = new URL(localBaseUrl);
-  if (mcBackendHintUrl != null) {
-    link.searchParams.set("mcBackend", mcBackendHintUrl);
-  }
   return `${base.origin}${link.pathname}${link.search}`;
 }
 
@@ -254,7 +245,6 @@ export class MobileBridgeSession {
    */
   private turnExternalWorkJournal?: TMobileBridgeExternalWorkJournal;
   private claimedWallet?: TPartnerPairedWallet;
-  private pairedWalletBaseline?: ReadonlyMap<string, number>;
   private completedConnection?: IMeteorConnection_V2_BridgeMobile;
   private resolveResult!: (value: any) => void;
   private rejectResult!: (reason: unknown) => void;
@@ -340,7 +330,6 @@ export class MobileBridgeSession {
     try {
       // Snapshot the paired-wallet ledger BEFORE the session exists, so the wallet that claims it
       // can be identified exactly afterwards (see resolveClaimedWallet).
-      this.pairedWalletBaseline = await this.readPairedWalletBaseline();
       const pinned = this.input.pinnedWallet;
       const session = await this.input.client.createSession({
         initialActionRequest: this.prepared.actionRequest,
@@ -562,7 +551,6 @@ export class MobileBridgeSession {
             linkString: rebaseWalletLinkToLocalDev(
               backendLink.linkString,
               this.input.localDevLinkRewrite.baseUrl,
-              this.input.localDevLinkRewrite.mcBackendHintUrl,
             ),
           }
         : backendLink;
@@ -570,7 +558,12 @@ export class MobileBridgeSession {
     // The memory-only secret rides the URL fragment. `buildWalletLinkUrl` is the only supported
     // way to build it and `parseWalletLinkUrl` the only supported way to read it back — a
     // hand-concatenated link is the historical source of unclaimable bridges.
-    this.update({ deepLink: buildWalletLinkUrl(session, link) });
+    // The rebased local-dev link is the only case where partner and wallet can legitimately be on
+    // different backends, so it is the only case that advertises one. Deployed links stay unset.
+    const hint = this.input.localDevLinkRewrite?.mcBackendHintUrl;
+    this.update({
+      deepLink: buildWalletLinkUrl(session, link, ...(hint == null ? [] : [{ backendUrlHint: hint }])),
+    });
   }
 
   /**
@@ -691,7 +684,7 @@ export class MobileBridgeSession {
         outcome.receipt,
         journaledResultHash,
       );
-      const walletConnection = this.input.buildConnection(await this.resolveClaimedWallet());
+      const walletConnection = this.input.buildConnection(this.resolveClaimedWallet());
       this.completedConnection = walletConnection;
       this.externalWorkHold = {
         bridgeId: outcome.receipt.bridgeId,
@@ -709,7 +702,7 @@ export class MobileBridgeSession {
     if (sharedActionId !== "transfer_accounts") {
       // Pin the exact wallet identity that authored this result; the matching `..._verify_active`
       // turn is bound to it.
-      this.completedConnection = this.input.buildConnection(await this.resolveClaimedWallet());
+      this.completedConnection = this.input.buildConnection(this.resolveClaimedWallet());
     }
     return meteorWalletCoreOutputToSdk(this.prepared, outcome.output);
   }
@@ -738,7 +731,7 @@ export class MobileBridgeSession {
     // Same rule as above: acknowledge and close before the SDK-shaped hydration, which does local
     // key persistence and account-identity checks that must not be able to park the session.
     await client.acknowledgeAndClose(outcome.receipt);
-    const connection = this.input.buildConnection(await this.resolveClaimedWallet());
+    const connection = this.input.buildConnection(this.resolveClaimedWallet());
     this.completedConnection = connection;
     return nearOutputToSdk(this.prepared, outcome.output, {
       getConnection: () => connection,
@@ -750,40 +743,25 @@ export class MobileBridgeSession {
   // Claimed wallet identity
   // ---------------------------------------------------------------------------------------------
 
-  private async readPairedWalletBaseline(): Promise<ReadonlyMap<string, number>> {
-    const wallets = await this.input.client.getPairedWallets();
-    return new Map(wallets.map((wallet) => [wallet.walletVerifyPublicKey, wallet.pairedAt]));
-  }
-
   /**
-   * Which wallet claimed THIS session. 0.12 exposes no per-session claimed-wallet getter, but a
-   * claim always (re)writes that wallet's paired record with a fresh `pairedAt` — the client's
-   * in-memory wallet link is cleared on every disconnect, so the write is never skipped for a new
-   * session. Diffing against the pre-session baseline therefore names the claimant exactly, and a
-   * session that was pushed to a specific paired wallet matches that wallet by exact verify key.
-   * Anything ambiguous fails closed rather than guessing.
+   * Which wallet claimed THIS session.
    *
-   * TODO(connect>0.12): replace with a first-class claimed-wallet surface on PartnerSessionClient.
+   * `client.claimedWallet` is the session's own binding (0.13+), so this no longer has to diff the
+   * whole paired-wallet ledger against a pre-session baseline and fail closed on an ambiguous
+   * result. A pushed session additionally pins the exact verify key it targeted — a claim by any
+   * other wallet is refused rather than accepted.
    */
-  private async resolveClaimedWallet(): Promise<TPartnerPairedWallet> {
+  private resolveClaimedWallet(): TPartnerPairedWallet {
     if (this.claimedWallet != null) return this.claimedWallet;
-    const baseline = this.pairedWalletBaseline ?? new Map<string, number>();
-    const wallets = await this.input.client.getPairedWallets();
-    const targeted = wallets.filter((wallet) =>
-      this.input.targetMeteorAppIds.includes(wallet.meteorAppId),
-    );
-    const pinned = this.input.pushWallet;
-    const candidates =
-      pinned == null
-        ? targeted.filter((wallet) => {
-            const previous = baseline.get(wallet.walletVerifyPublicKey);
-            return previous == null || wallet.pairedAt > previous;
-          })
-        : targeted.filter(
-            (wallet) => wallet.walletVerifyPublicKey === pinned.walletVerifyPublicKey,
-          );
-    const claimed = candidates.length === 1 ? candidates[0] : undefined;
+    const claimed = this.input.client.claimedWallet;
     if (claimed == null) throw new Error("mobile_bridge_active_wallet_unavailable");
+    const pinned = this.input.pushWallet;
+    if (pinned != null && claimed.walletVerifyPublicKey !== pinned.walletVerifyPublicKey) {
+      throw new Error("mobile_bridge_active_wallet_unavailable");
+    }
+    if (!this.input.targetMeteorAppIds.includes(claimed.meteorAppId)) {
+      throw new Error("mobile_bridge_active_wallet_unavailable");
+    }
     this.claimedWallet = claimed;
     return claimed;
   }

@@ -55,13 +55,15 @@ export interface ISessionClientDoubleBase {
    * `pinRequired` once per binding, and `terminal` on a terminal phase. Returns its argument so a
    * verb body can end in `return publishFacts(...)`.
    */
-  publishFacts(facts: TSessionFacts): TSessionFacts;
+  publishFacts(facts: TSessionFacts, selfInitiated?: boolean): TSessionFacts;
   /**
    * Wrap a facts-returning verb so its facts are published before its promise resolves — the shape
    * every such verb on a double is written in, so the emission cannot be forgotten.
    */
   verb<TArguments extends unknown[]>(
     implementation: (...args: TArguments) => TSessionFacts | Promise<TSessionFacts>,
+    /** Set for a CLOSE verb, so its terminal is published as this client's own (`selfInitiated`). */
+    options?: { selfInitiated?: boolean },
   ): (...args: TArguments) => Promise<TSessionFacts>;
   /** What `disconnectBridge` / `resetClient` do: drop the binding's facts, re-arm `pinRequired`. */
   releaseBinding(): void;
@@ -112,7 +114,7 @@ export function createSessionClientDoubleBase(
   const recordFactsCarriedBy = (payload: ISessionEventPayloads[TSessionEventName]): void => {
     if ("facts" in payload) sessionFacts = payload.facts;
   };
-  const publishFacts = (facts: TSessionFacts): TSessionFacts => {
+  const publishFacts = (facts: TSessionFacts, selfInitiated = false): TSessionFacts => {
     sessionFacts = facts;
     dispatch("factsChanged", { facts, source: "action" });
     if (!pinRequiredEmitted && facts.phase === ESessionPhase.wallet_verification) {
@@ -120,7 +122,11 @@ export function createSessionClientDoubleBase(
       dispatch("pinRequired", { facts });
     }
     if (facts.phase === ESessionPhase.closed || facts.phase === ESessionPhase.failed) {
-      dispatch("terminal", { outcome: { reason: "terminal_status", statusId: facts.phase } });
+      // Mirrors the real client: a terminal produced by one of THIS client's own close verbs is
+      // flagged, so a projection can tell its own close from the counterparty ending the session.
+      dispatch("terminal", {
+        outcome: { reason: "terminal_status", statusId: facts.phase, selfInitiated },
+      });
     }
     return facts;
   };
@@ -133,9 +139,9 @@ export function createSessionClientDoubleBase(
     getSessionFacts: () => sessionFacts,
     publishFacts,
     verb:
-      (implementation) =>
+      (implementation, options) =>
       async (...args) =>
-        publishFacts(await implementation(...args)),
+        publishFacts(await implementation(...args), options?.selfInitiated ?? false),
     releaseBinding: () => {
       sessionFacts = undefined;
       pinRequiredEmitted = false;

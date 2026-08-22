@@ -456,12 +456,15 @@ function createTurnCapturingClient(input: { result?: TValidatedSessionResult<unk
         initialTurn: { envelope: {}, signatureBase64: "" },
       } as unknown as ICreatedPartnerSession;
     },
+    claimedWallet: undefined,
     getPairedWallets: async (): Promise<TPartnerPairedWallet[]> => [],
     // The canary reveals the key mid-flow and wants no turn ending, so by default the wait never
     // settles; a test that needs the closing verb to actually run scripts a result.
     waitForValidatedResult: (): Promise<TValidatedSessionResult<unknown>> =>
       input.result == null ? new Promise(() => {}) : Promise.resolve(input.result),
-    acknowledgeAndClose: base.verb(() => sessionFactsFor(ESessionPhase.closed)),
+    acknowledgeAndClose: base.verb(() => sessionFactsFor(ESessionPhase.closed), {
+      selfInitiated: true,
+    }),
     // The client drops the binding's facts here, so a fresh session starts from nothing.
     disconnectBridge: async (): Promise<void> => {
       base.releaseBinding();

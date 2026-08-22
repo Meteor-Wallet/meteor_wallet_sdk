@@ -1,5 +1,9 @@
 import { describe, expect, it } from "bun:test";
-import { BridgeSessionTerminalError } from "@meteorwallet/connect";
+import {
+  BridgeSessionTerminalError,
+  buildWalletLinkUrl,
+  parseWalletLinkUrl,
+} from "@meteorwallet/connect";
 import {
   act_impl_meteor_wallet_core,
   buildAccountsTransferRequestData,
@@ -165,6 +169,50 @@ describe("execution-target domain gating", () => {
     expect(await test.getExecutionTargetConfigs(transferRequest)).toEqual([]);
   });
 
+  it("still routes EVERY NEAR action to a V1 target, exactly as before the session migration", async () => {
+    // The guarantee behind gating NEAR off the session bridge: nothing about NEAR changed for
+    // consumers, because the V1 web/extension transports still carry all seven ids. If this ever
+    // fails, a NEAR action has lost its transport entirely rather than merely lost the bridge.
+    const NEAR_ACTIONS = [
+      "near::sign_in",
+      "near::sign_in_and_sign_message",
+      "near::sign_out",
+      "near::sign_message",
+      "near::sign_transactions",
+      "near::sign_delegate_actions",
+      "near::verify_owner",
+    ] as const;
+
+    const storage = {
+      getItem: async () => null,
+      setItem: async () => {},
+      removeItem: async () => {},
+    };
+    // The V1 client sniffs `window` for the extension bridge; bun has no DOM, and "no extension
+    // present" is exactly the case we want here — a plain web build must still offer `v1_web`.
+    const hadWindow = "window" in globalThis;
+    if (!hadWindow) Object.defineProperty(globalThis, "window", { value: {}, configurable: true });
+
+    const v1 = new MeteorConnectV1Client({
+      storage: { getJsonOrDef: async (_key: string, fallback: unknown) => fallback },
+    } as unknown as MeteorConnect);
+    const bridge = new MeteorConnectMobileBridgeClient({} as unknown as MeteorConnect);
+    bridge.configure({ enabled: true }, storage);
+
+    for (const id of NEAR_ACTIONS) {
+      const request = { id, expandedInput: {} } as any;
+      const v1Targets = await v1.getExecutionTargetConfigs(request);
+      expect(
+        v1Targets.map((target) => target.executionTarget),
+        `${id} must still have a V1 target`,
+      ).toContain("v1_web");
+      // …and the session bridge stays out of it while NEAR is server-side ineligible.
+      expect(await bridge.getExecutionTargetConfigs(request), `${id} must not reach the bridge`).toEqual([]);
+    }
+
+    if (!hadWindow) Reflect.deleteProperty(globalThis, "window");
+  });
+
   it("offers no NEAR target unless experimentalNearOverSession is explicitly on", async () => {
     // The bridge's `session_policies.ts::hasImplementedRecoverySeams` admits only the three
     // meteor_wallet_core transfer ids, so a NEAR session is refused server-side with
@@ -323,10 +371,10 @@ describe("transfer outcome mapping", () => {
 
   it("maps a terminal bridge release by its reason", () => {
     expect(
-      mapRejectionToOutcome(new BridgeSessionTerminalError({ reason: "bridge_gone" })),
+      mapRejectionToOutcome(new BridgeSessionTerminalError({ reason: "bridge_gone", selfInitiated: false })),
     ).toEqual({ status: "expired" });
     expect(
-      mapRejectionToOutcome(new BridgeSessionTerminalError({ reason: "retry_budget" })),
+      mapRejectionToOutcome(new BridgeSessionTerminalError({ reason: "retry_budget", selfInitiated: false })),
     ).toEqual({ status: "failed", reason: "bridge_failed" });
   });
 
@@ -366,15 +414,24 @@ describe("web_local_dev link rebase", () => {
     ).toBe("http://192.168.0.12:3001/bridge_request?bridgeId=b2&protocolVersion=1");
   });
 
-  it("carries the partner's bridge backend as an mcBackend hint for the dev wallet", () => {
+  it("advertises the partner's bridge backend through the link fragment, not the query", () => {
+    // 0.13 moved the hint off `?mcBackend=` and into the fragment, where `parseWalletLinkUrl`
+    // surfaces it as explicitly UNTRUSTED input for the wallet to resolve against its own
+    // allowlist. The rebase itself now only moves the origin.
     const rebased = rebaseWalletLinkToLocalDev(
-      "https://wallet-dev.meteorwallet.app/bridge_request?bridgeId=b3&protocolVersion=1",
+      `https://wallet-dev.meteorwallet.app/bridge_request?linkFormat=s1&interactionMode=session_v1&bridgeId=${"b".repeat(64)}&bridgeLease=${"l".repeat(80)}&protocolVersion=2`,
       "https://localhost:3001",
-      "https://mc.meteorwallet.app",
     );
-    const url = new URL(rebased);
-    expect(url.origin).toBe("https://localhost:3001");
-    expect(url.searchParams.get("bridgeId")).toBe("b3");
-    expect(url.searchParams.get("mcBackend")).toBe("https://mc.meteorwallet.app");
+    expect(new URL(rebased).origin).toBe("https://localhost:3001");
+    expect(new URL(rebased).searchParams.get("mcBackend")).toBeNull();
+
+    const built = buildWalletLinkUrl(
+      { partnerSecret: "secret-value" },
+      { linkString: rebased },
+      { backendUrlHint: "https://mc.meteorwallet.app" },
+    );
+    const parsed = parseWalletLinkUrl(built);
+    expect(parsed?.bridgeId).toBe("b".repeat(64));
+    expect(parsed?.untrustedBackendUrlHint).toBe("https://mc.meteorwallet.app");
   });
 });
