@@ -373,17 +373,30 @@ export class MeteorConnect {
       await Promise.all(clients.map((c) => c.getExecutionTargetConfigs(expandedRequest)))
     ).flat();
 
-    if (executionConfigs.length === 0) {
+    const targetClientAvailable =
+      selectedExecutionTarget == null ||
+      executionConfigs.some((config) => config.executionTarget === selectedExecutionTarget);
+
+    // Signing out is, from the dApp's side, removal of local state — so it must never be the one
+    // action a stranded account cannot perform. Two escapes, and both are `near::sign_out` only:
+    //
+    //  - the account never received a dApp key, so there is nothing for the wallet to revoke; and
+    //  - the account's execution target is not offered by this configuration at all — e.g. an
+    //    account persisted with `v2_bridge_mobile` by an older build, now that NEAR is gated off
+    //    the session bridge (`experimentalNearOverSession`). The wallet is unreachable, so
+    //    removing the local entry is the only thing sign-out can still mean.
+    //
+    // Every other action for such an account keeps throwing below: a stranded account must still
+    // fail loudly for anything that actually needs the wallet.
+    const canSignOutLocally =
+      request.id === "near::sign_out" &&
+      (targetedAccount?.publicKeys.length === 0 || !targetClientAvailable);
+
+    if (executionConfigs.length === 0 && !canSignOutLocally) {
       throw new Error(
         this.logger.formatMsg(`No execution clients found for action [${request.id}]`),
       );
     }
-
-    const targetClientAvailable =
-      selectedExecutionTarget == null ||
-      executionConfigs.some((config) => config.executionTarget === selectedExecutionTarget);
-    const canSignOutLocally =
-      request.id === "near::sign_out" && targetedAccount?.publicKeys.length === 0;
 
     if (!targetClientAvailable && !canSignOutLocally) {
       throw new Error(

@@ -357,10 +357,29 @@ Available targets: [${this.connectionTargetConfig.allExecutionTargets.map((c) =>
     return this.execute_promise;
   }
 
+  /**
+   * The account is bound to an execution target this Meteor Connect configuration does not offer,
+   * so no client can carry its request to the wallet. `createAction` only lets `near::sign_out`
+   * reach here — every other account-bound action throws at creation — which is what keeps the
+   * local escape below narrow.
+   */
+  private isStrandedFromContextualTarget(): boolean {
+    const contextualTarget = this.connectionTargetConfig.contextualExecutionTarget;
+    if (contextualTarget == null) return false;
+    return !this.connectionTargetConfig.allExecutionTargets.some(
+      (config) => config.executionTarget === contextualTarget,
+    );
+  }
+
   private isLocalOnlySignOut(): boolean {
     if (this.id !== "near::sign_out") return false;
     const account = this.expandedInput.account as IMeteorConnectAccount | undefined;
-    return account != null && (account.publicKeys == null || account.publicKeys.length === 0);
+    if (account == null) return false;
+    // A stranded account has no reachable wallet, so local removal is all that is left. When its
+    // target IS available nothing changes here and the remote sign-out below still runs, so the
+    // wallet still gets the chance to revoke the dApp key.
+    if (this.isStrandedFromContextualTarget()) return true;
+    return account.publicKeys == null || account.publicKeys.length === 0;
   }
 
   private async executeLocalSignOut(): Promise<TMCActionRegistry[R["id"]]["output"]> {

@@ -1,10 +1,19 @@
 # Meteor Connect
 
-`MeteorConnect` routes each NEAR request to the compatible Meteor target. The existing web and
-extension targets remain unchanged. The optional `v2_bridge_mobile` target prepares an idempotent
-Meteor Connect bridge as soon as the popup opens, renders its QR code under **Meteor Mobile**, and
-attempts a push notification only when the targeted account is bound to the exact compatible paired
-wallet.
+`MeteorConnect` routes each request to the compatible Meteor target. The web and extension targets
+remain unchanged and carry every regular NEAR action. The optional `v2_bridge_mobile` target
+prepares an idempotent Meteor Connect bridge as soon as the popup opens, renders its QR code under
+**Meteor Mobile**, and attempts a push notification only when the targeted account is bound to the
+exact compatible paired wallet.
+
+`v2_bridge_mobile` currently carries the account-transfer flows only — `transfer_accounts` and the
+two `new_key_account_transfer_*` steps. The backend admits an action onto a session only once its
+crash-recovery seams exist (`session_policies.ts::hasImplementedRecoverySeams` in the bridge repo),
+so every `act_impl_near` request is refused with `action_ineligible`. `getExecutionTargetConfigs`
+therefore drops `near::*` before target selection, behind `config.experimentalNearOverSession`
+(default `false`). An account persisted against `v2_bridge_mobile` by an older build is treated as
+stranded: its actions throw naming the unavailable target, except `near::sign_out`, which resolves
+locally so the entry can always be removed.
 
 ## Enabling Meteor Mobile
 

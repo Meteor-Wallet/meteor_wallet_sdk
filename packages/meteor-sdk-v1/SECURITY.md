@@ -12,7 +12,7 @@ a boundary, the boundary is stated explicitly in [Limits and non-goals](#limits-
 a security document you can trust is one that also tells you what it does *not* do.
 
 **Scope.** The Meteor Connect bridge protocol (protocol version 1, `@meteorwallet/connect` /
-`@meteorwallet/connect-shared` 0.9.0) and this SDK's popup flows, including account transfer.
+`@meteorwallet/connect-shared` 0.12.0) and this SDK's popup flows, including account transfer.
 Legacy Meteor V1 web/extension execution paths are outside this document.
 
 ---
@@ -29,8 +29,9 @@ Legacy Meteor V1 web/extension execution paths are outside this document.
    physically using both ends can move: a PIN read off the wallet screen, and — for transfers — a
    decrypt key carried by hand from popup to wallet.
 4. **Fail closed, loudly.** Unknown sensitive actions get the strictest policy. Verification
-   failures throw typed errors (`mobile_bridge_wallet_signature_invalid`,
-   `mobile_bridge_output_hash_mismatch`, …) — there are no silent fallbacks or downgraded retries.
+   failures throw typed errors (`SessionLocalGuardError` from `@meteorwallet/connect`,
+   `mobile_bridge_action_result_mismatch` from this SDK, …) — there are no silent fallbacks or
+   downgraded retries.
 5. **Least privilege at every surface.** The backend exposes no state-dump, polling, or admin
    endpoints; responses are hand-picked projections. Knowing a `bridgeId` grants nothing.
 6. **Defense in depth.** Application-layer encryption sits inside channel encryption; schema
@@ -149,14 +150,19 @@ sequenceDiagram
 
 The wallet signs the **plaintext result** with its Ed25519 identity key — a key registered once
 and thereafter always sourced from the backend's wallet registry, never from claim input — then
-encrypts result + signature to the partner. Before any result reaches your code, this SDK
-enforces three independent checks and throws a typed error on each failure:
+encrypts result + signature to the partner. Before any result reaches your code, three independent
+checks are enforced and each failure throws:
 
-1. the wallet signature must verify (`mobile_bridge_wallet_signature_invalid`),
-2. the result must answer exactly the requested action domain + id
-   (`mobile_bridge_action_result_mismatch`),
-3. the result's output hash must recompute from its contents
-   (`mobile_bridge_output_hash_mismatch`).
+1. the wallet signature must verify — enforced inside `@meteorwallet/connect`, which refuses to
+   surface a result whose envelope signature does not check out (`SessionLocalGuardError`);
+2. the result must answer exactly the requested action domain + id, and must parse against that
+   action's declared output schema — both are `waitForValidatedResult`'s `"mismatch"` arm, which
+   this SDK turns into `mobile_bridge_action_result_mismatch`;
+3. the result must be bound to the exact turn it answers — a result carrying any other turn
+   identity is refused before validation runs.
+
+A mismatched result is still acknowledged to the backend before the session closes, so the wallet
+is never left waiting on a turn this SDK has already rejected.
 
 Replay is structurally dead: every bridge derives a unique E2E key, so a ciphertext from one
 bridge cannot even be decrypted on another; within a bridge, a repeated `complete_action` is

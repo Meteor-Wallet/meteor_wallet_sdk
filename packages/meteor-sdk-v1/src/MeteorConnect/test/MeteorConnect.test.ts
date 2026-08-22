@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { create_bun_test_local_storage } from "../../ported_common/utils/storage/bun_test/create_bun_test_local_storage";
 import { MeteorConnect } from "../MeteorConnect";
+import { EMeteorAppId } from "@meteorwallet/connect-shared";
 import type {
   IMeteorConnectAccount,
   TMeteorConnectAccountNetwork,
@@ -212,6 +213,65 @@ describe("MeteorConnect", () => {
       expect(result).toEqual(account.identifier);
       expect(action.getPreparedMobileSession()).toBeUndefined();
       expect(await meteorConnect.getAccount(account.identifier)).toBeUndefined();
+    });
+
+    /**
+     * An account persisted by an older build with `executionTarget: "v2_bridge_mobile"` is stranded
+     * once NEAR is gated off the session bridge (the backend refuses every `act_impl_near` action
+     * with `action_ineligible`, so `getExecutionTargetConfigs` no longer offers that target).
+     * Signing out is local state removal on this side, so it must remain possible — otherwise the
+     * upgrade leaves a dead account entry the user can neither use nor remove.
+     */
+    const strandedMobileAccount = (accountId: string): IMeteorConnectAccount => ({
+      identifier: { blockchain: "near", network: "testnet", accountId },
+      connection: {
+        executionTarget: "v2_bridge_mobile",
+        schemaVersion: 1,
+        bridgeEnvironmentId: "env-from-an-older-build",
+        meteorAppId: EMeteorAppId.meteor_wallet_mobile,
+        partnerClientId: "partner-from-an-older-build",
+        walletVerifyPublicKey: "ed25519:11111111111111111111111111111111",
+      },
+      // Non-empty on purpose: the pre-existing "no dApp key" escape must NOT be what saves this.
+      publicKeys: [{ type: "ed25519", publicKey: "ed25519:11111111111111111111111111111111" }],
+    });
+
+    it("signs out an account stranded on an execution target this configuration no longer offers", async () => {
+      const { meteorConnect } = await initializeMeteorConnectTest();
+      const account = strandedMobileAccount("stranded-mobile.testnet");
+      await meteorConnect.addSignedInAccount(account);
+
+      const action = await meteorConnect.createAction({
+        id: "near::sign_out",
+        input: { target: account.identifier },
+      });
+      const result = await action.promptForExecution();
+
+      expect(result).toEqual(account.identifier);
+      expect(await meteorConnect.getAccount(account.identifier)).toBeUndefined();
+    });
+
+    it("still fails loudly when a stranded account is asked to do anything that needs the wallet", async () => {
+      const { meteorConnect } = await initializeMeteorConnectTest();
+      const account = strandedMobileAccount("stranded-signing.testnet");
+      await meteorConnect.addSignedInAccount(account);
+
+      await expect(
+        meteorConnect.createAction({
+          id: "near::sign_message",
+          input: {
+            messageParams: {
+              message: "hello",
+              nonce: test_createSimpleNonce(),
+              recipient: GUESTBOOK_CONTRACT_ID,
+            },
+            target: account.identifier,
+          },
+        }),
+      ).rejects.toThrow("connected through [v2_bridge_mobile]");
+
+      // The account is still there — a refused action must never remove it as a side effect.
+      expect(await meteorConnect.getAccount(account.identifier)).toBeDefined();
     });
 
     it("does not fall back to a different wallet for an account-bound action", async () => {
