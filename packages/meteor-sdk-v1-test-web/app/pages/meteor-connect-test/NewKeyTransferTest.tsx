@@ -141,6 +141,14 @@ export const NewKeyTransferTest = ({ meteorConnect }: { meteorConnect: MeteorCon
             : `    ✗ ${account.accountId} refused (${account.issue})`,
         );
       }
+      const acceptedCount = result.output.accounts.filter((account) => account.ok).length;
+      if (acceptedCount === 0) {
+        // Saying "held for AddKeys" here would be doubly wrong: there are no AddKeys to run, and
+        // the next two steps cannot do anything but fail. The transfer is over — say so.
+        append(`    session ${result.output.transferSessionId} — nothing accepted, transfer over`);
+        append("    → resolve the reason in the wallet, then Clear transfer and start again");
+        return;
+      }
       append(
         result.externalWorkHeld
           ? `    session ${result.output.transferSessionId} — bridge held open for AddKeys`
@@ -201,6 +209,50 @@ export const NewKeyTransferTest = ({ meteorConnect }: { meteorConnect: MeteorCon
     clearMutation.isPending;
   const transferSessionId = active?.startOutput?.transferSessionId;
 
+  /**
+   * AddKeys is finished exactly when its verification proof is journaled — `commitVerificationIntent`
+   * writes that proof and DISCARDS the start result in the same step.
+   *
+   * This, not the session phase, is the gate for step 2. The phase here is still
+   * `add_key_in_progress` (it only becomes `verification_pending` inside `verifyActive`), so gating
+   * on it left the button live after a successful run. A second press then met a transfer whose
+   * start result is deliberately gone and failed `new_key_transfer_start_result_journal_missing` —
+   * the SDK fencing a duplicate AddKey submission, which is the right answer to a question the UI
+   * should never have let the user ask.
+   */
+  const addKeysDone =
+    transferSessionId != null &&
+    recovery?.pendingVerification?.transferSessionId === transferSessionId;
+  const verified = active?.phase === "destination_keys_verified";
+  /**
+   * How many accounts the wallet actually accepted. Zero is a finished, failed transfer — the SDK
+   * refuses `runAddKeys` with `new_key_transfer_no_accounts_ready` — so steps 2 and 3 must be shut
+   * rather than left live to produce that error and then the far more confusing "No journaled
+   * verification proof" from step 3.
+   */
+  const acceptedCount = active?.startOutput?.accounts.filter((account) => account.ok).length ?? 0;
+  const nothingAccepted = active != null && active.startOutput != null && acceptedCount === 0;
+  /**
+   * The wallet has minted and stored destination keys, but nothing is on-chain yet — so the SDK's
+   * `clear()` guard (which only fences a journaled AddKey intent) still allows clearing. Clearing
+   * here is legal and silent on THIS side, and leaves the WALLET holding a signer for a transfer
+   * this side has forgotten; that stranded record is what later refuses the account with
+   * `pending_transfer_conflict`. It is recoverable in the wallet, but it should be a choice.
+   */
+  const clearWouldStrandWallet = acceptedCount > 0 && active?.phase === "destination_keys_staged";
+  /**
+   * A finished transfer is NOT clearable, and must not be: once an AddKey intent is journaled the
+   * destination keys may be live on-chain, so `clear()` fences behind `markDestinationKeysRevoked`
+   * and otherwise throws `new_key_transfer_recovery_required`.
+   *
+   * So "clear it, then start the next one" is not a flow that exists. The next transfer simply
+   * starts alongside — the SDK keeps a list of sessions, not one slot. Gating step 1 on
+   * `active != null` made this harness a one-shot: after the first success nothing could be
+   * cleared and nothing new could begin.
+   */
+  const clearRefused = (active?.addKeyIntentAccounts.length ?? 0) > 0;
+  const activeIsFinished = active == null || verified || nothingAccepted;
+
   return (
     <div className={"mt-6 p-4 border-2 border-emerald-800 rounded-xl flex flex-col gap-3"}>
       <h2 className={"text-lg font-bold"}>New-Key Transfer to Meteor Wallet</h2>
@@ -232,6 +284,31 @@ export const NewKeyTransferTest = ({ meteorConnect }: { meteorConnect: MeteorCon
         )}
       </div>
 
+      {clearRefused && (
+        <p className={"text-xs text-gray-500"}>
+          This transfer can no longer be cleared: its AddKey intent is journaled, so the destination
+          keys may be live on-chain and the record stays as a recovery fence. That is intended —
+          start the next transfer alongside it rather than clearing this one.
+        </p>
+      )}
+
+      {clearWouldStrandWallet && (
+        <p className={"text-sm text-amber-700"}>
+          The wallet has already created destination keys for this transfer. Clearing now is allowed
+          here — nothing is on-chain yet — but the wallet keeps its half, and will refuse the next
+          transfer of these accounts with <code>pending_transfer_conflict</code> until that record
+          is resolved under <b>Pending new-key transfers</b>. Prefer finishing steps 2 and 3.
+        </p>
+      )}
+
+      {nothingAccepted && (
+        <p className={"text-sm text-amber-700"}>
+          The wallet accepted none of these accounts, so there is nothing to AddKey — steps 2 and 3
+          are closed. Fix the reason the wallet gave (most often the account still has an unfinished
+          transfer there), then <b>Clear transfer</b> and start again.
+        </p>
+      )}
+
       {recovery?.orphanedSignedAddKey === true && (
         <p className={"text-sm text-red-700"}>
           ⚠ An orphaned signed AddKey is journaled with no start result to bind it. Its bytes may
@@ -241,28 +318,31 @@ export const NewKeyTransferTest = ({ meteorConnect }: { meteorConnect: MeteorCon
 
       <div className={"flex flex-row flex-wrap gap-3 items-center"}>
         <Button
-          disabled={busy || staged.length === 0 || active != null}
+          disabled={busy || staged.length === 0 || !activeIsFinished}
           onClick={() => startMutation.mutate(undefined)}
         >
-          1. Start (mint destination keys)
+          {active == null || activeIsFinished ? "1. Start (mint destination keys)" : "1. Started ✓"}
         </Button>
         <Button
-          disabled={busy || transferSessionId == null || active?.phase === "verification_pending"}
+          // `verified` matters as well as `addKeysDone`: verification CONSUMES the pending proof,
+          // so once step 3 succeeds `addKeysDone` goes false again and this would re-open on a
+          // finished transfer — straight into `start_result_journal_missing`.
+          disabled={busy || transferSessionId == null || addKeysDone || verified || nothingAccepted}
           onClick={() => transferSessionId != null && addKeysMutation.mutate(transferSessionId)}
         >
-          2. Run AddKeys (on-chain)
+          {addKeysDone || verified ? "2. AddKeys done ✓" : "2. Run AddKeys (on-chain)"}
         </Button>
         <Button
-          disabled={busy || transferSessionId == null || recovery?.pendingVerification == null}
+          disabled={busy || !addKeysDone || verified || nothingAccepted}
           onClick={() => transferSessionId != null && verifyMutation.mutate(transferSessionId)}
         >
-          3. Verify Active (import)
+          {verified ? "3. Verified ✓" : "3. Verify Active (import)"}
         </Button>
         <Button
-          disabled={busy || active == null}
+          disabled={busy || active == null || clearRefused}
           onClick={() => active != null && clearMutation.mutate(active.clientTransferId)}
         >
-          Clear transfer
+          {clearWouldStrandWallet ? "Clear transfer (strands the wallet)" : "Clear transfer"}
         </Button>
       </div>
 
