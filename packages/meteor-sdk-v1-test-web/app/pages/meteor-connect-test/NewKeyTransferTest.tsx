@@ -129,6 +129,38 @@ export const NewKeyTransferTest = ({ meteorConnect }: { meteorConnect: MeteorCon
       if (accounts.length === 0) throw new Error("No staged account yields a NEAR public key");
       for (const accountId of skipped) append(`… skipped ${accountId} (no derivable public key)`);
 
+      /*
+       * The AddKey journal holds exactly ONE start result, and only `clear()` on that exact
+       * transfer removes it. A start result is written whenever the wallet ANSWERS — including
+       * when it accepts nothing — so a refused transfer left behind poisons the journal and every
+       * later start dies on `start_result_conflict`. Clearing the active transfer does not help:
+       * `clear()` only discards a start result belonging to the transfer being cleared.
+       *
+       * So sweep the leftover first. Only transfers with no journaled AddKey intent can be
+       * cleared, which is exactly the set that is safe to drop: nothing of theirs reached a chain.
+       */
+      const leftover = (await meteorConnect.newKeyTransfer.getRecoveryState()).startResult;
+      if (leftover != null) {
+        const stale = (await meteorConnect.newKeyTransfer.getSessions()).find(
+          (candidate) =>
+            candidate.startOutput?.transferSessionId === leftover.output.transferSessionId,
+        );
+        if (stale != null) {
+          try {
+            await meteorConnect.newKeyTransfer.clear(stale.clientTransferId);
+            append(`… discarded a leftover transfer (${stale.clientTransferId})`);
+          } catch (clearError) {
+            // Not clearable means it holds real recovery state — say so rather than failing later
+            // with the journal's own, much more cryptic, conflict message.
+            throw new Error(
+              `A previous transfer (${stale.clientTransferId}) still needs resolving before a new one can start: ${
+                clearError instanceof Error ? clearError.message : String(clearError)
+              }`,
+            );
+          }
+        }
+      }
+
       append(`1/3 start → ${PLATFORM_LABELS[platform]} with ${accounts.length} account(s)`);
       const result = await meteorConnect.newKeyTransfer.start({
         accounts,
@@ -146,7 +178,14 @@ export const NewKeyTransferTest = ({ meteorConnect }: { meteorConnect: MeteorCon
         // Saying "held for AddKeys" here would be doubly wrong: there are no AddKeys to run, and
         // the next two steps cannot do anything but fail. The transfer is over — say so.
         append(`    session ${result.output.transferSessionId} — nothing accepted, transfer over`);
-        append("    → resolve the reason in the wallet, then Clear transfer and start again");
+        // Drop it now rather than leaving it to block the next attempt. There is nothing to
+        // recover — no account was accepted, so no key was created and no chain call is possible.
+        try {
+          await meteorConnect.newKeyTransfer.clear(result.output.clientTransferId);
+          append("    discarded it — fix the reason in the wallet, then start again");
+        } catch (clearError) {
+          append(`    could not discard it: ${String(clearError)}`);
+        }
         return;
       }
       append(
