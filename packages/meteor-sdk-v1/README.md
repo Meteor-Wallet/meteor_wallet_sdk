@@ -360,9 +360,15 @@ Advanced integrations can use `transferAccounts.createAction()` to drive the raw
 
 ## Local development
 
-- **Try it first**: the hosted demo at <https://sdk-demo.meteorwallet.app/> runs this exact
-  SDK; its source lives in the `meteor-sdk-v1-test-web` package of this repository and doubles as a
-  reference integration for both flows.
+- **Reference integration**: [`examples/minimal-consumer/`](./examples/minimal-consumer/) — the
+  smallest correct integration of the recommended new-key flow, with supported defaults and ordinary
+  recovery UX. Start here; it is type-checked against this package's published types, so it cannot
+  drift out of date.
+- **Engineering lab**: the hosted harness at <https://sdk-demo.meteorwallet.app/> runs this exact
+  SDK; its source is the `meteor-sdk-v1-test-web` package of this repository. It is **not** a
+  reference integration — it deliberately exposes journal phases and opaque identifiers, offers
+  opt-in plaintext staging of account secrets, and can deliberately strand the destination wallet to
+  exercise recovery. Use it to observe the protocol; do not copy its UI into a product.
 - **Verbose logs**: `meteorConnect.setLoggingLevel("debug")`.
 - **Dev wallet targets**: on production builds, the popup's localhost targets (regular actions'
   "Dev Web (Localhost)" and the transfer flow's "Meteor Web (Local Dev)", both expecting a local

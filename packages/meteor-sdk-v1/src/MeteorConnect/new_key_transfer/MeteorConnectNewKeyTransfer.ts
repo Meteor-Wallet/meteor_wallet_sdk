@@ -7,20 +7,19 @@ import {
   type IAddKeyJournalRunner,
   type IAddKeyJournalStorageKeys,
   type IAddKeyJournalStorageMethods,
+  newKeyTransferAccountIdentityKey,
   parseNewKeyTransferStartOutputV1,
   type TNewKeyTransferStartOutputAccountV1,
   type TNewKeyTransferStartOutputV1,
   type TNewKeyTransferVerifyActiveInputV1,
+  newKeyTransferProtectedOperations,
   validateNewKeyTransferStartOutputForInput,
-  vNewKeyTransferStartInputV1,
-  vNewKeyTransferStartOutputV1,
-} from "@meteorwallet/connect-shared";
-import {
-  newKeyTransferAccountIdentityKey,
   vMeteorAppId,
   vNewKeyTransferOpaqueId,
+  vNewKeyTransferStartInputV1,
+  vNewKeyTransferStartOutputV1,
   vSerializedCryptoKeyDataEd25519_Raw,
-} from "@meteorwallet/connect-shared/internal";
+} from "@meteorwallet/connect-shared";
 import * as v from "valibot";
 import type { TMCActionRegistry } from "../action/mc_action.combined";
 import type { TMCActionRequestUnion } from "../action/mc_action.types";
@@ -30,6 +29,10 @@ import type { IMobileBridgeExternalWorkHold } from "../target_clients/mobile_bri
 import type {
   INewKeyTransferAddKeyOptions,
   INewKeyTransferAddKeyResult,
+  INewKeyTransferArchiveOptions,
+  INewKeyTransferReconcileOptions,
+  INewKeyTransferReconcileResult,
+  INewKeyTransferReconciliationReport,
   INewKeyTransferRecoveryState,
   INewKeyTransferSdkSession,
   INewKeyTransferStartOptions,
@@ -615,12 +618,56 @@ export class MeteorConnectNewKeyTransfer {
    */
   async getRecoveryState(): Promise<INewKeyTransferRecoveryState> {
     const runner = this.addKeyRunner();
-    const [startResult, pendingVerification, orphanedSignedAddKey] = await Promise.all([
-      runner.loadStartResult(),
-      runner.loadPendingVerification(),
-      runner.hasOrphanedSignedRecovery(),
-    ]);
-    return { startResult, pendingVerification, orphanedSignedAddKey };
+    const [startResult, pendingVerification, orphanedSignedAddKey, reconciliation] =
+      await Promise.all([
+        runner.loadStartResult(),
+        runner.loadPendingVerification(),
+        runner.hasOrphanedSignedRecovery(),
+        runner.buildReconciliationReport(),
+      ]);
+    return { startResult, pendingVerification, orphanedSignedAddKey, reconciliation };
+  }
+
+  /**
+   * Just the fence, for a host that only needs to decide whether to offer recovery.
+   * `getRecoveryState()` returns the same report alongside the resume records.
+   */
+  async getReconciliationReport(): Promise<INewKeyTransferReconciliationReport> {
+    return await this.addKeyRunner().buildReconciliationReport();
+  }
+
+  /**
+   * Advance one fenced operation as far as the chain allows (B-04). Read-only against the chain —
+   * it proves finality and access-key state, never signs and never broadcasts. The only mutation
+   * it can make is promoting a proven `transaction_signed` row to `finalized`, after which the
+   * transfer resumes through normal verification.
+   *
+   * The four outcomes and what a host does with each:
+   *
+   * - `finalized` — the AddKey landed. Resume verification with the recorded proof.
+   * - `destination_key_present_unproven` — the key is granted but nothing binds it to this
+   *   transfer. Remove it with the SOURCE signer, wait for finality, then
+   *   {@link archiveReconciledOperation}.
+   * - `destination_key_absent` — the transaction can never land and the key is not there. Call
+   *   {@link archiveReconciledOperation} to retire the row.
+   * - `ambiguous` — nothing could be established this pass; nothing changed. Retry later. Never
+   *   offer "start again": the fence guarantees a fresh start would be refused.
+   */
+  async reconcileFencedOperation(
+    options: INewKeyTransferReconcileOptions,
+  ): Promise<INewKeyTransferReconcileResult> {
+    this.requireEnabled();
+    return await this.addKeyRunner(options.chain).reconcileFencedOperation(options.operation);
+  }
+
+  /**
+   * Retire a fenced row once its destination key is proven ABSENT on-chain. Re-proves absence
+   * itself before touching the journal, so a host that revoked the key but lost finality cannot
+   * clear the fence by asserting it did. Returns `false` when it refused.
+   */
+  async archiveReconciledOperation(options: INewKeyTransferArchiveOptions): Promise<boolean> {
+    this.requireEnabled();
+    return await this.addKeyRunner(options.chain).archiveReconciledOperation(options.operation);
   }
 
   /** The one session this transfer id names, or a fail-closed miss. Callers hold the journal lock. */
@@ -670,11 +717,46 @@ export class MeteorConnectNewKeyTransfer {
    * Acknowledge that the host has finalized removal of the exact destination keys for these
    * accounts. This is deliberately separate from `clear`: the SDK only releases its recovery
    * fence after the caller has reconciled on-chain absence of every key it may have submitted.
+   *
+   * It clears BOTH fences. Dropping the accounts from this session's intent list is not enough on
+   * its own: the shared AddKey journal keeps its own protected `transaction_signed`/`finalized`
+   * rows, and `clear()` consults `hasProtectedRecovery()` — so revocation that only touched the
+   * session left the transfer just as stuck as before (REVIEW-consumer-implementation B-04). Each
+   * protected row is retired through the runner, which re-proves on-chain absence of the exact
+   * destination key first.
    */
   async markDestinationKeysRevoked(input: {
     transferSessionId: string;
     accounts: Array<{ blockchainId: string; networkId: string; accountId: string }>;
+    /**
+     * Required whenever any of these accounts still has a protected AddKey row. The SDK uses it to
+     * re-prove that the destination key is gone; a caller's assurance is never enough, because the
+     * whole point of the fence is that the signed bytes may have taken effect.
+     */
+    chain?: IAddKeyJournalChain;
   }): Promise<INewKeyTransferSdkSession> {
+    // Retire the journal rows BEFORE the session mutation. If absence cannot be proven this
+    // throws and the session keeps its intent, so the two fences never disagree about what has
+    // been revoked.
+    const runner = this.addKeyRunner(input.chain ?? REQUIRE_HOST_CHAIN);
+    const protectedOperations = newKeyTransferProtectedOperations(
+      await runner.loadJournalEntries(),
+      {
+        transferSessionId: input.transferSessionId,
+        accountIds: input.accounts.map((account) => account.accountId),
+      },
+    );
+    if (protectedOperations.length > 0) {
+      if (input.chain == null) {
+        throw new Error("new_key_transfer_revoke_chain_required");
+      }
+      for (const operation of protectedOperations) {
+        if (!(await runner.archiveReconciledOperation(operation))) {
+          throw new Error("new_key_transfer_revoke_destination_key_present");
+        }
+      }
+    }
+
     return this.withJournalLock(async () => {
       const session = (await this.readSessions()).find(
         (candidate) => candidate.startOutput?.transferSessionId === input.transferSessionId,

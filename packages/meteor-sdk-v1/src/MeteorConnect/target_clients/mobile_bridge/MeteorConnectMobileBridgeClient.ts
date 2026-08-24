@@ -168,7 +168,9 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
             withSessionMutationLock: (operation) =>
               this.withBridgeLease(`${this.storage!.environmentId}:session-context`, operation),
           });
-          this.sessionClient.apply();
+          // `initializeClient()` registers the action runtime itself; the separate deprecated
+          // `apply()` call this used to make was a no-op keeping a retired lifecycle alive in the
+          // SDK's first consumer (REVIEW-consumer-implementation M-05).
           await this.sessionClient.initializeClient();
         } finally {
           await identityLease.release();

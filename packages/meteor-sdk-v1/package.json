@@ -22,15 +22,17 @@
   },
   "files": [
     "./dist",
-    "./src",
     "./package.json",
     "./README.md",
     "./SECURITY.md"
   ],
   "scripts": {
-    "build": "bun run check-key-confinement && tsdown",
+    "build": "bun run check-key-confinement && bun run check-public-surface && tsdown && bun run check-bundle-size",
     "check-key-confinement": "bun scripts/check-key-confinement.ts",
-    "test": "bun run check-key-confinement && bun test",
+    "check-public-surface": "bun scripts/check-public-surface.ts",
+    "check-bundle-size": "bun scripts/check-bundle-size.ts",
+    "check-package-consumable": "bun scripts/check-package-consumable.ts",
+    "test": "bun run check-key-confinement && bun run check-public-surface && bun test",
     "build:watch": "tsdown --watch",
     "docs:build": "rimraf ./docs && typedoc",
     "docs:build_serve": "npm run docs:build && cd ./docs && serve",
@@ -47,8 +49,7 @@
     "lit": "3.3.2",
     "@scure/base": "2.0.0",
     "@noble/hashes": "2.0.1",
-    "@meteorwallet/errors": "1.28.0-0",
-    "@meteorwallet/utils": "1.28.0-0",
+    "@noble/curves": "2.0.1",
     "@meteorwallet/connect": "0.13.0",
     "@meteorwallet/connect-shared": "0.13.0",
     "@nice-code/util": "0.86.0",
@@ -71,15 +72,11 @@
     "secp256k1": "5.0.1",
     "zod": "^4.0.17"
   },
-  "peerDependencies": {
-    "near-api-js": "^6.0.0"
-  },
   "devDependencies": {
     "@types/secp256k1": "^4.0.7",
     "esbuild": "0.27.2",
-    "near-api-js": "6.2.5",
     "playwright-core": "1.61.1",
-    "typedoc": "0.28.16",
-    "tsdown": "0.20.1"
+    "tsdown": "0.20.1",
+    "typedoc": "0.28.16"
   }
 }

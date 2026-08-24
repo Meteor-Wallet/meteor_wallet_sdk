@@ -130,7 +130,28 @@ const MeteorConnectTestInner = () => {
       <div className={"p-5 flex flex-col gap-3 items-start"}>
         <h1>Meteor Connect initialization failed</h1>
         <p className={"text-red-700"}>{errorMessage}</p>
-        <Button onClick={() => window.location.reload()}>Reload test harness</Button>
+        {/*
+          Retry IN PROCESS, on the same `MeteorConnect` instance — that is the recovery a real
+          integration has. Offering only a page reload hid whether the SDK could recover at all,
+          which is how the sticky-rejection bug went unnoticed
+          (REVIEW-consumer-implementation H-01/M-04).
+        */}
+        <Button
+          disabled={meteorConnectQuery.isFetching}
+          onClick={() => void meteorConnectQuery.refetch()}
+        >
+          {meteorConnectQuery.isFetching ? "Retrying…" : "Retry initialization"}
+        </Button>
+        <details className={"text-sm text-gray-500"}>
+          <summary>Reload the whole harness instead</summary>
+          <p className={"mt-2"}>
+            A reload throws away every in-memory client, so it proves nothing about whether the SDK
+            can recover on its own. Use it only if the retry above keeps failing.
+          </p>
+          <div className={"mt-2"}>
+            <Button onClick={() => window.location.reload()}>Reload test harness</Button>
+          </div>
+        </details>
       </div>
     );
   }

@@ -1,6 +1,6 @@
 import { PublicKey } from "./actionCreator/public_key";
 import { actionCreators } from './actionCreator/action_creators'
-import type { AddKeyPermission } from "@near-wallet-selector/core";
+import type { AddKeyPermission } from "./wallet_selector_actions.types";
 import type { IMeteorGasKeyInfo, TMeteorAction } from "./meteor_actions.types";
 
 const getAccessKey = (permission: AddKeyPermission) => {

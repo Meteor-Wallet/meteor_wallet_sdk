@@ -56,6 +56,13 @@ export class MeteorConnect {
     initProp<NonNullable<IMeteorConnect_Initialize_Input["nearKeyStoreProvider"]>>();
   private initializeFingerprint?: string;
   private initializePromise?: Promise<void>;
+  /**
+   * Set the moment `initializeInternal` binds this instance's storage/key-store properties. Those
+   * are write-once (see `initProp`), so once bound a retry MUST use the same configuration — the
+   * failure rearm below keeps the fingerprint in that case so a mismatched retry is refused loudly
+   * instead of silently reusing the first configuration's adapters.
+   */
+  private initializeBoundConfig: boolean = false;
   private browserKeyStore?: BrowserLocalStorageKeyStore;
   private clients: {
     test: MeteorConnectTestClient;
@@ -138,7 +145,23 @@ export class MeteorConnect {
     }
     if (this.initializePromise != null) return this.initializePromise;
     this.initializeFingerprint = fingerprint;
-    this.initializePromise = this.initializeInternal(storage, mobileBridge, nearKeyStoreProvider);
+    // Rearm on failure. A rejected attempt must not be sticky: without this, every later caller
+    // gets the same cached rejection back and the only recovery is `disposeMobileBridge()` or a
+    // page reload — the nested mobile-bridge client already rearms its own
+    // (REVIEW-consumer-implementation H-01). Concurrent callers still coalesce onto this one
+    // promise and all observe the same rejection; the first retry after it settles starts fresh.
+    this.initializePromise = this.initializeInternal(
+      storage,
+      mobileBridge,
+      nearKeyStoreProvider,
+    ).catch((error: unknown) => {
+      this.initializePromise = undefined;
+      if (!this.initializeBoundConfig) {
+        // Nothing was bound, so the instance is still pristine and any configuration may retry.
+        this.initializeFingerprint = undefined;
+      }
+      throw error;
+    });
     return this.initializePromise;
   }
 
@@ -169,6 +192,9 @@ export class MeteorConnect {
       },
     );
     this._typedStorageHelper.set(typedStorageHelper);
+    // Past this point the write-once properties above hold this call's objects; see
+    // `initializeBoundConfig`.
+    this.initializeBoundConfig = true;
     this.clients.mobileBridge.configure(mobileBridge, storage);
     this.transferAccounts.configure(mobileBridge?.transferAccounts);
     this.newKeyTransfer.configure(mobileBridge?.transferAccounts?.enabled === true);

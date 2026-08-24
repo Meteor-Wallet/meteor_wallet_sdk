@@ -1,3 +1,13 @@
+> **Engineering lab — not a reference integration.**
+>
+> This harness exists to exercise the protocol, including its failure modes. It exposes journal
+> phases and opaque identifiers, offers opt-in plaintext staging of account secrets, and can
+> deliberately strand the destination wallet. None of that belongs in a product
+> (REVIEW-consumer-implementation M-04).
+>
+> The reference integration is
+> [`packages/meteor-sdk-v1/examples/minimal-consumer/`](../meteor-sdk-v1/examples/minimal-consumer/).
+
 # Welcome to React Router!
 
 A modern, production-ready template for building full-stack React applications using React Router.

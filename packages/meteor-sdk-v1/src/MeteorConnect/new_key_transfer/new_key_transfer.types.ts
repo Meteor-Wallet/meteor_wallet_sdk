@@ -1,5 +1,8 @@
 import type {
   IAddKeyJournalChain,
+  INewKeyTransferFencedOperation,
+  INewKeyTransferReconcileResult,
+  INewKeyTransferReconciliationReport,
   IJournaledNewKeyStartResult,
   TNewKeyTransferStartInputV1,
   TNewKeyTransferStartOutputV1,
@@ -88,6 +91,36 @@ export interface INewKeyTransferRecoveryState {
   /**
    * A signed (or finalized) AddKey transaction is journaled with no start-result record to bind
    * it. Nothing new may be started until it is reconciled — the bytes may still land on-chain.
+   *
+   * Equivalent to `reconciliation.fenced`; kept so existing callers do not break. Use
+   * `reconciliation` for anything a user sees: this flag alone cannot tell them what is stuck or
+   * what to do about it.
    */
   orphanedSignedAddKey: boolean;
+  /**
+   * The non-secret evidence behind the fence and the support reference to quote — everything a
+   * host needs to render real recovery choices instead of a dead end
+   * (REVIEW-consumer-implementation B-04). Resolve entries through
+   * {@link MeteorConnectNewKeyTransfer.reconcileFencedOperation}.
+   */
+  reconciliation: INewKeyTransferReconciliationReport;
 }
+
+/** Options for one pass of the fenced-operation state machine. */
+export interface INewKeyTransferReconcileOptions {
+  operation: INewKeyTransferFencedOperation;
+  /**
+   * The host's chain seam — the same one `runAddKeys` takes. Reconciliation only reads: it proves
+   * finality and access-key state, and never signs or broadcasts. Implement the optional
+   * `isSignedTransactionExpired` to let `destination_key_absent` be reachable without a revocation.
+   */
+  chain: IAddKeyJournalChain;
+}
+
+export interface INewKeyTransferArchiveOptions {
+  operation: INewKeyTransferFencedOperation;
+  /** Used to re-prove on-chain absence of the exact destination key before the row is retired. */
+  chain: IAddKeyJournalChain;
+}
+
+export type { INewKeyTransferFencedOperation, INewKeyTransferReconcileResult, INewKeyTransferReconciliationReport };

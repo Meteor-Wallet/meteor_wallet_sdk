@@ -1,7 +1,7 @@
-import type { ConnectConfig } from "near-api-js";
 import { ENearNetwork } from "./near_basic_types";
+import type { INearConnectConfig } from "./nearConnectConfig.types";
 
-export type TNearConnectConfig = Omit<ConnectConfig, "headers"> & {
+export type TNearConnectConfig = Omit<INearConnectConfig, "headers"> & {
   name: string;
   explorerUrl?: string;
   archivalUrl?: string;

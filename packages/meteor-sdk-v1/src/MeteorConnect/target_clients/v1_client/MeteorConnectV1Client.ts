@@ -20,7 +20,7 @@ import { getExtensionSupportedFeatures } from "./utils/getExtensionSupportedFeat
 import { nearActionToSdkV1Action } from "./utils/nearActionToSdkV1Action";
 import type { Action as MeteorNativeAction } from "../../../near_utils/actionCreator/actions";
 import { PublicKey as CustomPublicKey } from "../../../near_utils/actionCreator/public_key";
-import type { Action as SdkV1Action } from "@near-wallet-selector/core";
+import type { Action as SdkV1Action } from "../../../near_utils/wallet_selector_actions.types";
 
 interface IMeteorWalletV1AndKeyStore {
   wallet: MeteorWallet;

@@ -23,16 +23,19 @@
     "moduleResolution": "bundler",
     "verbatimModuleSyntax": true,
     "noImplicitAny": false,
-    "jsx": "react-jsx"
+    "jsx": "react-jsx",
+    "tsBuildInfoFile": "./.tsbuildinfo"
   },
   "include": [
     "src/**/*",
     "scripts/**/*",
-    "preview/**/*.ts"
+    "preview/**/*.ts",
+    "examples/**/*.ts"
   ],
   "exclude": [
     "dist",
     "node_modules",
-    "../../node_modules"
+    "../../node_modules",
+    "scripts/consumer-fixture"
   ]
 }

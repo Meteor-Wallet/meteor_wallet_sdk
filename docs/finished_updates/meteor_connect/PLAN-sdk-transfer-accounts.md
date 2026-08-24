@@ -1,3 +1,14 @@
+> **Finished record — not a to-do list.**
+>
+> This plan describes the Meteor Connect session-protocol migration as it was designed and
+> as it shipped in `@meteorwallet/sdk@3.2.0`. Its unchecked boxes are historical: they were
+> the plan's own working state and were never updated at release, which made it impossible
+> for a consumer to tell which requirements were still real
+> (REVIEW-consumer-implementation M-07).
+>
+> **Live release gates now live in [`RELEASE-GATES.md`](../../../RELEASE-GATES.md).** Read
+> this document for the reasoning behind a decision, never for what is left to do.
+
 # SDK Plan — Transfer Accounts via Meteor Connect
 
 **Status:** Legacy implementation complete; session-native transport migration is in progress and

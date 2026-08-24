@@ -1,7 +1,7 @@
 import { Glob } from "bun";
 
 /**
- * Guards the transfer-key confinement rule (PLAN-sdk-transfer-accounts §7): the account-transfer
+ * Guards the transfer-key confinement rule (docs/finished_updates/meteor_connect/PLAN-sdk-transfer-accounts.md §7): the account-transfer
  * decryption key must exist only inside TransferKeyHandle and the code that mints it. Ported from
  * mc_backend/scripts/check-key-confinement.ts — a coarse textual guard, not taint analysis: it
  * cannot prove an allowed file handles the key correctly, but it does prove no NEW file started
@@ -63,7 +63,7 @@ const run = async (): Promise<number> => {
       violations.push(
         `  ${relativePath}\n` +
           `    references "${KEY_SYMBOL}" but is not on the allowlist.\n` +
-          `    The transfer key must stay inside TransferKeyHandle (PLAN-sdk-transfer-accounts §7).\n` +
+          `    The transfer key must stay inside TransferKeyHandle (docs/finished_updates/meteor_connect/PLAN-sdk-transfer-accounts.md §7).\n` +
           `    If this is genuinely correct, add the file to ALLOWED_FILES in scripts/check-key-confinement.ts with a reason.`,
       );
       continue;

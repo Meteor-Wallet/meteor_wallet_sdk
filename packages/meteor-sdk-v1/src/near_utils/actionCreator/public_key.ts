@@ -1,5 +1,5 @@
 import { baseEncode, baseDecode } from '@near-js/utils';
-import { ed25519 } from '@noble/curves/ed25519';
+import { ed25519 } from "@noble/curves/ed25519.js";
 import secp256k1 from 'secp256k1';
 
 import { KeySize, KeyType } from './constants'

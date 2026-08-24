@@ -543,9 +543,21 @@ function createHarness(input: { sessions?: Map<string, unknown>; outputs?: unkno
  * A chain seam that finalizes immediately. Everything that decides whether the AddKey is
  * authorized still belongs to the shared runner + proof verifier — this only plays the RPC.
  */
-function createChainDouble(): { chain: IAddKeyJournalChain; calls: string[] } {
+interface IChainDoubleOptions {
+  /** Whether the destination key is already granted on the account. */
+  destinationLive?: boolean;
+  /** Whether `getFinalTransactionStatus` can prove the transaction. */
+  transactionKnown?: boolean;
+  /** `undefined` models a host that cannot answer the expiry question at all. */
+  signedTransactionExpired?: boolean;
+}
+
+function createChainDouble(options: IChainDoubleOptions = {}): {
+  chain: IAddKeyJournalChain;
+  calls: string[];
+} {
   const calls: string[] = [];
-  let destinationLive = false;
+  let destinationLive = options.destinationLive ?? false;
   const signed: IAddKeySignedTransaction = {
     transactionHash: TRANSACTION_HASH,
     signedTransactionBase64: Buffer.alloc(64, 3).toString("base64"),
@@ -596,10 +608,52 @@ function createChainDouble(): { chain: IAddKeyJournalChain; calls: string[] } {
     },
     getFinalTransactionStatus: async (job) => {
       calls.push("status");
+      if (options.transactionKnown === false) throw new Error("Transaction is not currently known");
       return finalStatus(job);
     },
   };
+  if (options.signedTransactionExpired != null) {
+    chain.isSignedTransactionExpired = async () => {
+      calls.push("expiry");
+      return options.signedTransactionExpired === true;
+    };
+  }
   return { chain, calls };
+}
+
+const ADD_KEY_JOURNAL_KEY = "met_data_newKeyTransferAddKeyJournal";
+const START_RESULT_JOURNAL_KEY = "met_data_newKeyTransferStartResultJournal";
+
+/**
+ * The exact damaged storage state observed during demo development: a signed AddKey row whose
+ * start-result record is gone. Resume refuses (nothing binds the operation) and starting a
+ * replacement refuses (the global orphan fence) — which is what made affected browser profiles
+ * permanently stranded before B-04.
+ */
+async function strandWithOrphanedSignedAddKey(
+  harness: ReturnType<typeof createHarness>,
+): Promise<void> {
+  await harness.storage.implementation.setItem(
+    ADD_KEY_JOURNAL_KEY,
+    JSON.stringify({
+      formatVersion: 2,
+      entries: [
+        {
+          operationVersion: 1,
+          transferSessionId: SESSION_ID,
+          blockchainId: "near",
+          networkId: "testnet",
+          accountId: "alice.testnet",
+          sourcePublicKey: SOURCE_KEY,
+          destinationPublicKey: DESTINATION_KEY,
+          phase: "transaction_signed",
+          transactionHash: TRANSACTION_HASH,
+          signedTransactionBase64: Buffer.alloc(64, 3).toString("base64"),
+        },
+      ],
+    }),
+  );
+  await harness.storage.implementation.removeItem(START_RESULT_JOURNAL_KEY);
 }
 
 describe("MeteorConnectNewKeyTransfer journal", () => {
@@ -971,5 +1025,195 @@ describe("MeteorConnectNewKeyTransfer external-work hold", () => {
       "new_key_transfer_start_result_journal_missing",
     );
     expect(calls).toEqual([]);
+  });
+});
+
+describe("MeteorConnectNewKeyTransfer orphaned-AddKey reconciliation (B-04)", () => {
+  it("exposes non-secret evidence and a support reference instead of a bare boolean", async () => {
+    const harness = createHarness({ outputs: [START_OUTPUT] });
+    await harness.api.start({
+      clientTransferId: CLIENT_ID,
+      targetPlatform: "web",
+      accounts: START_INPUT.accounts,
+    });
+    await strandWithOrphanedSignedAddKey(harness);
+
+    const recovery = await harness.api.getRecoveryState();
+    expect(recovery.orphanedSignedAddKey).toBe(true);
+    expect(recovery.reconciliation.fenced).toBe(true);
+    expect(recovery.reconciliation.reason).toBe("orphaned_signed_add_key");
+    expect(recovery.reconciliation.operations).toEqual([
+      {
+        transferSessionId: SESSION_ID,
+        blockchainId: "near",
+        networkId: "testnet",
+        accountId: "alice.testnet",
+        sourcePublicKey: SOURCE_KEY,
+        destinationPublicKey: DESTINATION_KEY,
+        phase: "transaction_signed",
+        transactionHash: TRANSACTION_HASH,
+        hasReplayableSignedTransaction: true,
+      },
+    ]);
+    // A real reference the consumer can render — MNW promised one and had nothing to show.
+    expect(recovery.reconciliation.supportReference).toMatch(/^MCNKT(-[A-Z2-7]{4}){4}$/);
+    // The replayable bytes stay inside the journal.
+    expect(JSON.stringify(recovery.reconciliation)).not.toContain(
+      Buffer.alloc(64, 3).toString("base64"),
+    );
+  });
+
+  it("resolves the fence when the transaction is proven final, and lets the transfer resume", async () => {
+    const harness = createHarness({ outputs: [START_OUTPUT, VERIFY_OUTPUT] });
+    await harness.api.start({
+      clientTransferId: CLIENT_ID,
+      targetPlatform: "web",
+      accounts: START_INPUT.accounts,
+    });
+    await harness.api.markAddKeyIntent({
+      transferSessionId: SESSION_ID,
+      accounts: START_INPUT.accounts,
+    });
+    await strandWithOrphanedSignedAddKey(harness);
+
+    const report = await harness.api.getReconciliationReport();
+    const { chain } = createChainDouble({ destinationLive: true });
+    const result = await harness.api.reconcileFencedOperation({
+      operation: report.operations[0]!,
+      chain,
+    });
+    expect(result.status).toBe("finalized");
+    expect(result.transactionHash).toBe(TRANSACTION_HASH);
+
+    // The global fence is lifted, so the host is no longer stuck between "cannot resume" and
+    // "cannot start again".
+    expect((await harness.api.getReconciliationReport()).fenced).toBe(false);
+    const verified = await harness.api.verifyActive({
+      transferSessionId: SESSION_ID,
+      activations: VERIFY_INPUT.activations,
+    });
+    expect(verified.session.phase).toBe("destination_keys_verified");
+  });
+
+  it("keeps the fence while the signed bytes could still land", async () => {
+    const harness = createHarness({ outputs: [START_OUTPUT] });
+    await harness.api.start({
+      clientTransferId: CLIENT_ID,
+      targetPlatform: "web",
+      accounts: START_INPUT.accounts,
+    });
+    await strandWithOrphanedSignedAddKey(harness);
+
+    const report = await harness.api.getReconciliationReport();
+    const { chain } = createChainDouble({
+      transactionKnown: false,
+      destinationLive: false,
+      signedTransactionExpired: false,
+    });
+    const result = await harness.api.reconcileFencedOperation({
+      operation: report.operations[0]!,
+      chain,
+    });
+    expect(result.status).toBe("ambiguous");
+    expect(result.detail).toBe("signed_transaction_may_still_land");
+    expect((await harness.api.getReconciliationReport()).fenced).toBe(true);
+  });
+
+  it("archives a dead operation and releases the fence", async () => {
+    const harness = createHarness({ outputs: [START_OUTPUT] });
+    await harness.api.start({
+      clientTransferId: CLIENT_ID,
+      targetPlatform: "web",
+      accounts: START_INPUT.accounts,
+    });
+    await strandWithOrphanedSignedAddKey(harness);
+
+    const report = await harness.api.getReconciliationReport();
+    const { chain } = createChainDouble({
+      transactionKnown: false,
+      destinationLive: false,
+      signedTransactionExpired: true,
+    });
+    const operation = report.operations[0]!;
+    expect((await harness.api.reconcileFencedOperation({ operation, chain })).status).toBe(
+      "destination_key_absent",
+    );
+    expect(await harness.api.archiveReconciledOperation({ operation, chain })).toBe(true);
+    expect((await harness.api.getReconciliationReport()).fenced).toBe(false);
+  });
+
+  it("refuses to archive while the destination key is still on the account", async () => {
+    const harness = createHarness({ outputs: [START_OUTPUT] });
+    await harness.api.start({
+      clientTransferId: CLIENT_ID,
+      targetPlatform: "web",
+      accounts: START_INPUT.accounts,
+    });
+    await strandWithOrphanedSignedAddKey(harness);
+
+    const report = await harness.api.getReconciliationReport();
+    const { chain } = createChainDouble({ transactionKnown: false, destinationLive: true });
+    const operation = report.operations[0]!;
+    expect((await harness.api.reconcileFencedOperation({ operation, chain })).status).toBe(
+      "destination_key_present_unproven",
+    );
+    expect(await harness.api.archiveReconciledOperation({ operation, chain })).toBe(false);
+    expect((await harness.api.getReconciliationReport()).fenced).toBe(true);
+  });
+
+  it("markDestinationKeysRevoked resolves the runner's protected row, not just the session intent", async () => {
+    const harness = createHarness({ outputs: [START_OUTPUT] });
+    await harness.api.start({
+      clientTransferId: CLIENT_ID,
+      targetPlatform: "web",
+      accounts: START_INPUT.accounts,
+    });
+    const { chain: addKeyChain } = createChainDouble();
+    await harness.api.runAddKeys({ transferSessionId: SESSION_ID, chain: addKeyChain });
+
+    // A real signed/finalized runner row now exists. The previous implementation cleared only the
+    // SDK session's intent list, so `clear()` stayed fenced by `hasProtectedRecovery()`.
+    await expect(
+      harness.api.markDestinationKeysRevoked({
+        transferSessionId: SESSION_ID,
+        accounts: START_INPUT.accounts,
+      }),
+    ).rejects.toThrow("new_key_transfer_revoke_chain_required");
+
+    const stillLive = createChainDouble({ destinationLive: true });
+    await expect(
+      harness.api.markDestinationKeysRevoked({
+        transferSessionId: SESSION_ID,
+        accounts: START_INPUT.accounts,
+        chain: stillLive.chain,
+      }),
+    ).rejects.toThrow("new_key_transfer_revoke_destination_key_present");
+
+    // Host removed the key with the source signer and waited for finality.
+    const removed = createChainDouble({ destinationLive: false });
+    const revoked = await harness.api.markDestinationKeysRevoked({
+      transferSessionId: SESSION_ID,
+      accounts: START_INPUT.accounts,
+      chain: removed.chain,
+    });
+    expect(revoked.addKeyIntentAccounts).toEqual([]);
+    await expect(harness.api.clear(CLIENT_ID)).resolves.toBeUndefined();
+    expect(await harness.api.getSessions()).toEqual([]);
+  });
+
+  it("fences a corrupt journal with a support reference and no evidence to act on", async () => {
+    const harness = createHarness({ outputs: [START_OUTPUT] });
+    await harness.api.start({
+      clientTransferId: CLIENT_ID,
+      targetPlatform: "web",
+      accounts: START_INPUT.accounts,
+    });
+    await harness.storage.implementation.setItem(ADD_KEY_JOURNAL_KEY, "{ not json");
+
+    const report = await harness.api.getReconciliationReport();
+    expect(report.fenced).toBe(true);
+    expect(report.reason).toBe("journal_unreadable");
+    expect(report.operations).toEqual([]);
+    expect(report.supportReference).toMatch(/^MCNKT(-[A-Z2-7]{4}){4}$/);
   });
 });

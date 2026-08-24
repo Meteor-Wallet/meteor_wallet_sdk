@@ -310,15 +310,18 @@ export const NewKeyTransferTest = ({ meteorConnect }: { meteorConnect: MeteorCon
               type={"radio"}
               name={"new-key-target-platform"}
               checked={platform === option}
-              disabled={active != null}
+              disabled={!activeIsFinished}
               onChange={() => setPlatform(option)}
             />
             {PLATFORM_LABELS[option]}
           </label>
         ))}
-        {active != null && (
+        {!activeIsFinished && (
+          // The old copy said "clear it to change", which is wrong for a transfer past AddKey:
+          // clear() fences on a journaled intent and would just throw
+          // (REVIEW-consumer-implementation M-04).
           <span className={"text-xs text-gray-500"}>
-            fixed for the life of a transfer — clear it to change
+            fixed until this transfer finishes — the next transfer can target anything
           </span>
         )}
       </div>
@@ -379,9 +382,30 @@ export const NewKeyTransferTest = ({ meteorConnect }: { meteorConnect: MeteorCon
         </Button>
         <Button
           disabled={busy || active == null || clearRefused}
-          onClick={() => active != null && clearMutation.mutate(active.clientTransferId)}
+          onClick={() => {
+            if (active == null) return;
+            // A destructive simulation on a PUBLICLY HOSTED lab. Clearing here is legal on this
+            // side and leaves the wallet holding a signer for a transfer we have forgotten — the
+            // stranded record that later refuses the account with `pending_transfer_conflict`.
+            // It is a legitimate thing to exercise, and it must be a deliberate one
+            // (REVIEW-consumer-implementation M-04).
+            if (
+              clearWouldStrandWallet &&
+              !window.confirm(
+                "This is a destructive simulation.\n\n" +
+                  "Meteor Wallet has already created and stored destination keys for this " +
+                  "transfer. Clearing it here leaves the wallet holding a signer for a transfer " +
+                  "this side has forgotten, and that account will be refused with " +
+                  "`pending_transfer_conflict` until the record is resolved in the wallet.\n\n" +
+                  "Strand the wallet?",
+              )
+            ) {
+              return;
+            }
+            clearMutation.mutate(active.clientTransferId);
+          }}
         >
-          {clearWouldStrandWallet ? "Clear transfer (strands the wallet)" : "Clear transfer"}
+          {clearWouldStrandWallet ? "⚠ Clear transfer (strands the wallet)" : "Clear transfer"}
         </Button>
       </div>
 

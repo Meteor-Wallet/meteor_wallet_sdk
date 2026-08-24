@@ -3,7 +3,7 @@ import {
   validateNewKeyTransferVerifyActiveOutputForInput,
   vNewKeyTransferStartInputV1,
 } from "@meteorwallet/connect-shared";
-import { vNewKeyTransferVerifyActiveInputV1 } from "@meteorwallet/connect-shared/internal";
+import { vNewKeyTransferVerifyActiveInputV1 } from "@meteorwallet/connect-shared";
 import { KeyType, PublicKey } from "@near-js/crypto";
 import { DelegateAction, SCHEMA, Signature, SignedDelegate } from "@near-js/transactions";
 import { sha256 } from "@noble/hashes/sha2.js";

@@ -1,4 +1,4 @@
-import { wait_utils } from "@meteorwallet/utils/javascript_helpers/wait.utils";
+import { waitMillis } from "../utils/wait";
 import { nanoid } from "nanoid";
 import { stringify } from "query-string";
 import { envConfig } from "../envConfig";
@@ -258,7 +258,7 @@ class MeteorPostMessenger {
 
             this.sendComs();
 
-            wait_utils.waitMillis(300).then(() => {
+            waitMillis(300).then(() => {
               console.log("Ending success with data", data);
               currentConnection.resolve({
                 success: true,

@@ -5,7 +5,7 @@ import {
   type EWalletProtocolCapability,
   REQUIRED_METEOR_WALLET_CAPABILITIES,
 } from "@meteorwallet/connect-shared";
-import { getServerRequiredWalletCapabilities } from "@meteorwallet/connect-shared/internal";
+import { getServerRequiredWalletCapabilities } from "@meteorwallet/connect-shared";
 import { KeyPair } from "@near-js/crypto";
 import { base64 } from "@scure/base";
 import { convertOldFunctionCallKeyDefToNew } from "../../../near_utils/convertOldFunctionCallKeyDefToNew";

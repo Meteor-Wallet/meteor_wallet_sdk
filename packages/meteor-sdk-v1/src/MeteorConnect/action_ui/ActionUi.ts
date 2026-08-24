@@ -1,4 +1,4 @@
-import { wait_utils } from "@meteorwallet/utils/javascript_helpers/wait.utils";
+import { waitMillis } from "../../utils/wait";
 import type { ExecutableAction } from "../action/ExecutableAction";
 import { MeteorLogger } from "../logging/MeteorLogger";
 import type { TMeteorConnectionExecutionTarget } from "../MeteorConnect.types";
@@ -96,7 +96,7 @@ export class ActionUi {
         input.action.execute(knownExecutionTarget);
       }
 
-      await wait_utils.waitMillis(10);
+      await waitMillis(10);
 
       this.renderAction(input, knownExecutionTarget);
 
@@ -139,7 +139,7 @@ export class ActionUi {
       const farewell = (renderedComponent as { farewell?: () => Promise<void> }).farewell;
       if (typeof farewell === "function") {
         try {
-          await Promise.race([farewell.call(renderedComponent), wait_utils.waitMillis(2_500)]);
+          await Promise.race([farewell.call(renderedComponent), waitMillis(2_500)]);
         } catch {
           // Farewell is presentation-only; teardown proceeds regardless.
         }

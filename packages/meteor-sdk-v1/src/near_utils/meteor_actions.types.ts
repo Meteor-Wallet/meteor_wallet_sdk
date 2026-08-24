@@ -1,5 +1,5 @@
 import type { Action as NearJsNativeAction } from "@near-js/transactions";
-import type { Action, AddKeyAction } from "@near-wallet-selector/core";
+import type { Action, AddKeyAction } from "./wallet_selector_actions.types";
 import type { Action as MeteorNativeAction } from "./actionCreator/actions";
 
 /**

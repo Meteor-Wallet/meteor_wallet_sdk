@@ -19,11 +19,9 @@ import {
   EWalletPlatform,
   type TSessionFacts,
   type TSessionRequestEnvelopeV1,
-} from "@meteorwallet/connect-shared";
-import {
   TRANSFER_ACCOUNTS_MAX_ACCOUNTS,
   TRANSFER_ACCOUNTS_MAX_SECRETS_PER_ACCOUNT,
-} from "@meteorwallet/connect-shared/internal";
+} from "@meteorwallet/connect-shared";
 import type { ITypedStorageHelper } from "../../ported_common/utils/storage/TypedStorageHelper";
 import type { IMeteorConnectTypedStorage } from "../MeteorConnect.types";
 import {

@@ -10,14 +10,11 @@ import {
   type DelegateAction as TNearJsDelegateAction,
   SCHEMA,
 } from "@near-js/transactions";
-import { type AccessKeyInfoView } from "@near-js/types";
-import type {
-  Action,
-  FinalExecutionOutcome,
-  Transaction,
-} from "@near-wallet-selector/core";
+import { type AccessKeyInfoView, type FinalExecutionOutcome } from "@near-js/types";
+import { baseDecode } from "@near-js/utils";
+import type { Action, Transaction } from "./near_utils/wallet_selector_actions.types";
 import { deserialize, serialize } from "borsh";
-import { type ConnectConfig, utils } from "near-api-js";
+import type { INearConnectConfig } from "./ported_common/near/nearConnectConfig.types";
 import type {
   AddFunctionCallKeyParams,
   TSimpleNearDelegateAction,
@@ -75,7 +72,7 @@ interface IMeteorV1TypedStorage {
   // empty for now
 }
 
-export interface IMeteorWallet_Init_Inputs extends Partial<ConnectConfig> {
+export interface IMeteorWallet_Init_Inputs extends Partial<INearConnectConfig> {
   networkId: string;
   appKeyPrefix?: string;
 }
@@ -244,7 +241,7 @@ export class MeteorWallet {
    *   blockId: string;
    *   publicKey: string;               // The public key which should be verified as belonging to this account
    *   signature: string;               // The signed payload (this exact same object JSON stringified, excluding this "signature" property)
-   *   keyType: utils.key_pair.KeyType; // Type from inside the near-api-js package
+   *   keyType: KeyType; // Type from `@near-js/crypto`
    * }
    * ```
    *
@@ -686,7 +683,7 @@ export class MeteorWallet {
           BigInt(0 + index), // will be replace wallet-side with the correct nonce based on the account public key
           // @ts-expect-error added more actions
           transformedActions,
-          utils.serialize.base_decode(block.header.hash),
+          baseDecode(block.header.hash),
         );
       }),
     );

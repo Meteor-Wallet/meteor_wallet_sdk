@@ -4,12 +4,10 @@ import {
   type TAccountSecretData,
   type TAccountTransferDataDecrypted,
   TRANSFER_ACCOUNTS_ACCOUNT_ID_PATTERN,
-  vAccountTransferDataDecrypted,
-} from "@meteorwallet/connect-shared";
-import {
   TRANSFER_ACCOUNTS_MAX_SECRETS_PER_ACCOUNT,
   vAccountBasicData,
-} from "@meteorwallet/connect-shared/internal";
+  vAccountTransferDataDecrypted,
+} from "@meteorwallet/connect-shared";
 import { stringifyCanonicalJson } from "@nice-code/util";
 import * as v from "valibot";
 import type { ITypedStorageHelper } from "../../ported_common/utils/storage/TypedStorageHelper";

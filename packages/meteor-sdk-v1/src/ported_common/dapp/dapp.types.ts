@@ -5,7 +5,10 @@ import {
   SignedDelegate,
 } from "@near-js/transactions";
 import type { FinalExecutionOutcome } from "@near-js/types";
-import type { Action, Transaction as WalletSelectorTransaction } from "@near-wallet-selector/core";
+import type {
+  Action,
+  Transaction as WalletSelectorTransaction,
+} from "../../near_utils/wallet_selector_actions.types";
 import { z } from "zod";
 import type {
   AddFunctionCallKeyParams,
