@@ -4,16 +4,6 @@
       "moduleName": "@hot-labs/near-connect",
       "relativePathToRoot": "../near-connect",
       "addToPackages": []
-    },
-    {
-      "moduleName": "@meteorwallet/connect",
-      "relativePathToRoot": "../meteor-connect-bridge/packages/meteor-connect-client",
-      "addToPackages": []
-    },
-    {
-      "moduleName": "@meteorwallet/connect-shared",
-      "relativePathToRoot": "../meteor-connect-bridge/packages/meteor-connect-shared",
-      "addToPackages": []
     }
   ],
   "exclude": ["node_modules", ".git", ".idea"]
