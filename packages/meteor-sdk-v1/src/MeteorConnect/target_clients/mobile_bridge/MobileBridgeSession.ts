@@ -154,6 +154,14 @@ interface IMobileBridgeSessionInput {
    */
   pinnedWallet?: TPartnerPairedWallet;
   /**
+   * The exact wallet verify key this session is FOR, when the full paired-wallet record needed for
+   * a backend pin is unavailable (stabilization SDK-3 recovery): the claim is open (QR-directed),
+   * but a claimant with any other verify key is refused locally before an action result is
+   * consumed. The wallet-side (partnerVerifyPublicKey, transferSessionId) binding remains the
+   * authoritative gate either way (D4).
+   */
+  expectedWalletVerifyPublicKey?: string;
+  /**
    * Journal-before-hold seam. Present only for `new_key_account_transfer_start`: supplying it is
    * what swaps this turn's closing verb from `acknowledgeAndClose` to
    * `acknowledgeAndBeginExternalWork`, leaving the session held open for the AddKey window.
@@ -755,8 +763,9 @@ export class MobileBridgeSession {
     if (this.claimedWallet != null) return this.claimedWallet;
     const claimed = this.input.client.claimedWallet;
     if (claimed == null) throw new Error("mobile_bridge_active_wallet_unavailable");
-    const pinned = this.input.pushWallet;
-    if (pinned != null && claimed.walletVerifyPublicKey !== pinned.walletVerifyPublicKey) {
+    const expectedVerifyKey =
+      this.input.pushWallet?.walletVerifyPublicKey ?? this.input.expectedWalletVerifyPublicKey;
+    if (expectedVerifyKey != null && claimed.walletVerifyPublicKey !== expectedVerifyKey) {
       throw new Error("mobile_bridge_active_wallet_unavailable");
     }
     if (!this.input.targetMeteorAppIds.includes(claimed.meteorAppId)) {

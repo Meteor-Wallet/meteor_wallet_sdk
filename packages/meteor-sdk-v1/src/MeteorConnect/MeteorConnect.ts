@@ -197,7 +197,9 @@ export class MeteorConnect {
     this.initializeBoundConfig = true;
     this.clients.mobileBridge.configure(mobileBridge, storage);
     this.transferAccounts.configure(mobileBridge?.transferAccounts);
-    this.newKeyTransfer.configure(mobileBridge?.transferAccounts?.enabled === true);
+    this.newKeyTransfer.configure(
+      (mobileBridge?.newKeyTransfer?.enabled ?? mobileBridge?.transferAccounts?.enabled) === true,
+    );
 
     await typedStorageHelper.setJson("lastInitialized", Date.now());
 
@@ -447,11 +449,15 @@ Platform Target: ${jsonStringifyCompat({
       })}
 
 Inputs: ${
-        request.id === "meteor_wallet_core::transfer_accounts" ||
-        request.id === "meteor_wallet_core::new_key_account_transfer_start" ||
-        request.id === "meteor_wallet_core::new_key_account_transfer_verify_active"
+        request.id === "meteor_wallet_core::transfer_accounts"
           ? `{ accounts: ${(expandedRequest.expandedInput as any).allAccountsBasicInfo?.length ?? 0}, ciphertext: ${(expandedRequest.expandedInput as any).encryptedData?.ciphertext?.length ?? 0} base64 chars }`
-          : jsonStringifyCompat(expandedRequest.expandedInput)
+          : // Stabilization SDK-13: the new-key inputs carry `accounts`/`activations`, not the
+            // existing-secret fields — probing those always logged `{ accounts: 0 }`.
+            request.id === "meteor_wallet_core::new_key_account_transfer_start"
+            ? `{ accounts: ${(expandedRequest.expandedInput as any).accounts?.length ?? 0} }`
+            : request.id === "meteor_wallet_core::new_key_account_transfer_verify_active"
+              ? `{ activations: ${(expandedRequest.expandedInput as any).activations?.length ?? 0} }`
+              : jsonStringifyCompat(expandedRequest.expandedInput)
       }
 `,
     );

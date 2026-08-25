@@ -382,9 +382,11 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
     }
     const prepared = await sdkActionToMobileBridge(request, sensitiveTransferSource);
     const pushWallet = await this.selectPushWallet(request, prepared, targetWalletConnection);
-    if (targetWalletConnection != null && pushWallet == null) {
-      throw new Error("new_key_transfer_paired_wallet_unavailable");
-    }
+    // Stabilization SDK-3: a wallet-targeted request whose paired-wallet record is gone (identity
+    // reset, ledger eviction, changed backend scope) is NOT a dead end. The session is created
+    // without push or a backend pin — QR/link delivery, copy directing the user to the exact
+    // wallet — while the claimed wallet is still locally checked against the stored verify key
+    // and the wallet's own (partner, transferSessionId) binding stays the authoritative gate.
     const token = crypto.randomUUID();
     this.currentToken = token;
     const session = new MobileBridgeSession({
@@ -397,6 +399,9 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
         targetWalletConnection,
       ),
       localDevLinkRewrite:
+        // Deliberately keyed on the persisted platform alone (stabilization SDK-14 review): a
+        // wallet-pinned verify turn under `web_local_dev` targets the SAME localhost wallet that
+        // claimed the start, so its link must be rebased exactly like the start's was.
         transferTargetPlatform === "web_local_dev"
           ? {
               baseUrl: await this.localDevLinkBaseUrl(),
@@ -409,6 +414,7 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
       // Only a wallet-pinned request binds the session to one claimant server-side; an ordinary
       // push wake is an optimisation and must never narrow who may claim the bridge.
       pinnedWallet: targetWalletConnection == null ? undefined : pushWallet,
+      expectedWalletVerifyPublicKey: targetWalletConnection?.walletVerifyPublicKey,
       journalBeforeExternalWorkHold: target.journalBeforeExternalWorkHold,
       isCurrent: (candidate) => candidate === this.currentToken,
       buildConnection: (wallet) => this.buildConnection(wallet),

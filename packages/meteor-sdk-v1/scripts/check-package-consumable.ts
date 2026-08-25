@@ -59,7 +59,13 @@ function packTarball(dir: string, label: string): string {
     console.error(result.stderr.toString());
     throw new Error(`npm pack failed for ${label}`);
   }
-  const info = JSON.parse(result.stdout.toString())[0];
+  // npm <=11 emits an array; npm 12's `pack --json` emits an object keyed by package name.
+  const parsed = JSON.parse(result.stdout.toString());
+  const info = (Array.isArray(parsed) ? parsed[0] : Object.values(parsed)[0]) as {
+    filename: string;
+    size: number;
+    entryCount: number;
+  };
   console.log(`   ✔ ${info.filename} (${(info.size / 1024 / 1024).toFixed(2)} MB, ${info.entryCount} entries)`);
   return join(tmpdir(), info.filename);
 }

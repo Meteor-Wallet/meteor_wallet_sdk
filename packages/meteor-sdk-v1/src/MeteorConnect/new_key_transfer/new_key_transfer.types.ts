@@ -17,6 +17,13 @@ export type TNewKeyTransferSdkPhase =
   | "destination_keys_staged"
   | "add_key_in_progress"
   | "verification_pending"
+  /**
+   * Stabilization SD4/SD6: chain proof passed for every requested account, but the WALLET still
+   * owes completion work on at least one (`verified_pending_completion` — import or the SD13
+   * activation self-test). Re-run `verifyActive` with the same activations to converge; render as
+   * "finishing in the wallet", never as done.
+   */
+  | "verification_pending_wallet"
   | "destination_keys_verified";
 
 export type TNewKeyTransferTargetPlatform = TTransferTargetPlatform;
@@ -31,7 +38,16 @@ export interface INewKeyTransferSdkSession {
   startOutput?: TNewKeyTransferStartOutputV1;
   walletConnection?: IMeteorConnection_V2_BridgeMobile;
   addKeyIntentAccounts: string[];
+  /**
+   * Accounts whose chain proof the wallet has accepted — the union of `securedAccounts` and
+   * `pendingCompletionAccounts`. Kept for continuity; render user-facing state from the two
+   * specific sets below (SD6).
+   */
   verifiedAccounts: string[];
+  /** Accounts the wallet reported `secured`: proven on-chain AND durably imported (SD3/SD4). */
+  securedAccounts: string[];
+  /** Accounts still `verified_pending_completion` wallet-side; re-verify later to converge. */
+  pendingCompletionAccounts: string[];
   updatedAt: number;
 }
 

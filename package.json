@@ -36,8 +36,13 @@
     ]
   },
   "overrides": {
-    "react": "19.1.0",
-    "react-dom": "19.1.0"
+    "@nice-code/action": "0.87.0",
+    "@nice-code/util": "0.87.0",
+    "@nice-code/wire": "0.87.0",
+    "@nice-code/realm": "0.87.0",
+    "@nice-code/error": "0.87.0",
+    "@nice-code/common-errors": "0.87.0",
+    "@nice-code/state": "0.87.0"
   },
   "patchedDependencies": {
     "@near-js/transactions@2.2.5": "patches/@near-js%2Ftransactions@2.2.5.patch"

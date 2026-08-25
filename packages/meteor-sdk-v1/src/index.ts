@@ -44,6 +44,23 @@ export * from "./MeteorConnect/logging/MeteorLogger";
 export * from "./MeteorConnect/MeteorConnect";
 export * from "./MeteorConnect/MeteorConnect.types";
 export * from "./MeteorConnect/new_key_transfer/new_key_transfer.types";
+/**
+ * The typed new-key error surface (stabilization SD11): hosts branch on
+ * `instanceof NewKeyTransferError` + `error.code` — never on message prose.
+ */
+export {
+  isNewKeyTransferError,
+  NEW_KEY_TRANSFER_ERROR_CODES,
+  NewKeyTransferError,
+  type TNewKeyTransferErrorCode,
+  type TNewKeyTransferRecoveryFence,
+} from "./MeteorConnect/new_key_transfer/new_key_transfer_errors";
+/**
+ * Pass-through error surfaces hosts must be able to `instanceof` (stabilization XR-4): the
+ * shared AddKey journal runner's typed error, and the bridge-flow ending sentinels.
+ */
+export { AddKeyJournalError, type TAddKeyJournalErrorCode } from "@meteorwallet/connect-shared";
+export { MOBILE_BRIDGE_ENDING } from "./MeteorConnect/target_clients/mobile_bridge/MobileBridgeSession";
 export * from "./MeteorConnect/target_clients/mobile_bridge/mobileBridgeLease";
 export { parseTransferSecretInput } from "./MeteorConnect/transfer_accounts/TransferAccountsStaging";
 // Pinned locally rather than re-exported from connect-shared: the bound lives on that package's

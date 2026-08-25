@@ -133,6 +133,17 @@ export interface IMeteorConnectTypedStorage {
    * the same `met_data_` prefix so a partner-identity reset cannot wipe AddKey recovery.
    */
   newKeyTransferSessions: unknown;
+  /**
+   * Cached terminal verify exchanges keyed by transferSessionId (stabilization SDK-4,
+   * `exact_cached_result`): a byte-identical repeated verification replays from here without
+   * asking the wallet again. Secret-free (request + signed-output rows only).
+   */
+  newKeyTransferVerifyResults: unknown;
+  /**
+   * Bounded archive of fully completed transfer sessions (stabilization SD10): retention that
+   * keeps the active journal under its capacity without deleting completion records.
+   */
+  newKeyTransferArchivedSessions: unknown;
 }
 
 export interface IMeteorConnect_Initialize_Input {
@@ -215,6 +226,12 @@ export interface IMeteorConnectMobileBridgeConfig {
     originUrl?: string;
   };
   transferAccounts?: IMeteorConnectTransferAccountsConfig;
+  /**
+   * Dedicated enable flag for the new-key transfer surface (stabilization SDK-12). When omitted,
+   * it follows `transferAccounts.enabled` for continuity with pre-stabilization hosts; set it
+   * explicitly to run the two features independently.
+   */
+  newKeyTransfer?: { enabled?: boolean };
   /**
    * Offer `v2_bridge_mobile` for NEAR actions again. Off by default and NOT production-ready:
    * the bridge backend's `session_policies.ts::hasImplementedRecoverySeams` admits only

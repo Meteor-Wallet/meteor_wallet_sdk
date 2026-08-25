@@ -30,6 +30,7 @@ import {
   type TSessionFacts,
 } from "@meteorwallet/connect-shared";
 import { getActionPolicy } from "@meteorwallet/connect-shared/internal";
+import { NewKeyTransferError } from "./new_key_transfer_errors";
 import { CEnvironmentStorageAdapter } from "../../ported_common/utils/storage/EnvironmentStorageAdapter";
 import type { ILocalStorageInterface } from "../../ported_common/utils/storage/storage.types";
 import type { MeteorConnect } from "../MeteorConnect";
@@ -123,7 +124,8 @@ const VERIFY_OUTPUT: TNewKeyTransferVerifyActiveOutputV1 = {
       blockchainId: "near",
       networkId: "testnet",
       accountId: "alice.testnet",
-      activation: "verified",
+      activation: "secured",
+      liveness: "confirmed",
     },
   ],
 };
@@ -1215,5 +1217,319 @@ describe("MeteorConnectNewKeyTransfer orphaned-AddKey reconciliation (B-04)", ()
     expect(report.reason).toBe("journal_unreadable");
     expect(report.operations).toEqual([]);
     expect(report.supportReference).toMatch(/^MCNKT(-[A-Z2-7]{4}){4}$/);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// Stabilization SD-series behaviors (PLAN-new-key-transfer-stabilization.md Phase 2)
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+
+const VERIFY_PENDING_OUTPUT: TNewKeyTransferVerifyActiveOutputV1 = {
+  formatVersion: 1,
+  transferSessionId: SESSION_ID,
+  accounts: [
+    {
+      blockchainId: "near",
+      networkId: "testnet",
+      accountId: "alice.testnet",
+      activation: "verified_pending_completion",
+      pendingFact: "import_incomplete",
+    },
+  ],
+};
+
+/** A different, valid 32-byte base58 value to play a drifted activation hash. */
+const OTHER_TRANSACTION_HASH = "cGfHiC6Kgg3FpFZvgwGcswsCRtp4aBP2fzuXRQPizuN";
+
+const fullFlowToVerified = async (harness: ReturnType<typeof createHarness>) => {
+  await harness.api.start({
+    clientTransferId: CLIENT_ID,
+    targetPlatform: "web",
+    accounts: START_INPUT.accounts,
+  });
+  const { chain } = createChainDouble();
+  await harness.api.runAddKeys({ transferSessionId: SESSION_ID, chain });
+  return harness.api.verifyActive({
+    transferSessionId: SESSION_ID,
+    activations: VERIFY_INPUT.activations,
+  });
+};
+
+describe("stabilization: SD4/SD6 completion facts", () => {
+  it("holds a pending-completion row open, converges on secured, then replays from cache", async () => {
+    const harness = createHarness({
+      outputs: [START_OUTPUT, VERIFY_PENDING_OUTPUT, VERIFY_OUTPUT],
+    });
+    const pendingResult = await fullFlowToVerified(harness);
+    expect(pendingResult.session.phase).toBe("verification_pending_wallet");
+    expect(pendingResult.session.pendingCompletionAccounts).toHaveLength(1);
+    expect(pendingResult.session.securedAccounts).toHaveLength(0);
+    // The pending proof is retained for the retry — never cleared on a non-terminal exchange.
+    expect((await harness.api.getRecoveryState()).pendingVerification).not.toBeNull();
+
+    const converged = await harness.api.verifyActive({
+      transferSessionId: SESSION_ID,
+      activations: VERIFY_INPUT.activations,
+    });
+    expect(converged.session.phase).toBe("destination_keys_verified");
+    expect(converged.session.securedAccounts).toHaveLength(1);
+    expect(converged.session.pendingCompletionAccounts).toHaveLength(0);
+    expect((await harness.api.getRecoveryState()).pendingVerification).toBeNull();
+    expect(harness.getPromptCount()).toBe(3);
+
+    // SDK-4 exact_cached_result: a byte-identical repeat of the TERMINAL exchange answers from
+    // the durable cache without asking the wallet again.
+    const replayed = await harness.api.verifyActive({
+      transferSessionId: SESSION_ID,
+      activations: VERIFY_INPUT.activations,
+    });
+    expect(replayed.output).toEqual(VERIFY_OUTPUT);
+    expect(replayed.session.phase).toBe("destination_keys_verified");
+    expect(harness.getPromptCount()).toBe(3);
+  });
+
+  it("refuses an activation hash that contradicts this transfer's own finalized journal", async () => {
+    const harness = createHarness({ outputs: [START_OUTPUT, VERIFY_OUTPUT] });
+    await harness.api.start({
+      clientTransferId: CLIENT_ID,
+      targetPlatform: "web",
+      accounts: START_INPUT.accounts,
+    });
+    const { chain } = createChainDouble();
+    await harness.api.runAddKeys({ transferSessionId: SESSION_ID, chain });
+    const drifted = harness.api.verifyActive({
+      transferSessionId: SESSION_ID,
+      activations: [{ ...VERIFY_INPUT.activations[0], addKeyTransactionHash: OTHER_TRANSACTION_HASH }],
+    });
+    await expect(drifted).rejects.toThrow("new_key_transfer_verify_hash_mismatch");
+    await drifted.catch((error) => {
+      expect(error).toBeInstanceOf(NewKeyTransferError);
+      expect((error as NewKeyTransferError).code).toBe("new_key_transfer_verify_hash_mismatch");
+    });
+  });
+});
+
+describe("stabilization: SDK-1 fence agrees with the reconciliation report", () => {
+  it("does not fence a signed row that is still bound to its start result", async () => {
+    const harness = createHarness({ outputs: [START_OUTPUT, SECOND_START_OUTPUT] });
+    await harness.api.start({
+      clientTransferId: CLIENT_ID,
+      targetPlatform: "web",
+      accounts: START_INPUT.accounts,
+    });
+    // An ambiguous broadcast: the signed row exists, the start result is intact. Resumable
+    // through `runAddKeys` — and per SDK-1 it must NOT brick unrelated transfers.
+    await harness.storage.implementation.setItem(
+      ADD_KEY_JOURNAL_KEY,
+      JSON.stringify({
+        formatVersion: 2,
+        entries: [
+          {
+            operationVersion: 1,
+            transferSessionId: SESSION_ID,
+            blockchainId: "near",
+            networkId: "testnet",
+            accountId: "alice.testnet",
+            sourcePublicKey: SOURCE_KEY,
+            destinationPublicKey: DESTINATION_KEY,
+            phase: "transaction_signed",
+            transactionHash: TRANSACTION_HASH,
+            signedTransactionBase64: Buffer.alloc(64, 3).toString("base64"),
+          },
+        ],
+      }),
+    );
+    const recovery = await harness.api.getRecoveryState();
+    expect(recovery.reconciliation.fenced).toBe(false);
+    // The legacy flag now IS the report's verdict — they can never disagree again.
+    expect(recovery.orphanedSignedAddKey).toBe(recovery.reconciliation.fenced);
+  });
+});
+
+describe("stabilization: SDK-2 start-result wedge exits", () => {
+  it("clear() on a crash-window start_pending row also discards its journaled start result", async () => {
+    const harness = createHarness({ outputs: [START_OUTPUT, START_OUTPUT] });
+    await harness.api.start({
+      clientTransferId: CLIENT_ID,
+      targetPlatform: "web",
+      accounts: START_INPUT.accounts,
+    });
+    // Simulate the crash between the wallet's answer (start result journaled, hold begun) and
+    // the session commit: rewind the session row to `start_pending`.
+    harness.setStoredSessions([
+      {
+        formatVersion: 1,
+        phase: "start_pending",
+        targetPlatform: "web",
+        clientTransferId: CLIENT_ID,
+        canonicalInputHash: hashNewKeyTransferStartInput(START_INPUT),
+        startRequest: START_INPUT,
+        addKeyIntentAccounts: [],
+        verifiedAccounts: [],
+        securedAccounts: [],
+        pendingCompletionAccounts: [],
+        updatedAt: Date.now(),
+      },
+    ]);
+    expect((await harness.api.getRecoveryState()).startResult).not.toBeNull();
+
+    await harness.api.clear(CLIENT_ID);
+    expect((await harness.api.getRecoveryState()).startResult).toBeNull();
+    expect(await harness.api.getSessions()).toHaveLength(0);
+
+    // The profile is startable again — the exact wedge SDK-2 described is gone.
+    const restarted = await harness.api.start({
+      clientTransferId: CLIENT_ID,
+      targetPlatform: "web",
+      accounts: START_INPUT.accounts,
+    });
+    expect(restarted.output).toEqual(START_OUTPUT);
+  });
+
+  it("discardOrphanedStartResult clears an unreferenced slot and refuses a referenced one", async () => {
+    const harness = createHarness({ outputs: [START_OUTPUT] });
+    await harness.api.start({
+      clientTransferId: CLIENT_ID,
+      targetPlatform: "web",
+      accounts: START_INPUT.accounts,
+    });
+    // Referenced by a live session → refused.
+    await expect(harness.api.discardOrphanedStartResult()).rejects.toThrow(
+      "new_key_transfer_start_result_referenced",
+    );
+    // Orphaned (no session row at all) → discarded.
+    harness.setStoredSessions([]);
+    expect(await harness.api.discardOrphanedStartResult()).toBe(true);
+    expect((await harness.api.getRecoveryState()).startResult).toBeNull();
+    expect(await harness.api.discardOrphanedStartResult()).toBe(false);
+  });
+});
+
+describe("stabilization: SD10 retention", () => {
+  const pendingRow = (index: number, updatedAt: number) => {
+    const request: TNewKeyTransferStartInputV1 = {
+      formatVersion: 1,
+      clientTransferId: `RETAIN${String(index).padStart(16, "0")}`,
+      accounts: START_INPUT.accounts,
+    };
+    return {
+      formatVersion: 1,
+      phase: "start_pending",
+      targetPlatform: "web",
+      clientTransferId: request.clientTransferId,
+      canonicalInputHash: hashNewKeyTransferStartInput(request),
+      startRequest: request,
+      addKeyIntentAccounts: [],
+      verifiedAccounts: [],
+      securedAccounts: [],
+      pendingCompletionAccounts: [],
+      updatedAt,
+    };
+  };
+
+  it("surfaces capacity as a typed retention error, and sweeps stale pending rows", async () => {
+    const harness = createHarness({ outputs: [START_OUTPUT] });
+    const fresh = Array.from({ length: 100 }, (_, index) => pendingRow(index, Date.now()));
+    harness.setStoredSessions(fresh);
+    const overflow = harness.api.start({
+      clientTransferId: CLIENT_ID,
+      targetPlatform: "web",
+      accounts: START_INPUT.accounts,
+    });
+    await expect(overflow).rejects.toThrow("new_key_transfer_journal_retention_required");
+    await overflow.catch((error) => {
+      expect((error as NewKeyTransferError).code).toBe(
+        "new_key_transfer_journal_retention_required",
+      );
+    });
+
+    // The same 100 rows, stale: swept automatically and the start proceeds.
+    const stale = Array.from({ length: 100 }, (_, index) =>
+      pendingRow(index, Date.now() - 2 * 60 * 60 * 1000),
+    );
+    harness.setStoredSessions(stale);
+    const started = await harness.api.start({
+      clientTransferId: CLIENT_ID,
+      targetPlatform: "web",
+      accounts: START_INPUT.accounts,
+    });
+    expect(started.output).toEqual(START_OUTPUT);
+    expect((await harness.api.getSessions()).length).toBe(1);
+  });
+
+  it("archives a fully secured transfer and refuses to archive unfinished ones", async () => {
+    const harness = createHarness({ outputs: [START_OUTPUT, VERIFY_OUTPUT] });
+    const verified = await fullFlowToVerified(harness);
+    expect(verified.session.phase).toBe("destination_keys_verified");
+
+    await harness.api.archiveCompletedSession(CLIENT_ID);
+    expect(await harness.api.getSessions()).toHaveLength(0);
+    // Terminal retirement also releases the one-slot start-result journal for the next transfer.
+    expect((await harness.api.getRecoveryState()).startResult).toBeNull();
+    await expect(harness.api.archiveCompletedSession(CLIENT_ID)).rejects.toThrow(
+      "new_key_transfer_session_not_found",
+    );
+
+    const second = createHarness({ outputs: [START_OUTPUT] });
+    await second.api.start({
+      clientTransferId: CLIENT_ID,
+      targetPlatform: "web",
+      accounts: START_INPUT.accounts,
+    });
+    await expect(second.api.archiveCompletedSession(CLIENT_ID)).rejects.toThrow(
+      "new_key_transfer_session_not_terminal",
+    );
+  });
+});
+
+describe("stabilization: SD11 typed errors and validate-before-effect", () => {
+  it("raises NewKeyTransferError with stable codes and recovery fences", async () => {
+    const harness = createHarness({ outputs: [START_OUTPUT, VERIFY_OUTPUT] });
+    await fullFlowToVerified(harness);
+    const blocked = harness.api.clear(CLIENT_ID);
+    await expect(blocked).rejects.toThrow("new_key_transfer_recovery_required");
+    await blocked.catch((error) => {
+      expect(error).toBeInstanceOf(NewKeyTransferError);
+      expect((error as NewKeyTransferError).fence).toBe("session_intent");
+    });
+
+    harness.api.configure(false);
+    const disabled = harness.api.start({
+      clientTransferId: SECOND_CLIENT_ID,
+      targetPlatform: "web",
+      accounts: SECOND_START_INPUT.accounts,
+    });
+    await expect(disabled).rejects.toThrow("new_key_transfer_unavailable");
+  });
+
+  it("validates revocation identity before touching any fence evidence", async () => {
+    // Stop after the AddKey window: the finalized journal row is live fence evidence here.
+    const harness = createHarness({ outputs: [START_OUTPUT] });
+    await harness.api.start({
+      clientTransferId: CLIENT_ID,
+      targetPlatform: "web",
+      accounts: START_INPUT.accounts,
+    });
+    const { chain } = createChainDouble();
+    await harness.api.runAddKeys({ transferSessionId: SESSION_ID, chain });
+    const journalBefore = await harness.storage.implementation.getItem(ADD_KEY_JOURNAL_KEY);
+    expect(JSON.parse(journalBefore ?? "{}").entries?.length ?? 0).toBeGreaterThan(0);
+
+    // Unknown transfer session → refused up front, no journal mutation attempted.
+    await expect(
+      harness.api.markDestinationKeysRevoked({
+        transferSessionId: "Z".repeat(22),
+        accounts: START_INPUT.accounts,
+      }),
+    ).rejects.toThrow("new_key_transfer_session_not_found");
+    // An account outside the intent set → refused up front.
+    await expect(
+      harness.api.markDestinationKeysRevoked({
+        transferSessionId: SESSION_ID,
+        accounts: [{ blockchainId: "near", networkId: "testnet", accountId: "mallory.testnet" }],
+      }),
+    ).rejects.toThrow("new_key_transfer_revoke_account_mismatch");
+    // The fence evidence is byte-identical after both refusals (SDK-9: validate before effect).
+    expect(await harness.storage.implementation.getItem(ADD_KEY_JOURNAL_KEY)).toBe(journalBefore);
   });
 });

@@ -8,18 +8,21 @@ import {
   type IAddKeyJournalStorageKeys,
   type IAddKeyJournalStorageMethods,
   newKeyTransferAccountIdentityKey,
+  newKeyTransferProtectedOperations,
   parseNewKeyTransferStartOutputV1,
   type TNewKeyTransferStartOutputAccountV1,
   type TNewKeyTransferStartOutputV1,
   type TNewKeyTransferVerifyActiveInputV1,
-  newKeyTransferProtectedOperations,
+  type TNewKeyTransferVerifyActiveOutputV1,
   validateNewKeyTransferStartOutputForInput,
+  validateNewKeyTransferVerifyActiveOutputForInput,
   vMeteorAppId,
   vNewKeyTransferOpaqueId,
   vNewKeyTransferStartInputV1,
   vNewKeyTransferStartOutputV1,
   vSerializedCryptoKeyDataEd25519_Raw,
 } from "@meteorwallet/connect-shared";
+import { stringifyCanonicalJson } from "@nice-code/util";
 import * as v from "valibot";
 import type { TMCActionRegistry } from "../action/mc_action.combined";
 import type { TMCActionRequestUnion } from "../action/mc_action.types";
@@ -40,6 +43,7 @@ import type {
   INewKeyTransferVerifyOptions,
   INewKeyTransferVerifyResult,
 } from "./new_key_transfer.types";
+import { NewKeyTransferError } from "./new_key_transfer_errors";
 
 type TStartRequest = Extract<
   TMCActionRequestUnion<TMCActionRegistry>,
@@ -79,6 +83,7 @@ const vSession = v.object({
     "destination_keys_staged",
     "add_key_in_progress",
     "verification_pending",
+    "verification_pending_wallet",
     "destination_keys_verified",
   ]),
   targetPlatform: vTargetPlatform,
@@ -89,9 +94,15 @@ const vSession = v.object({
   walletConnection: v.optional(vWalletConnection),
   addKeyIntentAccounts: vAccountIdentityKeys,
   verifiedAccounts: vAccountIdentityKeys,
+  securedAccounts: vAccountIdentityKeys,
+  pendingCompletionAccounts: vAccountIdentityKeys,
   updatedAt: v.pipe(v.number(), v.integer(), v.minValue(1)),
 });
-const vSessions = v.pipe(v.array(vSession), v.maxLength(100));
+const MAX_JOURNAL_SESSIONS = 100;
+const vSessions = v.pipe(v.array(vSession), v.maxLength(MAX_JOURNAL_SESSIONS));
+const MAX_ARCHIVED_SESSIONS = 100;
+/** A never-answered `start_pending` row this old (and unreferenced) is swept at the next start. */
+const STALE_START_PENDING_MAX_AGE_MILLIS = 60 * 60 * 1000;
 const JOURNAL_LOCK_NAME = "meteor-wallet-sdk::new-key-transfer-journal::v1";
 /** Serializes whole AddKey submissions across tabs; deliberately NOT the journal lock (chain I/O). */
 const ADD_KEY_LOCK_NAME = "meteor-wallet-sdk::new-key-transfer-add-key::v1";
@@ -115,20 +126,26 @@ const ADD_KEY_JOURNAL_STORAGE_KEYS: IAddKeyJournalStorageKeys = {
  */
 const REQUIRE_HOST_CHAIN: IAddKeyJournalChain = {
   getAccessKeys: async () => {
-    throw new Error("new_key_transfer_add_key_chain_required");
+    throw new NewKeyTransferError("new_key_transfer_add_key_chain_required");
   },
   signAddKeyTransaction: async () => {
-    throw new Error("new_key_transfer_add_key_chain_required");
+    throw new NewKeyTransferError("new_key_transfer_add_key_chain_required");
   },
   broadcastSignedTransaction: async () => {
-    throw new Error("new_key_transfer_add_key_chain_required");
+    throw new NewKeyTransferError("new_key_transfer_add_key_chain_required");
   },
   getFinalTransactionStatus: async () => {
-    throw new Error("new_key_transfer_add_key_chain_required");
+    throw new NewKeyTransferError("new_key_transfer_add_key_chain_required");
   },
 };
 
 type TReadyStartAccount = Extract<TNewKeyTransferStartOutputAccountV1, { ok: true }>;
+
+/** One cached terminal verify exchange (SD12/SDK-4 `exact_cached_result`): request + output. */
+interface ICachedVerifyResult {
+  request: TNewKeyTransferVerifyActiveInputV1;
+  output: TNewKeyTransferVerifyActiveOutputV1;
+}
 
 const asRecord = (value: unknown): Record<string, unknown> | undefined =>
   value != null && typeof value === "object" && !Array.isArray(value)
@@ -177,23 +194,42 @@ const hasStrictStartOutputShape = (value: unknown): boolean => {
   );
 };
 
+const STORED_SESSION_KEYS = [
+  "formatVersion",
+  "phase",
+  "targetPlatform",
+  "clientTransferId",
+  "canonicalInputHash",
+  "startRequest",
+  "startOutput",
+  "walletConnection",
+  "addKeyIntentAccounts",
+  "verifiedAccounts",
+  "securedAccounts",
+  "pendingCompletionAccounts",
+  "updatedAt",
+] as const;
+
+/** The exact pre-stabilization stored shape, accepted only for the one-shot migration below. */
+const PRE_STABILIZATION_SESSION_KEYS = [
+  "formatVersion",
+  "phase",
+  "targetPlatform",
+  "clientTransferId",
+  "canonicalInputHash",
+  "startRequest",
+  "startOutput",
+  "walletConnection",
+  "addKeyIntentAccounts",
+  "verifiedAccounts",
+  "updatedAt",
+] as const;
+
 const hasStrictStoredSessionShape = (value: unknown): boolean => {
   const session = asRecord(value);
   if (
     session == null ||
-    !hasOnlyKeys(session, [
-      "formatVersion",
-      "phase",
-      "targetPlatform",
-      "clientTransferId",
-      "canonicalInputHash",
-      "startRequest",
-      "startOutput",
-      "walletConnection",
-      "addKeyIntentAccounts",
-      "verifiedAccounts",
-      "updatedAt",
-    ]) ||
+    !hasOnlyKeys(session, STORED_SESSION_KEYS) ||
     !hasStrictStartRequestShape(session.startRequest)
   ) {
     return false;
@@ -210,6 +246,22 @@ const hasStrictStoredSessionShape = (value: unknown): boolean => {
       "walletVerifyPublicKey",
     ])
   );
+};
+
+/**
+ * One-shot migration for rows persisted before the stabilization fields existed: EXACTLY the old
+ * key set gains empty `securedAccounts`/`pendingCompletionAccounts`. Deliberately conservative —
+ * accounts that were "verified" under the old contract are NOT presumed secured; a re-verify
+ * settles them honestly. Anything that matches neither shape stays untouched and fails closed.
+ */
+const migrateStoredSession = (value: unknown): unknown => {
+  const session = asRecord(value);
+  if (session == null) return value;
+  if (hasOnlyKeys(session, PRE_STABILIZATION_SESSION_KEYS) && !("securedAccounts" in session)) {
+    const phase = session.phase === "destination_keys_verified" ? "verification_pending" : session.phase;
+    return { ...session, phase, securedAccounts: [], pendingCompletionAccounts: [] };
+  }
+  return value;
 };
 
 const successfulAccountKeys = (session: INewKeyTransferSdkSession): Set<string> =>
@@ -246,7 +298,7 @@ const assertSameDestinationKeys = (
     storedKeys.size !== journaledKeys.size ||
     [...storedKeys].some(([identity, key]) => journaledKeys.get(identity) !== key)
   ) {
-    throw new Error("new_key_transfer_start_result_conflict");
+    throw new NewKeyTransferError("new_key_transfer_start_result_conflict");
   }
 };
 
@@ -261,7 +313,7 @@ const buildAddKeyJob = (
   const requested = session.startRequest.accounts.find(
     (candidate) => newKeyTransferAccountIdentityKey(candidate) === identity,
   );
-  if (requested == null) throw new Error("new_key_transfer_add_key_account_mismatch");
+  if (requested == null) throw new NewKeyTransferError("new_key_transfer_add_key_account_mismatch");
   return {
     transferSessionId: output.transferSessionId,
     blockchainId: account.blockchainId,
@@ -272,12 +324,31 @@ const buildAddKeyJob = (
   };
 };
 
-const validateStoredSessions = (value: unknown): INewKeyTransferSdkSession[] => {
-  if (!Array.isArray(value) || !value.every(hasStrictStoredSessionShape)) {
-    throw new Error("new_key_transfer_journal_corrupt");
+/** SD6/SDK-7: ONE completion definition — every intended account is `secured`, none pending. */
+const resolvePostVerifyPhase = (
+  session: Pick<
+    INewKeyTransferSdkSession,
+    "addKeyIntentAccounts" | "securedAccounts" | "pendingCompletionAccounts"
+  >,
+): INewKeyTransferSdkSession["phase"] => {
+  const allIntentSecured =
+    session.addKeyIntentAccounts.length > 0 &&
+    session.addKeyIntentAccounts.every((key) => session.securedAccounts.includes(key));
+  if (allIntentSecured && session.pendingCompletionAccounts.length === 0) {
+    return "destination_keys_verified";
   }
-  const parsed = v.safeParse(vSessions, value);
-  if (!parsed.success) throw new Error("new_key_transfer_journal_corrupt");
+  return session.pendingCompletionAccounts.length > 0
+    ? "verification_pending_wallet"
+    : "verification_pending";
+};
+
+const validateStoredSessions = (value: unknown): INewKeyTransferSdkSession[] => {
+  const migrated = Array.isArray(value) ? value.map(migrateStoredSession) : value;
+  if (!Array.isArray(migrated) || !migrated.every(hasStrictStoredSessionShape)) {
+    throw new NewKeyTransferError("new_key_transfer_journal_corrupt");
+  }
+  const parsed = v.safeParse(vSessions, migrated);
+  if (!parsed.success) throw new NewKeyTransferError("new_key_transfer_journal_corrupt");
 
   const clientTransferIds = new Set<string>();
   const transferSessionIds = new Set<string>();
@@ -287,7 +358,7 @@ const validateStoredSessions = (value: unknown): INewKeyTransferSdkSession[] => 
       session.startRequest.clientTransferId !== session.clientTransferId ||
       hashNewKeyTransferStartInput(session.startRequest) !== session.canonicalInputHash
     ) {
-      throw new Error("new_key_transfer_journal_corrupt");
+      throw new NewKeyTransferError("new_key_transfer_journal_corrupt");
     }
     clientTransferIds.add(session.clientTransferId);
 
@@ -296,37 +367,47 @@ const validateStoredSessions = (value: unknown): INewKeyTransferSdkSession[] => 
         session.startOutput != null ||
         session.walletConnection != null ||
         session.addKeyIntentAccounts.length > 0 ||
-        session.verifiedAccounts.length > 0
+        session.verifiedAccounts.length > 0 ||
+        session.securedAccounts.length > 0 ||
+        session.pendingCompletionAccounts.length > 0
       ) {
-        throw new Error("new_key_transfer_journal_corrupt");
+        throw new NewKeyTransferError("new_key_transfer_journal_corrupt");
       }
       continue;
     }
     if (session.startOutput == null || session.walletConnection == null) {
-      throw new Error("new_key_transfer_journal_corrupt");
+      throw new NewKeyTransferError("new_key_transfer_journal_corrupt");
     }
     validateNewKeyTransferStartOutputForInput({
       request: session.startRequest,
       output: session.startOutput,
     });
     if (transferSessionIds.has(session.startOutput.transferSessionId)) {
-      throw new Error("new_key_transfer_journal_corrupt");
+      throw new NewKeyTransferError("new_key_transfer_journal_corrupt");
     }
     transferSessionIds.add(session.startOutput.transferSessionId);
 
     const successful = successfulAccountKeys(session);
+    const secured = new Set(session.securedAccounts);
     if (
       session.addKeyIntentAccounts.some((key) => !successful.has(key)) ||
       session.verifiedAccounts.some((key) => !session.addKeyIntentAccounts.includes(key)) ||
+      session.securedAccounts.some((key) => !session.verifiedAccounts.includes(key)) ||
+      session.pendingCompletionAccounts.some(
+        (key) => !session.verifiedAccounts.includes(key) || secured.has(key),
+      ) ||
       (session.phase === "destination_keys_staged" &&
         (session.addKeyIntentAccounts.length > 0 || session.verifiedAccounts.length > 0)) ||
       (session.phase === "add_key_in_progress" && session.addKeyIntentAccounts.length === 0) ||
       (session.phase === "verification_pending" && session.addKeyIntentAccounts.length === 0) ||
+      (session.phase === "verification_pending_wallet" &&
+        session.pendingCompletionAccounts.length === 0) ||
       (session.phase === "destination_keys_verified" &&
         (session.addKeyIntentAccounts.length === 0 ||
-          session.addKeyIntentAccounts.some((key) => !session.verifiedAccounts.includes(key))))
+          session.pendingCompletionAccounts.length > 0 ||
+          session.addKeyIntentAccounts.some((key) => !secured.has(key))))
     ) {
-      throw new Error("new_key_transfer_journal_corrupt");
+      throw new NewKeyTransferError("new_key_transfer_journal_corrupt");
     }
   }
   return parsed.output;
@@ -348,6 +429,16 @@ const validateStoredSessions = (value: unknown): INewKeyTransferSdkSession[] => 
  * verification before checkpointing) belongs to `@meteorwallet/connect-shared`'s runner and is
  * deliberately not re-implemented here. What this layer owns is the orchestration journal: schema
  * and account-set integrity, replay, exact-wallet routing, and phase-aware host state.
+ *
+ * Stabilization changes (SD-series in PLAN-new-key-transfer-stabilization.md):
+ * - SD4 three-literal verify results with per-account `secured`/`pendingCompletion` facts;
+ * - SD6/SDK-7 one completion definition (the intent set, fully secured);
+ * - SDK-1 the start fence agrees with the reconciliation report (a bound signed row fences
+ *   nothing it cannot explain);
+ * - SDK-2 self-healing start-result orphans + `discardOrphanedStartResult()`;
+ * - SDK-4 terminal verify exchanges are cached and replayed without re-asking the wallet;
+ * - SDK-8/9/10 lock-scope and validate-before-effect corrections;
+ * - SD10 retention: stale pending sweep, capacity as a typed error, and `archiveCompletedSession`.
  */
 export class MeteorConnectNewKeyTransfer {
   private enabled = false;
@@ -357,6 +448,9 @@ export class MeteorConnectNewKeyTransfer {
    * map is exactly the signal to take the fresh-session recovery path.
    */
   private readonly externalWorkHolds = new Map<string, IMobileBridgeExternalWorkHold>();
+  /** In-flight `start()` calls by clientTransferId — concurrent same-id callers join one prompt. */
+  private readonly inFlightStarts = new Map<string, Promise<INewKeyTransferStartResult>>();
+  private readonly sessionListeners = new Set<() => void>();
 
   constructor(private readonly meteorConnect: MeteorConnect) {}
 
@@ -365,7 +459,26 @@ export class MeteorConnectNewKeyTransfer {
   }
 
   private requireEnabled(): void {
-    if (!this.enabled) throw new Error("new_key_transfer_unavailable");
+    if (!this.enabled) throw new NewKeyTransferError("new_key_transfer_unavailable");
+  }
+
+  /**
+   * Notify on every durable session-journal change (start/verify/intent/revoke/clear/archive) in
+   * THIS process. Pull the fresh state with {@link getSessions}; the callback carries nothing.
+   */
+  onSessionsChanged(listener: () => void): () => void {
+    this.sessionListeners.add(listener);
+    return () => this.sessionListeners.delete(listener);
+  }
+
+  private notifySessionsChanged(): void {
+    for (const listener of this.sessionListeners) {
+      try {
+        listener();
+      } catch {
+        // A throwing host listener never breaks journal mutation.
+      }
+    }
   }
 
   /**
@@ -393,10 +506,15 @@ export class MeteorConnectNewKeyTransfer {
   }
 
   private async writeSessions(sessions: INewKeyTransferSdkSession[]): Promise<void> {
+    // SD10: capacity is a retention problem with a typed answer, never "corrupt".
+    if (sessions.length > MAX_JOURNAL_SESSIONS) {
+      throw new NewKeyTransferError("new_key_transfer_journal_retention_required");
+    }
     await this.meteorConnect.storage.setJson(
       "newKeyTransferSessions",
       validateStoredSessions(sessions),
     );
+    this.notifySessionsChanged();
   }
 
   private async replaceSession(session: INewKeyTransferSdkSession): Promise<void> {
@@ -438,6 +556,45 @@ export class MeteorConnectNewKeyTransfer {
     return this.withNamedLock(JOURNAL_LOCK_NAME, operation);
   }
 
+  // --- cached terminal verify exchange (SDK-4 `exact_cached_result`) ------------------------
+
+  private async readCachedVerifyResults(): Promise<Record<string, ICachedVerifyResult>> {
+    const stored = await this.meteorConnect.storage.getJson("newKeyTransferVerifyResults");
+    const record = asRecord(stored);
+    if (record == null) return {};
+    const valid: Record<string, ICachedVerifyResult> = {};
+    for (const [transferSessionId, entry] of Object.entries(record)) {
+      const candidate = asRecord(entry);
+      if (candidate == null) continue;
+      try {
+        const output = validateNewKeyTransferVerifyActiveOutputForInput({
+          request: candidate.request as TNewKeyTransferVerifyActiveInputV1,
+          output: candidate.output,
+        });
+        valid[transferSessionId] = {
+          request: candidate.request as TNewKeyTransferVerifyActiveInputV1,
+          output,
+        };
+      } catch {
+        // An unreadable cache entry is dropped — the wallet re-answers idempotently.
+      }
+    }
+    return valid;
+  }
+
+  private async writeCachedVerifyResult(
+    transferSessionId: string,
+    entry: ICachedVerifyResult | null,
+  ): Promise<void> {
+    const cached = await this.readCachedVerifyResults();
+    if (entry == null) {
+      delete cached[transferSessionId];
+    } else {
+      cached[transferSessionId] = entry;
+    }
+    await this.meteorConnect.storage.setJson("newKeyTransferVerifyResults", cached);
+  }
+
   async getSessions(): Promise<INewKeyTransferSdkSession[]> {
     return this.readSessions();
   }
@@ -449,9 +606,26 @@ export class MeteorConnectNewKeyTransfer {
       clientTransferId: options.clientTransferId ?? createNewKeyTransferOpaqueId(),
       accounts: options.accounts,
     });
-    return this.withJournalLock(async () => {
-      const canonicalInputHash = hashNewKeyTransferStartInput(request);
-      const existing = (await this.readSessions()).find(
+    // Concurrent same-id starts join ONE prompt instead of queueing behind a lock held across a
+    // human-paced wallet interaction (SDK-10).
+    const inFlight = this.inFlightStarts.get(request.clientTransferId);
+    if (inFlight != null) return inFlight;
+    const flight = this.executeStart(request, options).finally(() => {
+      this.inFlightStarts.delete(request.clientTransferId);
+    });
+    this.inFlightStarts.set(request.clientTransferId, flight);
+    return flight;
+  }
+
+  private async executeStart(
+    request: v.InferOutput<typeof vNewKeyTransferStartInputV1>,
+    options: INewKeyTransferStartOptions,
+  ): Promise<INewKeyTransferStartResult> {
+    const canonicalInputHash = hashNewKeyTransferStartInput(request);
+    const staged = await this.withJournalLock(async () => {
+      const runner = this.addKeyRunner();
+      const sessions = await this.readSessions();
+      const existing = sessions.find(
         (session) => session.clientTransferId === request.clientTransferId,
       );
       if (existing != null) {
@@ -459,23 +633,43 @@ export class MeteorConnectNewKeyTransfer {
           existing.canonicalInputHash !== canonicalInputHash ||
           existing.targetPlatform !== options.targetPlatform
         ) {
-          throw new Error("new_key_transfer_client_id_conflict");
+          throw new NewKeyTransferError("new_key_transfer_client_id_conflict");
         }
         if (existing.startOutput != null) {
           // Exact replay of an already-answered start: the wallet is not asked again, and the
           // hold — if this process still has one for that transfer — is reported as it stands.
           return {
-            output: existing.startOutput,
-            session: existing,
-            externalWorkHeld: this.externalWorkHolds.has(existing.startOutput.transferSessionId),
+            kind: "replay" as const,
+            result: {
+              output: existing.startOutput,
+              session: existing,
+              externalWorkHeld: this.externalWorkHolds.has(
+                existing.startOutput.transferSessionId,
+              ),
+            },
           };
         }
       }
 
-      // Global fence: a replayable signed AddKey transaction whose start-result record was lost or
-      // damaged must be reconciled before any NEW transfer may be started.
-      if (await this.addKeyRunner().hasOrphanedSignedRecovery()) {
-        throw new Error("new_key_transfer_orphaned_add_key_recovery");
+      // SD10: sweep never-answered pending rows that nothing references any more, so declined and
+      // abandoned attempts cannot creep toward the capacity wedge.
+      const journaledStartResult = await runner.loadStartResult();
+      const now = Date.now();
+      const swept = sessions.filter((session) => {
+        if (session.phase !== "start_pending") return true;
+        if (session.clientTransferId === request.clientTransferId) return true;
+        if (journaledStartResult?.output.clientTransferId === session.clientTransferId)
+          return true;
+        return now - session.updatedAt < STALE_START_PENDING_MAX_AGE_MILLIS;
+      });
+
+      // SDK-1: the start fence must agree with what the reconciliation report can explain. An
+      // orphaned/unreadable signed AddKey fences everything; a signed row still BOUND to its
+      // start result is an in-progress transfer, resumable through `runAddKeys`, and fences
+      // nothing here (account overlap is refused wallet-side as `pending_transfer_conflict`).
+      const reconciliation = await runner.buildReconciliationReport();
+      if (reconciliation.fenced) {
+        throw new NewKeyTransferError("new_key_transfer_orphaned_add_key_recovery");
       }
 
       const pending: INewKeyTransferSdkSession = existing ?? {
@@ -487,42 +681,62 @@ export class MeteorConnectNewKeyTransfer {
         startRequest: request,
         addKeyIntentAccounts: [],
         verifiedAccounts: [],
+        securedAccounts: [],
+        pendingCompletionAccounts: [],
         updatedAt: Date.now(),
       };
-      await this.replaceSession(pending);
+      const withPending = [
+        ...swept.filter((session) => session.clientTransferId !== pending.clientTransferId),
+        pending,
+      ];
+      await this.writeSessions(withPending);
+      return { kind: "prompt" as const, pending };
+    });
+    if (staged.kind === "replay") return staged.result;
 
-      const action = await this.meteorConnect.createAction<TStartRequest>({
-        id: "meteor_wallet_core::new_key_account_transfer_start",
-        input: request,
-      });
-      action.setTransferTarget({
-        platform: options.targetPlatform,
-        // Journal-before-hold (D33): the wallet's exact signed result is durable BEFORE the hold
-        // begins, and the hold names the exact hash that was written — a drifted hash is refused
-        // by the backend as `external_work_journal_mismatch`.
-        externalWorkJournal: async ({ receipt, output }) => {
-          const journaled = await this.addKeyRunner().rememberStartResult({
-            resultHash: receipt.resultHash,
-            output: parseNewKeyTransferStartOutputV1(output),
-          });
-          return journaled.resultHash;
-        },
-        // The AddKey window and the verification turn ride this same session; its teardown belongs
-        // to whichever of them ends it.
-        retainSessionForExternalWork: true,
-      });
-      const output = await action.promptForExecution();
-      const walletConnection = action.getCompletedMobileConnection();
-      if (walletConnection == null) throw new Error("new_key_transfer_wallet_binding_missing");
+    // The wallet prompt runs OUTSIDE the journal lock (SDK-10): a human-paced interaction must
+    // not block every other new-key operation in every tab. The wallet's own replay makes a
+    // repeated prompt for the same clientTransferId converge on the identical committed output.
+    const action = await this.meteorConnect.createAction<TStartRequest>({
+      id: "meteor_wallet_core::new_key_account_transfer_start",
+      input: request,
+    });
+    action.setTransferTarget({
+      platform: options.targetPlatform,
+      // Journal-before-hold (D33): the wallet's exact signed result is durable BEFORE the hold
+      // begins, and the hold names the exact hash that was written — a drifted hash is refused
+      // by the backend as `external_work_journal_mismatch`.
+      externalWorkJournal: async ({ receipt, output }) => {
+        const journaled = await this.addKeyRunner().rememberStartResult({
+          resultHash: receipt.resultHash,
+          output: parseNewKeyTransferStartOutputV1(output),
+        });
+        return journaled.resultHash;
+      },
+      // The AddKey window and the verification turn ride this same session; its teardown belongs
+      // to whichever of them ends it.
+      retainSessionForExternalWork: true,
+    });
+    const output = await action.promptForExecution();
+    const walletConnection = action.getCompletedMobileConnection();
+    if (walletConnection == null) {
+      throw new NewKeyTransferError("new_key_transfer_wallet_binding_missing");
+    }
+    const hold = action.getExternalWorkHold();
+
+    return this.withJournalLock(async () => {
+      const sessions = await this.readSessions();
+      const current =
+        sessions.find((session) => session.clientTransferId === request.clientTransferId) ??
+        staged.pending;
       const completed: INewKeyTransferSdkSession = {
-        ...pending,
+        ...current,
         phase: "destination_keys_staged",
         startOutput: output,
         walletConnection,
         updatedAt: Date.now(),
       };
       await this.replaceSession(completed);
-      const hold = action.getExternalWorkHold();
       if (hold != null) this.externalWorkHolds.set(output.transferSessionId, hold);
       return { output, session: completed, externalWorkHeld: hold != null };
     });
@@ -547,7 +761,9 @@ export class MeteorConnectNewKeyTransfer {
     const prepared = await this.withJournalLock(async () => {
       const session = await this.requireSession(options.transferSessionId);
       const startOutput = session.startOutput;
-      if (startOutput == null) throw new Error("new_key_transfer_session_not_found");
+      if (startOutput == null) {
+        throw new NewKeyTransferError("new_key_transfer_session_not_found");
+      }
       const journaled = await runner.loadStartResult();
       if (
         journaled == null ||
@@ -556,7 +772,7 @@ export class MeteorConnectNewKeyTransfer {
       ) {
         // Without the exact durable start result there is nothing to prove which destination keys
         // this AddKey would authorize. Replay the start action instead of guessing.
-        throw new Error("new_key_transfer_start_result_journal_missing");
+        throw new NewKeyTransferError("new_key_transfer_start_result_journal_missing");
       }
       // Both records must describe the same request AND the same destination keys; a divergence
       // means two transfers are competing for one account.
@@ -567,7 +783,7 @@ export class MeteorConnectNewKeyTransfer {
       assertSameDestinationKeys(startOutput, journaled.output);
 
       const ready = readyAccounts(journaled.output);
-      if (ready.length === 0) throw new Error("new_key_transfer_no_accounts_ready");
+      if (ready.length === 0) throw new NewKeyTransferError("new_key_transfer_no_accounts_ready");
       const jobs = ready.map((account) => buildAddKeyJob(session, journaled.output, account));
       // Intent lands in the orchestration journal BEFORE any chain call, so a crash mid-window
       // still fences `clear()` behind explicit destination-key revocation.
@@ -618,14 +834,18 @@ export class MeteorConnectNewKeyTransfer {
    */
   async getRecoveryState(): Promise<INewKeyTransferRecoveryState> {
     const runner = this.addKeyRunner();
-    const [startResult, pendingVerification, orphanedSignedAddKey, reconciliation] =
-      await Promise.all([
-        runner.loadStartResult(),
-        runner.loadPendingVerification(),
-        runner.hasOrphanedSignedRecovery(),
-        runner.buildReconciliationReport(),
-      ]);
-    return { startResult, pendingVerification, orphanedSignedAddKey, reconciliation };
+    const [startResult, pendingVerification, reconciliation] = await Promise.all([
+      runner.loadStartResult(),
+      runner.loadPendingVerification(),
+      runner.buildReconciliationReport(),
+    ]);
+    // SDK-1: the flag IS the report's verdict — the two can never disagree again.
+    return {
+      startResult,
+      pendingVerification,
+      orphanedSignedAddKey: reconciliation.fenced,
+      reconciliation,
+    };
   }
 
   /**
@@ -670,12 +890,42 @@ export class MeteorConnectNewKeyTransfer {
     return await this.addKeyRunner(options.chain).archiveReconciledOperation(options.operation);
   }
 
+  /**
+   * Discard a journaled start result that NO session references (SDK-2's wedge exit): a crash
+   * between the wallet's answer and the session commit could historically orphan the one-slot
+   * start-result journal, refusing every later transfer as `start_result_conflict` with no public
+   * way out. Guarded: a referenced result throws `start_result_referenced` (resume that transfer
+   * instead), and protected AddKey rows keep the recovery fence.
+   */
+  async discardOrphanedStartResult(): Promise<boolean> {
+    return this.withJournalLock(async () => {
+      const runner = this.addKeyRunner();
+      const journaled = await runner.loadStartResult();
+      if (journaled == null) return false;
+      const sessions = await this.readSessions();
+      const referenced = sessions.some(
+        (session) =>
+          session.startOutput?.transferSessionId === journaled.output.transferSessionId ||
+          session.clientTransferId === journaled.output.clientTransferId,
+      );
+      if (referenced) {
+        throw new NewKeyTransferError("new_key_transfer_start_result_referenced");
+      }
+      if (await runner.hasProtectedRecovery(journaled.output.transferSessionId)) {
+        throw new NewKeyTransferError("new_key_transfer_recovery_required", {
+          fence: "protected_journal",
+        });
+      }
+      return await runner.discardStartResult();
+    });
+  }
+
   /** The one session this transfer id names, or a fail-closed miss. Callers hold the journal lock. */
   private async requireSession(transferSessionId: string): Promise<INewKeyTransferSdkSession> {
     const session = (await this.readSessions()).find(
       (candidate) => candidate.startOutput?.transferSessionId === transferSessionId,
     );
-    if (session == null) throw new Error("new_key_transfer_session_not_found");
+    if (session == null) throw new NewKeyTransferError("new_key_transfer_session_not_found");
     return session;
   }
 
@@ -687,7 +937,7 @@ export class MeteorConnectNewKeyTransfer {
     const successful = successfulAccountKeys(session);
     const intentKeys = accounts.map(newKeyTransferAccountIdentityKey);
     if (intentKeys.some((key) => !successful.has(key))) {
-      throw new Error("new_key_transfer_add_key_account_mismatch");
+      throw new NewKeyTransferError("new_key_transfer_add_key_account_mismatch");
     }
     const updated: INewKeyTransferSdkSession = {
       ...session,
@@ -708,6 +958,7 @@ export class MeteorConnectNewKeyTransfer {
     transferSessionId: string;
     accounts: Array<{ blockchainId: string; networkId: string; accountId: string }>;
   }): Promise<INewKeyTransferSdkSession> {
+    this.requireEnabled();
     return this.withJournalLock(async () =>
       this.applyAddKeyIntent(await this.requireSession(input.transferSessionId), input.accounts),
     );
@@ -724,6 +975,9 @@ export class MeteorConnectNewKeyTransfer {
    * session left the transfer just as stuck as before (REVIEW-consumer-implementation B-04). Each
    * protected row is retired through the runner, which re-proves on-chain absence of the exact
    * destination key first.
+   *
+   * SDK-9: the session and account membership are validated BEFORE any fence evidence is
+   * archived, so a stale or wrong id can no longer retire journal rows and then fail.
    */
   async markDestinationKeysRevoked(input: {
     transferSessionId: string;
@@ -735,9 +989,20 @@ export class MeteorConnectNewKeyTransfer {
      */
     chain?: IAddKeyJournalChain;
   }): Promise<INewKeyTransferSdkSession> {
-    // Retire the journal rows BEFORE the session mutation. If absence cannot be proven this
-    // throws and the session keeps its intent, so the two fences never disagree about what has
-    // been revoked.
+    this.requireEnabled();
+    const revokedKeys = [...new Set(input.accounts.map(newKeyTransferAccountIdentityKey))];
+    await this.withJournalLock(async () => {
+      const session = await this.requireSession(input.transferSessionId);
+      if (revokedKeys.length === 0) {
+        throw new NewKeyTransferError("new_key_transfer_revoked_accounts_required");
+      }
+      if (revokedKeys.some((key) => !session.addKeyIntentAccounts.includes(key))) {
+        throw new NewKeyTransferError("new_key_transfer_revoke_account_mismatch");
+      }
+    });
+
+    // Chain-proving archive work runs outside the journal lock; validation above already bound
+    // the request to a real session and its intent set.
     const runner = this.addKeyRunner(input.chain ?? REQUIRE_HOST_CHAIN);
     const protectedOperations = newKeyTransferProtectedOperations(
       await runner.loadJournalEntries(),
@@ -748,46 +1013,47 @@ export class MeteorConnectNewKeyTransfer {
     );
     if (protectedOperations.length > 0) {
       if (input.chain == null) {
-        throw new Error("new_key_transfer_revoke_chain_required");
+        throw new NewKeyTransferError("new_key_transfer_revoke_chain_required");
       }
       for (const operation of protectedOperations) {
         if (!(await runner.archiveReconciledOperation(operation))) {
-          throw new Error("new_key_transfer_revoke_destination_key_present");
+          throw new NewKeyTransferError("new_key_transfer_revoke_destination_key_present");
         }
       }
     }
 
     return this.withJournalLock(async () => {
-      const session = (await this.readSessions()).find(
-        (candidate) => candidate.startOutput?.transferSessionId === input.transferSessionId,
-      );
-      if (session == null) throw new Error("new_key_transfer_session_not_found");
-
-      const revokedKeys = [...new Set(input.accounts.map(newKeyTransferAccountIdentityKey))];
-      if (revokedKeys.length === 0) {
-        throw new Error("new_key_transfer_revoked_accounts_required");
-      }
+      const session = await this.requireSession(input.transferSessionId);
       if (revokedKeys.some((key) => !session.addKeyIntentAccounts.includes(key))) {
-        throw new Error("new_key_transfer_revoke_account_mismatch");
+        throw new NewKeyTransferError("new_key_transfer_revoke_account_mismatch");
       }
 
       const addKeyIntentAccounts = session.addKeyIntentAccounts.filter(
         (key) => !revokedKeys.includes(key),
       );
       const verifiedAccounts = session.verifiedAccounts.filter((key) => !revokedKeys.includes(key));
-      const allRemainingVerified =
-        addKeyIntentAccounts.length > 0 &&
-        addKeyIntentAccounts.every((key) => verifiedAccounts.includes(key));
+      const securedAccounts = session.securedAccounts.filter((key) => !revokedKeys.includes(key));
+      const pendingCompletionAccounts = session.pendingCompletionAccounts.filter(
+        (key) => !revokedKeys.includes(key),
+      );
+      const remaining = {
+        addKeyIntentAccounts,
+        securedAccounts,
+        pendingCompletionAccounts,
+      };
       const updated: INewKeyTransferSdkSession = {
         ...session,
         phase:
           addKeyIntentAccounts.length === 0
             ? "destination_keys_staged"
-            : allRemainingVerified
-              ? "destination_keys_verified"
-              : "add_key_in_progress",
+            : resolvePostVerifyPhase(remaining) === "verification_pending" &&
+                verifiedAccounts.length === 0
+              ? "add_key_in_progress"
+              : resolvePostVerifyPhase(remaining),
         addKeyIntentAccounts,
         verifiedAccounts,
+        securedAccounts,
+        pendingCompletionAccounts,
         updatedAt: Date.now(),
       };
       await this.replaceSession(updated);
@@ -796,8 +1062,8 @@ export class MeteorConnectNewKeyTransfer {
   }
 
   /**
-   * Prove the destination keys are live. Two paths, and which one runs is decided by whether this
-   * process still holds the start turn's external-work hold:
+   * Prove the destination keys are live AND secured wallet-side. Two paths, decided by whether
+   * this process still holds the start turn's external-work hold:
    *
    * - **same session** — the verification request is installed as the NEXT turn of the held
    *   session (`prepareAction` persists the exact signed turn before `submitPreparedAction`
@@ -805,33 +1071,70 @@ export class MeteorConnectNewKeyTransfer {
    * - **fresh recovery session** — a new `single_turn_v1` session with a freshly generated
    *   `partnerRequestId`, pinned to the exact wallet that minted the destination keys. An expired
    *   or process-lost lease is never replayed.
+   *
+   * A byte-identical repeat of an already TERMINAL exchange (every row `secured`/`not_verified`)
+   * replays from the durable cache without asking the wallet again (SDK-4); anything pending
+   * re-asks, and the wallet answers idempotently.
    */
   async verifyActive(options: INewKeyTransferVerifyOptions): Promise<INewKeyTransferVerifyResult> {
     this.requireEnabled();
     const runner = this.addKeyRunner();
     const prepared = await this.withJournalLock(async () => {
       const session = await this.requireSession(options.transferSessionId);
-      if (session.walletConnection == null) throw new Error("new_key_transfer_session_not_found");
+      if (session.walletConnection == null) {
+        throw new NewKeyTransferError("new_key_transfer_wallet_connection_missing");
+      }
       const activationKeys = options.activations.map(newKeyTransferAccountIdentityKey);
       if (activationKeys.some((key) => !session.addKeyIntentAccounts.includes(key))) {
-        throw new Error("new_key_transfer_verify_before_add_key_intent");
+        throw new NewKeyTransferError("new_key_transfer_verify_before_add_key_intent");
       }
       const request: TNewKeyTransferVerifyActiveInputV1 = {
         formatVersion: 1,
         transferSessionId: options.transferSessionId,
         activations: options.activations,
       };
+
+      // 2.10: an activation hash must agree with this transfer's own finalized AddKey journal
+      // row where one exists — a drifted hash after completion cannot reach the wallet.
+      const finalizedHashes = new Map<string, string>();
+      for (const entry of await runner.loadJournalEntries()) {
+        if (entry.phase === "finalized" && entry.transferSessionId === options.transferSessionId) {
+          finalizedHashes.set(newKeyTransferAccountIdentityKey(entry), entry.transactionHash);
+        }
+      }
+      for (const activation of options.activations) {
+        const journaledHash = finalizedHashes.get(newKeyTransferAccountIdentityKey(activation));
+        if (journaledHash != null && journaledHash !== activation.addKeyTransactionHash) {
+          throw new NewKeyTransferError("new_key_transfer_verify_hash_mismatch");
+        }
+      }
+
+      // SDK-4: a byte-identical repeat of a terminal exchange replays without a wallet round trip.
+      const cached = (await this.readCachedVerifyResults())[options.transferSessionId];
+      if (
+        cached != null &&
+        stringifyCanonicalJson(cached.request) === stringifyCanonicalJson(request)
+      ) {
+        return { kind: "cached" as const, session, output: cached.output };
+      }
+
       // Durable before the turn is staged: a lost verify response must be resumable against the
       // exact same proof, never a regenerated one. A byte-different pending proof is refused.
       await runner.rememberPendingVerification(request);
       const pending: INewKeyTransferSdkSession = {
         ...session,
-        phase: "verification_pending",
+        phase:
+          session.pendingCompletionAccounts.length > 0
+            ? "verification_pending_wallet"
+            : "verification_pending",
         updatedAt: Date.now(),
       };
       await this.replaceSession(pending);
-      return { session: pending, request };
+      return { kind: "ask" as const, session: pending, request };
     });
+    if (prepared.kind === "cached") {
+      return this.recordVerifyOutcome(options.transferSessionId, prepared.output, runner);
+    }
 
     const hold = this.externalWorkHolds.get(options.transferSessionId);
     const action = await this.meteorConnect.createAction<TVerifyRequest>({
@@ -852,28 +1155,71 @@ export class MeteorConnectNewKeyTransfer {
       this.externalWorkHolds.delete(options.transferSessionId);
     }
 
-    return this.withJournalLock(async () => {
-      const session = await this.requireSession(options.transferSessionId);
-      const newlyVerified = output.accounts
-        .filter((account) => account.activation === "verified")
-        .map(newKeyTransferAccountIdentityKey);
-      const verifiedAccounts = [...new Set([...session.verifiedAccounts, ...newlyVerified])];
-      const allSuccessfulVerified = [...successfulAccountKeys(session)].every((key) =>
-        verifiedAccounts.includes(key),
-      );
-      const completed: INewKeyTransferSdkSession = {
-        ...session,
-        phase: allSuccessfulVerified ? "destination_keys_verified" : "verification_pending",
-        verifiedAccounts,
-        updatedAt: Date.now(),
-      };
-      await this.replaceSession(completed);
-      if (allSuccessfulVerified) {
-        // Clear only this transfer's proof; a stale completion can never erase a newer one.
-        await runner.clearPendingVerification(options.transferSessionId);
+    return this.recordVerifyOutcome(options.transferSessionId, output, runner, prepared.request);
+  }
+
+  /**
+   * Fold a verify output into the durable session facts. SDK-5: the wallet has already completed
+   * its side by the time this runs, so a session-journal failure here must NOT masquerade as a
+   * verification failure — it retries once, then surfaces the distinct
+   * `verify_session_update_failed` code whose contract is "re-run verifyActive to converge".
+   */
+  private async recordVerifyOutcome(
+    transferSessionId: string,
+    output: TNewKeyTransferVerifyActiveOutputV1,
+    runner: IAddKeyJournalRunner,
+    request?: TNewKeyTransferVerifyActiveInputV1,
+  ): Promise<INewKeyTransferVerifyResult> {
+    const apply = () =>
+      this.withJournalLock(async () => {
+        const session = await this.requireSession(transferSessionId);
+        const securedNow = output.accounts
+          .filter((account) => account.activation === "secured")
+          .map(newKeyTransferAccountIdentityKey);
+        const pendingNow = output.accounts
+          .filter((account) => account.activation === "verified_pending_completion")
+          .map(newKeyTransferAccountIdentityKey);
+        const securedAccounts = [...new Set([...session.securedAccounts, ...securedNow])];
+        const pendingCompletionAccounts = [
+          ...new Set([...session.pendingCompletionAccounts, ...pendingNow]),
+        ].filter((key) => !securedAccounts.includes(key));
+        const verifiedAccounts = [
+          ...new Set([...session.verifiedAccounts, ...securedNow, ...pendingNow]),
+        ];
+        const nextFacts = { ...session, securedAccounts, pendingCompletionAccounts };
+        const phase = resolvePostVerifyPhase(nextFacts);
+        const completed: INewKeyTransferSdkSession = {
+          ...session,
+          phase,
+          verifiedAccounts,
+          securedAccounts,
+          pendingCompletionAccounts,
+          updatedAt: Date.now(),
+        };
+        await this.replaceSession(completed);
+        const terminalExchange = output.accounts.every(
+          (account) => account.activation !== "verified_pending_completion",
+        );
+        if (request != null && terminalExchange) {
+          await this.writeCachedVerifyResult(transferSessionId, { request, output });
+        }
+        if (phase === "destination_keys_verified") {
+          // Clear only this transfer's proof; a stale completion can never erase a newer one.
+          await runner.clearPendingVerification(transferSessionId);
+        }
+        return { output, session: completed };
+      });
+    try {
+      return await apply();
+    } catch (firstError) {
+      try {
+        return await apply();
+      } catch {
+        throw new NewKeyTransferError("new_key_transfer_verify_session_update_failed", {
+          cause: firstError,
+        });
       }
-      return { output, session: completed };
-    });
+    }
   }
 
   /**
@@ -893,6 +1239,46 @@ export class MeteorConnectNewKeyTransfer {
     await client.releaseSession(session);
   }
 
+  /**
+   * Move one fully completed transfer out of the active journal into the bounded archive (SD10).
+   * Allowed only for `destination_keys_verified` sessions — everything else still owes work or a
+   * recovery decision. The archive holds secret-free records and trims oldest-first at its cap.
+   */
+  async archiveCompletedSession(clientTransferId: string): Promise<void> {
+    await this.withJournalLock(async () => {
+      const sessions = await this.readSessions();
+      const session = sessions.find(
+        (candidate) => candidate.clientTransferId === clientTransferId,
+      );
+      if (session == null) throw new NewKeyTransferError("new_key_transfer_session_not_found");
+      if (session.phase !== "destination_keys_verified") {
+        throw new NewKeyTransferError("new_key_transfer_session_not_terminal");
+      }
+      const storedArchive = await this.meteorConnect.storage.getJson(
+        "newKeyTransferArchivedSessions",
+      );
+      const archive = Array.isArray(storedArchive) ? storedArchive : [];
+      archive.push(session);
+      await this.meteorConnect.storage.setJson(
+        "newKeyTransferArchivedSessions",
+        archive.slice(-MAX_ARCHIVED_SESSIONS),
+      );
+      await this.writeSessions(
+        sessions.filter((candidate) => candidate.clientTransferId !== clientTransferId),
+      );
+      const transferSessionId = session.startOutput?.transferSessionId;
+      if (transferSessionId != null) {
+        await this.writeCachedVerifyResult(transferSessionId, null);
+        // The one-slot start-result journal is release-eligible once the transfer is terminal;
+        // leaving it would refuse the NEXT transfer as `start_result_conflict`.
+        const journaled = await this.addKeyRunner().loadStartResult();
+        if (journaled?.output.transferSessionId === transferSessionId) {
+          await this.addKeyRunner().discardStartResult();
+        }
+      }
+    });
+  }
+
   async clear(clientTransferId: string): Promise<void> {
     const runner = this.addKeyRunner();
     const clearedTransferSessionId = await this.withJournalLock(async () => {
@@ -900,14 +1286,18 @@ export class MeteorConnectNewKeyTransfer {
       const session = sessions.find((candidate) => candidate.clientTransferId === clientTransferId);
       if (session == null) return undefined;
       if (session.addKeyIntentAccounts.length > 0) {
-        throw new Error("new_key_transfer_recovery_required");
+        throw new NewKeyTransferError("new_key_transfer_recovery_required", {
+          fence: "session_intent",
+        });
       }
       const transferSessionId = session.startOutput?.transferSessionId;
       // A signed or finalized AddKey operation cannot be abandoned by a generic "start fresh":
       // the bytes may still land on-chain. A malformed journal fences this exactly as a real
       // record does.
       if (transferSessionId != null && (await runner.hasProtectedRecovery(transferSessionId))) {
-        throw new Error("new_key_transfer_recovery_required");
+        throw new NewKeyTransferError("new_key_transfer_recovery_required", {
+          fence: "protected_journal",
+        });
       }
       // The shared AddKey journal holds exactly ONE start result and `rememberStartResult` refuses
       // to displace a different transfer's, so one left behind here rejects every LATER transfer
@@ -915,20 +1305,26 @@ export class MeteorConnectNewKeyTransfer {
       // Discard it only when it is THIS transfer's: another transfer's is live recoverable state
       // and never ours to drop. It goes before the session row, so a journal that cannot be
       // written leaves both records standing rather than a start result with nothing behind it.
-      if (transferSessionId != null) {
-        const journaled = await runner.loadStartResult();
-        if (
-          journaled?.output.transferSessionId === transferSessionId &&
-          !(await runner.discardStartResult())
-        ) {
-          // Both fences above already passed, so `discardStartResult` only refuses on a journal it
-          // could not read or rewrite. Fail closed rather than clear on top of it.
-          throw new Error("new_key_transfer_start_result_discard_failed");
-        }
+      //
+      // SDK-2: a `start_pending` row (no startOutput) can still own the journaled result — the
+      // crash window between the wallet's answer and the session commit — so the match runs on
+      // clientTransferId too, not only transferSessionId.
+      const journaled = await runner.loadStartResult();
+      const ownsJournaledResult =
+        journaled != null &&
+        (journaled.output.transferSessionId === transferSessionId ||
+          journaled.output.clientTransferId === clientTransferId);
+      if (ownsJournaledResult && !(await runner.discardStartResult())) {
+        // The fences above already passed, so `discardStartResult` only refuses on a journal it
+        // could not read or rewrite. Fail closed rather than clear on top of it.
+        throw new NewKeyTransferError("new_key_transfer_start_result_discard_failed");
       }
       await this.writeSessions(
         sessions.filter((candidate) => candidate.clientTransferId !== clientTransferId),
       );
+      if (transferSessionId != null) {
+        await this.writeCachedVerifyResult(transferSessionId, null);
+      }
       return transferSessionId;
     });
     // Outside the journal lock: closing a bridge is network work and must not block journal reads.
