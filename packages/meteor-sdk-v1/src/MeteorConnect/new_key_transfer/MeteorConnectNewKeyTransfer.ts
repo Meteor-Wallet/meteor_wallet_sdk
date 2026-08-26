@@ -1324,6 +1324,13 @@ export class MeteorConnectNewKeyTransfer {
       );
       if (transferSessionId != null) {
         await this.writeCachedVerifyResult(transferSessionId, null);
+        // A pending verification proof for THIS transfer can only still exist here after every
+        // destination key was revoked (`markDestinationKeysRevoked` is the one path that empties
+        // the intent set the fence above checks). It is dead weight now — and a live wedge: the
+        // one-slot record would refuse the NEXT transfer's own proof as `pending_verify_conflict`
+        // with no public way out. Scoped to this transfer's id; another transfer's proof is live
+        // recoverable state and never ours to drop.
+        await runner.clearPendingVerification(transferSessionId);
       }
       return transferSessionId;
     });

@@ -1199,8 +1199,14 @@ describe("MeteorConnectNewKeyTransfer orphaned-AddKey reconciliation (B-04)", ()
       chain: removed.chain,
     });
     expect(revoked.addKeyIntentAccounts).toEqual([]);
+    // The AddKeys committed their verification proof; revocation alone must not touch it…
+    expect((await harness.api.getRecoveryState()).pendingVerification).not.toBeNull();
     await expect(harness.api.clear(CLIENT_ID)).resolves.toBeUndefined();
     expect(await harness.api.getSessions()).toEqual([]);
+    // …but `clear()` after a full revoke must release the one-slot proof too, or the NEXT
+    // transfer's own `commitVerificationIntent` dies on `pending_verify_conflict` with no
+    // public way out.
+    expect((await harness.api.getRecoveryState()).pendingVerification).toBeNull();
   });
 
   it("fences a corrupt journal with a support reference and no evidence to act on", async () => {
