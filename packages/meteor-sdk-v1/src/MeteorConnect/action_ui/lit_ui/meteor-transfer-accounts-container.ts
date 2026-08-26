@@ -214,7 +214,14 @@ export class MeteorTransferAccountsContainer extends LitElement {
     // target: skip the chooser and open straight onto that platform.
     this.platformLocked = this.targetPlatform != null;
     if (this.targetPlatform != null) {
-      void this.startTransfer(this.targetPlatform);
+      // The verify turn arrives after the web wallet window closed itself at the end of the
+      // start turn (keys minted, recovery confirmed), so nothing is listening on the bridge —
+      // reopen the pinned web wallet right away instead of waiting for a click on the panel's
+      // Open button. Best-effort: without a fresh-enough user gesture the browser may block
+      // the window, and the connect panel's Open button and QR remain the fallback.
+      const reopenClosedWebWallet =
+        this.action.id === "meteor_wallet_core::new_key_account_transfer_verify_active";
+      void this.startTransfer(this.targetPlatform, { openWebWindow: reopenClosedWebWallet });
     }
     this.action.waitForExecutionOutput().then(
       (output: unknown) => {
