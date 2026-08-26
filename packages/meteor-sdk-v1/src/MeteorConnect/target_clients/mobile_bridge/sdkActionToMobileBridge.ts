@@ -169,10 +169,9 @@ export async function sdkActionToMobileBridge(
 }
 
 /**
- * NEAR over the session bridge is gated off in production (`experimentalNearOverSession`): the
- * backend's `hasImplementedRecoverySeams` admits only the three `meteor_wallet_core` transfer
- * ids, so `createSession` refuses every `act_impl_near` action with `action_ineligible`. The
- * adapters below stay intact and correct for the day that gate opens.
+ * NEAR requests over the session bridge. The backend's
+ * `session_policies.ts::hasImplementedRecoverySeams` admits the `act_impl_near` domain, so these
+ * adapters carry sign-in and every account-bound NEAR action for mobile-connected accounts.
  */
 async function nearActionToMobileBridge(
   sdkRequest: TMCActionRequestUnionExpandedInput<TMCActionRegistry>,

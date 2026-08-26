@@ -306,8 +306,8 @@ function makeTransferScenarios() {
   return [
     base(
       "transfer-choose",
-      "Transfer: wallet-platform choice (Meteor Web vs Mobile)",
-      "initializing",
+      "Transfer: wallet chooser with the inline Meteor Mobile QR panel",
+      "waiting_for_wallet",
       {
         screen: "choose",
       },

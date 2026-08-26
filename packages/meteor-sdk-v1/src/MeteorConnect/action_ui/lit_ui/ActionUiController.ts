@@ -22,8 +22,8 @@ export class ActionUiController implements ReactiveController {
     return this.action.prepareMobileBridge(options);
   }
 
-  async refreshMobileBridge() {
-    return this.action.refreshMobileBridge();
+  async refreshMobileBridge(options?: Parameters<ExecutableAction<any>["refreshMobileBridge"]>[0]) {
+    return this.action.refreshMobileBridge(options);
   }
 
   async resetMobileIdentityAndRePair() {

@@ -131,15 +131,10 @@ async function getMeteorConnect(): Promise<MeteorConnect> {
     nearKeyStoreProvider: selectorKeyStoreProvider,
     mobileBridge: {
       // Production remains gated off until the compatible backend/mobile rollout is recorded.
-      //
-      // Note that at @meteorwallet/connect 0.12 this selector never reaches the session bridge
-      // even in a development build: every action it runs is a `near::*` one, and the backend's
-      // `session_policies.ts::hasImplementedRecoverySeams` admits only the three
-      // `meteor_wallet_core` transfer actions — `createSession` refuses the rest with
-      // `action_ineligible`. `MeteorConnectMobileBridgeClient` therefore offers no
-      // `v2_bridge_mobile` target for NEAR unless `experimentalNearOverSession` is turned on
-      // (default false, and NOT production-ready — the upstream policy has to change first).
-      // NEAR keeps working unchanged over the `v1_web` / `v1_ext` targets.
+      // NEAR actions are session-eligible (the bridge backend's
+      // `session_policies.ts::hasImplementedRecoverySeams` admits the `act_impl_near` domain), so
+      // a development build offers Meteor Mobile for sign-in and mobile-connected accounts. NEAR
+      // keeps working unchanged over the `v1_web` / `v1_ext` targets.
       enabled: IS_DEVELOPMENT_BUILD,
       meteorAppId: IS_DEVELOPMENT_BUILD
         ? EMeteorAppId.meteor_wallet_mobile_dev

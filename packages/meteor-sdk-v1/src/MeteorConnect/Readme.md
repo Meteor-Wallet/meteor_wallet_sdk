@@ -6,14 +6,14 @@ prepares an idempotent Meteor Connect bridge as soon as the popup opens, renders
 **Meteor Mobile**, and attempts a push notification only when the targeted account is bound to the
 exact compatible paired wallet.
 
-`v2_bridge_mobile` currently carries the account-transfer flows only — `transfer_accounts` and the
-two `new_key_account_transfer_*` steps. The backend admits an action onto a session only once its
-crash-recovery seams exist (`session_policies.ts::hasImplementedRecoverySeams` in the bridge repo),
-so every `act_impl_near` request is refused with `action_ineligible`. `getExecutionTargetConfigs`
-therefore drops `near::*` before target selection, behind `config.experimentalNearOverSession`
-(default `false`). An account persisted against `v2_bridge_mobile` by an older build is treated as
-stranded: its actions throw naming the unavailable target, except `near::sign_out`, which resolves
-locally so the entry can always be removed.
+`v2_bridge_mobile` carries the regular NEAR actions (sign-in offers a QR pairing shell; every
+other NEAR action rides the account's stored bridge connection) as well as the account-transfer
+flows — `transfer_accounts` and the two `new_key_account_transfer_*` steps. The backend admits an
+action onto a session only once its crash-recovery seams exist
+(`session_policies.ts::hasImplementedRecoverySeams` in the bridge repo), which now includes the
+`act_impl_near` domain. An account persisted against `v2_bridge_mobile` while the bridge is
+disabled in this configuration is treated as stranded: its actions throw naming the unavailable
+target, except `near::sign_out`, which resolves locally so the entry can always be removed.
 
 ## Enabling Meteor Mobile
 

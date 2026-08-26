@@ -123,6 +123,8 @@ function makeMockAction(scenario: ScenarioConfig): ExecutableAction<any> {
     getTransferTargetPlatform: () => undefined,
     addExecutionStateListener: (_cb: unknown) => () => {},
     getExecutionState: () => ({ isExecuting: false, targetedPlatform: "unset" }),
+    // Previews re-prepare rather than refresh — the mock session is the same either way.
+    getPreparedMobileSession: () => undefined,
     prepareMobileBridge: async () => session,
     refreshMobileBridge: async () => session,
     resetMobileIdentityAndRePair: async () => session,

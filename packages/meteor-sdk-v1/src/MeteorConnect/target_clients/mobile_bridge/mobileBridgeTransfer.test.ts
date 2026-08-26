@@ -170,9 +170,9 @@ describe("execution-target domain gating", () => {
   });
 
   it("still routes EVERY NEAR action to a V1 target, exactly as before the session migration", async () => {
-    // The guarantee behind gating NEAR off the session bridge: nothing about NEAR changed for
-    // consumers, because the V1 web/extension transports still carry all seven ids. If this ever
-    // fails, a NEAR action has lost its transport entirely rather than merely lost the bridge.
+    // The V1 web/extension transports must keep carrying all seven NEAR ids regardless of what
+    // the session bridge offers. If this ever fails, a NEAR action has lost its baseline
+    // transport rather than merely gained/lost the bridge.
     const NEAR_ACTIONS = [
       "near::sign_in",
       "near::sign_in_and_sign_message",
@@ -183,11 +183,6 @@ describe("execution-target domain gating", () => {
       "near::verify_owner",
     ] as const;
 
-    const storage = {
-      getItem: async () => null,
-      setItem: async () => {},
-      removeItem: async () => {},
-    };
     // The V1 client sniffs `window` for the extension bridge; bun has no DOM, and "no extension
     // present" is exactly the case we want here — a plain web build must still offer `v1_web`.
     const hadWindow = "window" in globalThis;
@@ -196,8 +191,6 @@ describe("execution-target domain gating", () => {
     const v1 = new MeteorConnectV1Client({
       storage: { getJsonOrDef: async (_key: string, fallback: unknown) => fallback },
     } as unknown as MeteorConnect);
-    const bridge = new MeteorConnectMobileBridgeClient({} as unknown as MeteorConnect);
-    bridge.configure({ enabled: true }, storage);
 
     for (const id of NEAR_ACTIONS) {
       const request = { id, expandedInput: {} } as any;
@@ -206,52 +199,55 @@ describe("execution-target domain gating", () => {
         v1Targets.map((target) => target.executionTarget),
         `${id} must still have a V1 target`,
       ).toContain("v1_web");
-      // …and the session bridge stays out of it while NEAR is server-side ineligible.
-      expect(await bridge.getExecutionTargetConfigs(request), `${id} must not reach the bridge`).toEqual([]);
     }
 
     if (!hadWindow) Reflect.deleteProperty(globalThis, "window");
   });
 
-  it("offers no NEAR target unless experimentalNearOverSession is explicitly on", async () => {
-    // The bridge's `session_policies.ts::hasImplementedRecoverySeams` admits only the three
-    // meteor_wallet_core transfer ids, so a NEAR session is refused server-side with
-    // `action_ineligible`. NEAR keeps running over v1_web / v1_ext instead.
+  it("offers the session bridge for NEAR sign-in and for accounts bound to it", async () => {
+    // NEAR actions are session-eligible (`session_policies.ts::hasImplementedRecoverySeams`
+    // admits the `act_impl_near` domain), so a mobile-bridge-enabled configuration offers
+    // `v2_bridge_mobile` for the account-less sign-in actions and for any account whose stored
+    // connection names the bridge.
     const storage = {
       getItem: async () => null,
       setItem: async () => {},
       removeItem: async () => {},
     };
-    const signInRequest = { id: "near::sign_in", expandedInput: {} } as any;
     const client = new MeteorConnectMobileBridgeClient({} as unknown as MeteorConnect);
     client.configure({ enabled: true }, storage);
-    expect(await client.getExecutionTargetConfigs(signInRequest)).toEqual([]);
 
-    const experimental = new MeteorConnectMobileBridgeClient({} as unknown as MeteorConnect);
-    experimental.configure({ enabled: true, experimentalNearOverSession: true }, storage);
-    const configs = await experimental.getExecutionTargetConfigs(signInRequest);
-    expect(configs).toHaveLength(1);
-    expect(configs[0]!.executionTarget).toBe("v2_bridge_mobile");
+    for (const id of ["near::sign_in", "near::sign_in_and_sign_message"] as const) {
+      const configs = await client.getExecutionTargetConfigs({ id, expandedInput: {} } as any);
+      expect(configs, `${id} must offer the bridge`).toHaveLength(1);
+      expect(configs[0]!.executionTarget).toBe("v2_bridge_mobile");
+    }
 
-    // Non-sign-in NEAR actions never had an account-less shell and still do not get one.
+    // Non-sign-in NEAR actions have no account-less shell — they reach the bridge only through
+    // an account connection bound to it.
     expect(
-      await experimental.getExecutionTargetConfigs({
+      await client.getExecutionTargetConfigs({
         id: "near::sign_message",
         expandedInput: {},
       } as any),
     ).toEqual([]);
-
-    // A NEAR account whose stored connection still names the session bridge must not re-enter it
-    // while the gate is closed — the gate runs before the stored-connection shortcut.
     const storedMobileConnection = { executionTarget: "v2_bridge_mobile" };
-    const storedConnection = {
-      id: "near::sign_message",
-      expandedInput: { account: { connection: storedMobileConnection } },
-    } as any;
-    expect(await client.getExecutionTargetConfigs(storedConnection)).toEqual([]);
-    expect(await experimental.getExecutionTargetConfigs(storedConnection)).toEqual([
-      storedMobileConnection as any,
-    ]);
+    expect(
+      await client.getExecutionTargetConfigs({
+        id: "near::sign_message",
+        expandedInput: { account: { connection: storedMobileConnection } },
+      } as any),
+    ).toEqual([storedMobileConnection as any]);
+
+    // A disabled bridge offers nothing, for NEAR or otherwise.
+    const disabled = new MeteorConnectMobileBridgeClient({} as unknown as MeteorConnect);
+    disabled.configure({ enabled: false }, storage);
+    expect(
+      await disabled.getExecutionTargetConfigs({
+        id: "near::sign_in",
+        expandedInput: {},
+      } as any),
+    ).toEqual([]);
   });
 
   it("mobile client offers transfer targets only when the feature flag is on", async () => {

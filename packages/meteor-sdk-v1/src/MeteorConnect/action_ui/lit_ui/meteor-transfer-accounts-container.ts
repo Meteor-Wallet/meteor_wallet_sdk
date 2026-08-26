@@ -28,10 +28,6 @@ const TRANSFER_SUPPORTED_PLATFORMS: TMeteorConnectionExecutionTarget[] = [
   "v2_bridge_mobile",
 ];
 
-/** Phone glyph in the shared icon style (stroke/currentColor) — the icon set has no mobile icon. */
-const svg_icon_mobile_phone =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="6.8" y="2.8" width="10.4" height="18.4" rx="2.6"/><path d="M10.5 5.5h3"/><path d="M11.99 17.9h.02" stroke-width="2.4"/></svg>';
-
 type TTransferTerminalState =
   | "imported"
   | "keys_prepared"
@@ -118,6 +114,8 @@ export class MeteorTransferAccountsContainer extends LitElement {
   private farewellShownResolve?: () => void;
   /** Set once at mount: a pre-selected platform means the chooser is never offered. */
   private platformLocked = false;
+  /** The eager Meteor Mobile bridge preparation behind the chooser's inline QR panel. */
+  private inlineMobilePrepare?: Promise<void>;
 
   static styles = css`
     :host {
@@ -222,6 +220,18 @@ export class MeteorTransferAccountsContainer extends LitElement {
       const reopenClosedWebWallet =
         this.action.id === "meteor_wallet_core::new_key_account_transfer_verify_active";
       void this.startTransfer(this.targetPlatform, { openWebWindow: reopenClosedWebWallet });
+    } else {
+      // Mirror the regular sign-in popup: the chooser screen carries the Meteor Mobile QR panel
+      // inline, so the bridge session (targeting the mobile wallet) starts preparing immediately.
+      // Choosing a web wallet later retargets it via refresh.
+      this.inlineMobilePrepare = this.actionController
+        .prepareMobileBridge({ transferTargetPlatform: "mobile" })
+        .then((session: MobileBridgeSession | undefined) => {
+          this.bindSession(session);
+        })
+        .catch((error: unknown) => {
+          this.logger.err("Failed to prepare the inline Meteor Mobile bridge", error);
+        });
     }
     this.action.waitForExecutionOutput().then(
       (output: unknown) => {
@@ -279,9 +289,18 @@ export class MeteorTransferAccountsContainer extends LitElement {
     // until the session exists, the same way the regular popup's contextual flow does.
     this.screen = "connect";
     try {
-      const session = await this.actionController.prepareMobileBridge({
-        transferTargetPlatform: platform,
-      });
+      // The chooser may have eagerly prepared a Meteor-Mobile-targeted bridge for its inline QR
+      // panel; wait for that to settle, then retarget the live session at the chosen platform
+      // instead of reusing it.
+      await this.inlineMobilePrepare?.catch(() => {});
+      const session =
+        this.action.getPreparedMobileSession() == null
+          ? await this.actionController.prepareMobileBridge({
+              transferTargetPlatform: platform,
+            })
+          : await this.actionController.refreshMobileBridge({
+              transferTargetPlatform: platform,
+            });
       this.bindSession(session);
       // Choosing a web wallet was a user click, so open the sized wallet popup window right
       // away — the same window a regular V1 web action opens. If the browser blocks it (or the
@@ -314,6 +333,18 @@ export class MeteorTransferAccountsContainer extends LitElement {
     this.mobileSession = session;
     this.unsubscribeSession = session?.subscribe((snapshot) => {
       this.snapshot = snapshot;
+      // The chooser's inline QR was scanned: a wallet now owns the request, so the chooser is
+      // over — commit to Meteor Mobile and hand the whole screen to the connect flow (PIN /
+      // review / key card stages).
+      if (
+        this.screen === "choose_platform" &&
+        ["wallet_verification", "wallet_action", "result_ready", "external_work"].includes(
+          snapshot.phase,
+        )
+      ) {
+        this.targetPlatform = "mobile";
+        this.screen = "connect";
+      }
     });
   }
 
@@ -344,12 +375,6 @@ export class MeteorTransferAccountsContainer extends LitElement {
             .icon=${svg_icons_text.icon_web_globe}
             @meteor-button-click=${() => this.startTransfer("web", { openWebWindow: true })}
           ></meteor-action-button>
-          <meteor-action-button
-            variant="option"
-            label="Meteor Mobile"
-            .icon=${svg_icon_mobile_phone}
-            @meteor-button-click=${() => this.startTransfer("mobile")}
-          ></meteor-action-button>
           ${
             this.localDevWebAvailable
               ? html`
@@ -363,6 +388,19 @@ export class MeteorTransferAccountsContainer extends LitElement {
           }
         </div>
       </div>
+      <meteor-mobile-bridge-panel
+        .session=${this.mobileSession}
+        walletLabel="Meteor Mobile"
+        walletPlatform="mobile"
+        .contextual=${false}
+        .openInApp=${() => this.action.meteorConnect.mobileBridgeClient.openCurrentSessionInApp()}
+        .refreshCode=${async () => {
+          this.bindSession(await this.actionController.refreshMobileBridge());
+        }}
+        .resetIdentity=${async () => {
+          this.bindSession(await this.actionController.resetMobileIdentityAndRePair());
+        }}
+      ></meteor-mobile-bridge-panel>
       <div class="no-wallet-bottom-section">
         <div class="divider">
           <span class="divider-line"></span>
@@ -421,6 +459,7 @@ export class MeteorTransferAccountsContainer extends LitElement {
       <meteor-mobile-bridge-panel
         .session=${this.mobileSession}
         .walletLabel=${this.walletLabel}
+        .walletPlatform=${this.targetPlatform === "mobile" ? "mobile" : "web"}
         .contextual=${true}
         .openInApp=${() => this.action.meteorConnect.mobileBridgeClient.openCurrentSessionInApp()}
         .refreshCode=${async () => {

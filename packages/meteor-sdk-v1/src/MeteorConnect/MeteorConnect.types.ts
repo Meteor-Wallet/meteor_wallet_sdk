@@ -232,13 +232,4 @@ export interface IMeteorConnectMobileBridgeConfig {
    * explicitly to run the two features independently.
    */
   newKeyTransfer?: { enabled?: boolean };
-  /**
-   * Offer `v2_bridge_mobile` for NEAR actions again. Off by default and NOT production-ready:
-   * the bridge backend's `session_policies.ts::hasImplementedRecoverySeams` admits only
-   * `meteor_wallet_core::{transfer_accounts, new_key_account_transfer_start,
-   * new_key_account_transfer_verify_active}`, so `createSession` rejects every `act_impl_near`
-   * action with `action_ineligible`. The NEAR request/result adapters stay intact behind this
-   * flag; NEAR itself keeps working unchanged over the `v1_web` / `v1_ext` targets.
-   */
-  experimentalNearOverSession?: boolean;
 }

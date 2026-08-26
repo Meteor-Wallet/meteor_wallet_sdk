@@ -195,8 +195,14 @@ export class ExecutableAction<R extends TMCActionRequestUnion<TMCActionRegistry>
     });
   }
 
-  async refreshMobileBridge(): Promise<MobileBridgeSession> {
+  async refreshMobileBridge(options?: {
+    /** Retarget the replacement bridge at a different transfer platform (chooser → web click). */
+    transferTargetPlatform?: TTransferTargetPlatform;
+  }): Promise<MobileBridgeSession> {
     if (this.execute_promise != null) throw new Error("mobile_bridge_refresh_after_commit");
+    if (options?.transferTargetPlatform != null) {
+      this.transferTargetPlatform = options.transferTargetPlatform;
+    }
     const session = await this.meteorConnect.mobileBridgeClient.refreshRequest(
       this.getExpandedRequest(),
       this.#sensitiveTransferSource,

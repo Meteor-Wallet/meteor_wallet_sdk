@@ -270,14 +270,6 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
     request: R,
   ): Promise<TMeteorExecutionTargetConfig[]> {
     if (!this.config?.enabled) return [];
-    // NEAR is session-ineligible: the backend's `session_policies.ts::hasImplementedRecoverySeams`
-    // admits only the three meteor_wallet_core transfer ids, so `createSession` refuses every
-    // `act_impl_near` action with `action_ineligible`. Gated FIRST so a NEAR account whose stored
-    // connection still names `v2_bridge_mobile` cannot re-enter the session bridge either. NEAR
-    // keeps working unchanged over the `v1_web` / `v1_ext` targets.
-    if (request.id.startsWith("near::") && this.config.experimentalNearOverSession !== true) {
-      return [];
-    }
     const accountConnection = (request.expandedInput as any).account?.connection;
     if (accountConnection != null && accountConnection.executionTarget !== "v2_bridge_mobile") {
       return [];
@@ -572,8 +564,7 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
 
   /**
    * The connection of the wallet that completed the current session. Only the NEAR account
-   * actions consume it (and only behind `experimentalNearOverSession`); an account-less transfer
-   * never reaches here.
+   * actions consume it; an account-less transfer never reaches here.
    */
   getActiveConnection(): IMeteorConnection_V2_BridgeMobile {
     const connection = this.currentSession?.getCompletedConnection();

@@ -260,7 +260,7 @@ export class ActionUi {
       );
     }
     return window.confirm(
-      "This request has already been handed to Meteor Mobile and may continue on your phone. Close this window?",
+      "This request has already been handed to your Meteor Wallet and may continue there. Close this window?",
     );
   }
 }

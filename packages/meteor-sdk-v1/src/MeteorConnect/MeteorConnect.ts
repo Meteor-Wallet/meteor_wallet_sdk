@@ -120,10 +120,6 @@ export class MeteorConnect {
           mobileBridge?.meteorAppId ??
           (this.isDevelopment ? "meteor_wallet_mobile_dev" : "meteor_wallet_mobile"),
         partnerMetadata: mobileBridge?.partnerMetadata,
-        // Part of the fingerprint on purpose: it decides whether NEAR is offered over the session
-        // bridge at all, so two initialize() calls that disagree must be a mismatch, never a
-        // silently mixed client.
-        experimentalNearOverSession: mobileBridge?.experimentalNearOverSession ?? false,
         leaseProvider: objectFingerprint(mobileBridge?.leaseProvider),
         nativeAppOpener: objectFingerprint(mobileBridge?.nativeAppOpener),
         nearKeyStoreProvider: objectFingerprint(nearKeyStoreProvider),
@@ -410,9 +406,9 @@ export class MeteorConnect {
     //
     //  - the account never received a dApp key, so there is nothing for the wallet to revoke; and
     //  - the account's execution target is not offered by this configuration at all — e.g. an
-    //    account persisted with `v2_bridge_mobile` by an older build, now that NEAR is gated off
-    //    the session bridge (`experimentalNearOverSession`). The wallet is unreachable, so
-    //    removing the local entry is the only thing sign-out can still mean.
+    //    account persisted with `v2_bridge_mobile` while this configuration runs with the mobile
+    //    bridge disabled. The wallet is unreachable, so removing the local entry is the only
+    //    thing sign-out can still mean.
     //
     // Every other action for such an account keeps throwing below: a stranded account must still
     // fail loudly for anything that actually needs the wallet.

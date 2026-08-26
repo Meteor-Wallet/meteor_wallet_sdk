@@ -12,13 +12,12 @@ import) that handles the entire wallet interaction for you:
   encrypted bridge with QR / deep-link + push notifications — without secrets ever touching a
   server in plaintext.
 
-> **Meteor Mobile currently carries the account-transfer flows only.** The bridge admits an action
-> onto a session only once its crash-recovery seams are implemented and reviewed, which today means
-> `transfer_accounts` and the two `new_key_account_transfer_*` steps. Regular NEAR actions are
-> refused by the backend with `action_ineligible`, so the SDK does not offer Meteor Mobile as a
-> target for them; they run over Meteor Web and the extension exactly as before. The
-> `mobileBridge.experimentalNearOverSession` flag re-enables the code path for local testing and is
-> off by default — with it on, the backend still refuses the session.
+> **Meteor Mobile carries both regular NEAR actions and the account-transfer flows.** The bridge
+> admits an action onto a session only once its crash-recovery seams are implemented and reviewed —
+> today that covers the `near::*` actions plus `transfer_accounts` and the two
+> `new_key_account_transfer_*` steps. NEAR actions also keep running over Meteor Web and the
+> extension exactly as before; Meteor Mobile is offered alongside them whenever the bridge is
+> enabled.
 
 Every action is a simple promise: `createAction(...)` → `promptForExecution()` → typed result.
 
@@ -85,12 +84,11 @@ await meteorConnect.initialize({
 | Option | Description |
 | --- | --- |
 | `storage` | Async key-value storage (`getItem`/`setItem`/`removeItem`). Use the exported `webpage_local_storage` in browsers, or adapt your own (e.g. React Native storage) via `ILocalStorageInterface`. |
-| `mobileBridge.enabled` | Master switch for the Meteor Mobile bridge target. It carries the account-transfer flows; regular NEAR actions are not eligible for it (see the note at the top). |
+| `mobileBridge.enabled` | Master switch for the Meteor Mobile bridge target. It carries regular NEAR actions (sign-in QR pairing and account-bound requests) as well as the account-transfer flows. |
 | `mobileBridge.backendUrl` | Bridge backend. Default: `https://mc.meteorwallet.app` (production — leave it unless you run a local backend). |
 | `mobileBridge.meteorAppId` | `EMeteorAppId.meteor_wallet_mobile` (default) or `meteor_wallet_mobile_dev` to pair with the development mobile app. |
 | `mobileBridge.partnerMetadata` | Your app's `name` / `description` / `iconUrl` / `originUrl` — shown to the user inside Meteor when pairing and approving requests. Set this: it is your identity in the wallet. |
 | `mobileBridge.transferAccounts` | Opt-in account-transfer feature for partner wallets — see [Transferring accounts into Meteor](#transferring-accounts-into-meteor-partner-wallets). |
-| `mobileBridge.experimentalNearOverSession` | Off by default. Re-offers Meteor Mobile for regular NEAR actions. The backend still refuses those sessions today, so this is for local testing against a bridge that has been changed to admit them — not a supported production setting. |
 | `nearKeyStoreProvider` | Where limited function-call access keys from `near::sign_in` live. Defaults to a browser `localStorage` keystore. |
 
 Configuration is pinned per instance — to change `backendUrl` or app ids, create a fresh

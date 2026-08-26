@@ -107,9 +107,8 @@ export function meteorWalletCoreOutputToSdk(
 }
 
 /**
- * NEAR outputs. Unreachable in production while `experimentalNearOverSession` is off (the bridge
- * refuses `act_impl_near` sessions with `action_ineligible`) — kept intact and tested so the path
- * is ready the day `session_policies.ts::hasImplementedRecoverySeams` admits NEAR.
+ * NEAR outputs from the session bridge — the result half of the NEAR adapters in
+ * `sdkActionToMobileBridge`.
  */
 export async function nearOutputToSdk(
   prepared: IMobileBridgePreparedAction,

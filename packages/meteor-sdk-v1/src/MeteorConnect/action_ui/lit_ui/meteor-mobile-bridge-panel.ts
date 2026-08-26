@@ -51,6 +51,11 @@ export class MeteorMobileBridgePanel extends LitElement {
   @property({ attribute: false }) resetIdentity?: () => Promise<void>;
   /** Wallet name shown in all copy — "Meteor Mobile" by default; transfer-to-web passes "Meteor Web". */
   @property() walletLabel = "Meteor Mobile";
+  /**
+   * Which kind of device the targeted wallet runs on — steers copy like "Scan or open …" (a
+   * phone can scan the QR; a web wallet opens in a browser window instead).
+   */
+  @property() walletPlatform: "mobile" | "web" = "mobile";
   @state() private snapshot?: IMobileBridgeSnapshot;
   @state() private showQr = !isMobile();
   @state() private pin = "";
@@ -100,7 +105,7 @@ export class MeteorMobileBridgePanel extends LitElement {
     }
 
     /* ---------- Card shell ---------- */
-    .panel { position: relative; isolation: isolate; overflow: hidden; display: flex; flex-direction: column; gap: .5rem; align-items: center; padding: .75rem .8rem; border: 1px solid rgba(150,140,255,.13); border-radius: .9rem; background: linear-gradient(155deg, rgba(var(--meteor-dark-gray-lightest, 34,34,41), .32), rgba(var(--meteor-dark-gray-darkest, 14,14,23), .55) 70%); box-shadow: inset 0 2px 16px rgba(0,0,0,.22), inset 0 1px rgba(255,255,255,.035); box-sizing: border-box; }
+    .panel { position: relative; isolation: isolate; overflow: hidden; display: flex; flex-direction: column; gap: .42rem; align-items: center; padding: .55rem .8rem; border: 1px solid rgba(150,140,255,.13); border-radius: .9rem; background: linear-gradient(155deg, rgba(var(--meteor-dark-gray-lightest, 34,34,41), .32), rgba(var(--meteor-dark-gray-darkest, 14,14,23), .55) 70%); box-shadow: inset 0 2px 16px rgba(0,0,0,.22), inset 0 1px rgba(255,255,255,.035); box-sizing: border-box; }
     .panel::before { content: ""; position: absolute; width: 240px; height: 240px; left: -90px; top: -110px; z-index: -1; border-radius: 50%; background: radial-gradient(circle, rgba(105,79,244,.12), transparent 68%); pointer-events: none; }
     .panel::after { content: ""; position: absolute; width: 200px; height: 200px; right: -90px; bottom: -120px; z-index: -1; border-radius: 50%; background: radial-gradient(circle, rgba(69,193,255,.07), transparent 70%); pointer-events: none; }
     :host([contextual]) .panel { padding: .9rem; }
@@ -117,7 +122,7 @@ export class MeteorMobileBridgePanel extends LitElement {
     button:active:not(:disabled) { transform: translateY(0); }
     button.secondary { background: linear-gradient(135deg, rgba(var(--mc-secondary-a), .8) 0%, rgba(var(--mc-secondary-b), .7) 100%); }
     button.secondary:hover:not(:disabled) { background: linear-gradient(135deg, rgba(var(--mc-secondary-a), 1) 0%, rgba(var(--mc-secondary-b), 1) 100%); }
-    button.ghost { min-height: 2.05rem; padding: .42rem .68rem; font-size: .72rem; background: rgba(255,255,255,.08); filter: none; }
+    button.ghost { min-height: 1.9rem; padding: .38rem .68rem; font-size: .72rem; background: rgba(255,255,255,.08); filter: none; }
     button.ghost:hover:not(:disabled) { background: rgba(255,255,255,.13); }
     button.icon-toggle { min-width: 2.55rem; padding: .5rem; }
     button.icon-toggle svg { width: 1.15rem; height: 1.15rem; }
@@ -185,6 +190,9 @@ export class MeteorMobileBridgePanel extends LitElement {
     .review-visual.violet::before, .review-visual.violet::after { border-color: rgba(139,119,255,.34); }
     .review-phone { position: relative; width: 42px; height: 68px; display: grid; place-items: center; border: 2px solid rgba(244,242,255,.92); border-radius: 11px; background: linear-gradient(160deg, rgba(93,72,212,.92), rgba(34,27,78,.96)); box-shadow: 0 13px 35px rgba(63,41,174,.42); }
     .review-phone::before { content: ""; position: absolute; width: 13px; height: 2px; top: 5px; border-radius: 2px; background: rgba(255,255,255,.6); }
+    /* Browser-window variant of the device visual, used when the paired wallet is a web wallet. */
+    .review-phone.web { width: 66px; height: 48px; border-radius: 8px; }
+    .review-phone.web::before { width: 30px; left: 7px; top: 6px; }
     .review-check { width: 18px; height: 9px; margin-top: -2px; border-left: 2px solid #82ebbd; border-bottom: 2px solid #82ebbd; transform: rotate(-45deg); }
     .phone-pin-dots { display: flex; gap: 3px; margin-top: -2px; }
     .phone-pin-dots span { width: 5px; height: 5px; border-radius: 50%; background: rgba(210,200,255,.95); box-shadow: 0 0 6px rgba(170,150,255,.8); animation: phone-dot 1.6s ease-in-out infinite; }
@@ -407,7 +415,7 @@ export class MeteorMobileBridgePanel extends LitElement {
       await this.refreshCode?.();
       this.interactionError = undefined;
     } catch {
-      this.interactionError = "A new mobile code could not be created. Please try again.";
+      this.interactionError = "A new connection code could not be created. Please try again.";
     }
   }
 
@@ -480,15 +488,17 @@ export class MeteorMobileBridgePanel extends LitElement {
   private statusText(snapshot: IMobileBridgeSnapshot): string {
     switch (snapshot.phase) {
       case "initializing":
-        return "Initializing secure mobile connection…";
+        return "Initializing secure connection…";
       case "busy_other_tab":
         return `${this.walletLabel} is busy in another tab. Retrying…`;
       case "creating_bridge":
-        return "Creating secure mobile request…";
+        return "Creating secure request…";
       case "waiting_for_wallet":
-        return `Scan or open ${this.walletLabel} to continue.`;
+        return this.walletPlatform === "mobile"
+          ? `Scan or open ${this.walletLabel} to continue.`
+          : `Open ${this.walletLabel} to continue.`;
       case "wallet_verification":
-        return "Enter the 4-digit PIN shown on your phone.";
+        return `Enter the 4-digit PIN shown on ${this.walletLabel}.`;
       case "wallet_action":
         return `Review and approve this request in ${this.walletLabel}.`;
       case "result_ready":
@@ -498,9 +508,9 @@ export class MeteorMobileBridgePanel extends LitElement {
       case "completed":
         return `Completed in ${this.walletLabel}.`;
       case "failed":
-        return "The mobile request could not be completed.";
+        return "The request could not be completed.";
       case "cancelled":
-        return "The mobile request was cancelled.";
+        return "The request was cancelled.";
     }
   }
 
@@ -670,7 +680,7 @@ export class MeteorMobileBridgePanel extends LitElement {
       html`<div class="stage review-stage">
         <span class="stage-kicker">Request received</span>
         <div class="review-visual" aria-hidden="true">
-          <div class="review-phone"><span class="review-check"></span></div>
+          <div class=${`review-phone${this.walletPlatform === "web" ? " web" : ""}`}><span class="review-check"></span></div>
         </div>
         <h2 class="review-title">Review and approve this request in ${this.walletLabel}</h2>
         <p class="review-subtitle">Your wallet has securely received the request and is ready for your approval.</p>
@@ -708,11 +718,11 @@ export class MeteorMobileBridgePanel extends LitElement {
       html`<div class="stage review-stage pin-stage">
         <span class="stage-kicker">Secure pairing</span>
         <div class="review-visual violet" aria-hidden="true">
-          <div class="review-phone">
+          <div class=${`review-phone${this.walletPlatform === "web" ? " web" : ""}`}>
             <div class="phone-pin-dots"><span></span><span></span><span></span><span></span></div>
           </div>
         </div>
-        <h2 class="review-title">Enter the PIN shown on your phone</h2>
+        <h2 class="review-title">Enter the PIN shown on ${this.walletLabel}</h2>
         <p class="review-subtitle">
           ${this.walletLabel} is displaying a 4-digit PIN. Enter it here to securely pair this dApp with
           your wallet.
@@ -801,11 +811,11 @@ export class MeteorMobileBridgePanel extends LitElement {
         <span class="error">This dApp's saved ${this.walletLabel} pairing no longer matches the server.</span>
         ${
           this.resetConfirmation
-            ? html`<span class="muted">Resetting removes this dApp's saved mobile pairings for this environment. Your NEAR accounts remain listed and will pair again by QR.</span>`
+            ? html`<span class="muted">Resetting removes this dApp's saved wallet pairings for this environment. Your NEAR accounts remain listed and will pair again by QR.</span>`
             : ""
         }
         <button ?disabled=${this.resetPending} @click=${() => void this.confirmIdentityReset()}>
-          ${this.resetPending ? html`<span class="spinner" role="status" aria-label="Resetting"></span>` : this.resetConfirmation ? "Confirm Reset & Re-pair" : "Reset Mobile Pairing"}
+          ${this.resetPending ? html`<span class="spinner" role="status" aria-label="Resetting"></span>` : this.resetConfirmation ? "Confirm Reset & Re-pair" : "Reset Wallet Pairing"}
         </button>
         ${this.interactionError ? html`<span class="error">${this.interactionError}</span>` : ""}
       </div>

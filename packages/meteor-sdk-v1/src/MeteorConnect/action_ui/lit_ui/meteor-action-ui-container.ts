@@ -222,19 +222,19 @@ export class MeteorActionUiContainer extends LitElement {
         display: flex;
         flex-direction: column;
         justify-content: center;
-        gap: 0.5rem;
+        gap: 0.4rem;
         align-items: center;
       }
 
       .meteor-connect-content {
         position: relative;
-        padding: 0.6rem 0.9rem 0.75rem;
+        padding: 0.5rem 0.9rem 0.6rem;
         display: flex;
         flex-direction: column;
         /* justify-content: space-evenly; */
         justify-content: flex-start;
         flex-grow: 1;
-        gap: 0.6rem;
+        gap: 0.45rem;
         overflow-y: auto;
         min-height: 0;
       }
@@ -287,7 +287,7 @@ export class MeteorActionUiContainer extends LitElement {
         width: 100%;
         justify-content: center;
         align-items: stretch;
-        gap: 0.5rem;
+        gap: 0.4rem;
       }
 
       .divider {
@@ -312,7 +312,7 @@ export class MeteorActionUiContainer extends LitElement {
         display: flex;
         flex-direction: column;
         align-items: stretch;
-        gap: 0.55rem;
+        gap: 0.45rem;
         margin-top: auto;
       }
 

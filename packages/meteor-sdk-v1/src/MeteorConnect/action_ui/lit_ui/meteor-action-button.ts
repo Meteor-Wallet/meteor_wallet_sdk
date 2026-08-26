@@ -113,8 +113,8 @@ export class MeteorActionButton extends LitElement {
       width: 100%;
       justify-content: flex-start;
       gap: 0.65rem;
-      min-height: 2.55rem;
-      padding: 0.45rem 0.7rem;
+      min-height: 2.4rem;
+      padding: 0.35rem 0.7rem;
       border-radius: 0.8rem;
       border: 1px solid rgba(255, 255, 255, 0.075);
       background: linear-gradient(150deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02));
