@@ -38,6 +38,10 @@ const PLATFORM_LABELS: Record<TNewKeyTransferTargetPlatform, string> = {
   mobile: "Meteor Mobile",
 };
 
+/** Absent until the popup's chooser has been answered (the start turn records the choice). */
+const platformLabel = (platform: TNewKeyTransferTargetPlatform | undefined): string =>
+  platform == null ? "platform chosen in popup" : PLATFORM_LABELS[platform];
+
 /** Staged accounts are secrets; the protocol's start input wants public keys. Bridge the two. */
 const toStartAccounts = (
   staged: readonly TAccountTransferDataDecrypted[],
@@ -69,7 +73,6 @@ const errorText = (error: unknown): string =>
 
 export const NewKeyTransferTest = ({ meteorConnect }: { meteorConnect: MeteorConnect }) => {
   const queryClient = useQueryClient();
-  const [platform, setPlatform] = useState<TNewKeyTransferTargetPlatform>("web_local_dev");
   const [log, setLog] = useState<string[]>([]);
   const [flowError, setFlowError] = useState<string>();
 
@@ -161,11 +164,11 @@ export const NewKeyTransferTest = ({ meteorConnect }: { meteorConnect: MeteorCon
         }
       }
 
-      append(`1/3 start → ${PLATFORM_LABELS[platform]} with ${accounts.length} account(s)`);
-      const result = await meteorConnect.newKeyTransfer.start({
-        accounts,
-        targetPlatform: platform,
-      });
+      // No targetPlatform: the popup asks (Meteor Web / Meteor Mobile), exactly like the regular
+      // action popup for a not-signed-in user. The verify turn reuses whatever gets chosen.
+      append(`1/3 start → ${accounts.length} account(s) — choose the platform in the popup`);
+      const result = await meteorConnect.newKeyTransfer.start({ accounts });
+      append(`    platform: ${platformLabel(result.session.targetPlatform)}`);
       for (const account of result.output.accounts) {
         append(
           account.ok
@@ -225,10 +228,15 @@ export const NewKeyTransferTest = ({ meteorConnect }: { meteorConnect: MeteorCon
         activations: pending.activations,
       });
       for (const account of result.output.accounts) {
+        // The stabilized contract (SD4/SD6): `secured` is the only done state; a chain-proven key
+        // the wallet still owes completion work on is `verified_pending_completion` — re-verify
+        // later to converge.
         append(
-          account.activation === "verified"
-            ? `    ✓ ${account.accountId} verified and imported`
-            : `    ✗ ${account.accountId} not verified (${account.issue})`,
+          account.activation === "secured"
+            ? `    ✓ ${account.accountId} secured and imported`
+            : account.activation === "verified_pending_completion"
+              ? `    … ${account.accountId} verified on-chain, wallet still finishing (${account.pendingFact})`
+              : `    ✗ ${account.accountId} not verified (${account.issue})`,
         );
       }
     }),
@@ -302,29 +310,10 @@ export const NewKeyTransferTest = ({ meteorConnect }: { meteorConnect: MeteorCon
         only their <b>public</b> keys.
       </p>
 
-      <div className={"flex flex-row flex-wrap gap-3 items-center"}>
-        <span className={"text-sm font-medium"}>Target:</span>
-        {(Object.keys(PLATFORM_LABELS) as TNewKeyTransferTargetPlatform[]).map((option) => (
-          <label key={option} className={"text-sm flex flex-row gap-1 items-center"}>
-            <input
-              type={"radio"}
-              name={"new-key-target-platform"}
-              checked={platform === option}
-              disabled={!activeIsFinished}
-              onChange={() => setPlatform(option)}
-            />
-            {PLATFORM_LABELS[option]}
-          </label>
-        ))}
-        {!activeIsFinished && (
-          // The old copy said "clear it to change", which is wrong for a transfer past AddKey:
-          // clear() fences on a journaled intent and would just throw
-          // (REVIEW-consumer-implementation M-04).
-          <span className={"text-xs text-gray-500"}>
-            fixed until this transfer finishes — the next transfer can target anything
-          </span>
-        )}
-      </div>
+      <p className={"text-sm text-gray-500"}>
+        The target platform (Meteor Web / Meteor Mobile) is chosen inside the popup on step 1 — the
+        same chooser the regular action popup shows. Step 3 reuses that choice automatically.
+      </p>
 
       {clearRefused && (
         <p className={"text-xs text-gray-500"}>
@@ -417,7 +406,7 @@ export const NewKeyTransferTest = ({ meteorConnect }: { meteorConnect: MeteorCon
               <span className={"font-mono text-xs"}>{session.clientTransferId}</span>
               <span className={"font-medium"}>{session.phase}</span>
               <span className={"text-gray-500"}>
-                {PLATFORM_LABELS[session.targetPlatform]} · {session.startRequest.accounts.length}{" "}
+                {platformLabel(session.targetPlatform)} · {session.startRequest.accounts.length}{" "}
                 account(s) · {session.verifiedAccounts.length} verified
               </span>
             </div>

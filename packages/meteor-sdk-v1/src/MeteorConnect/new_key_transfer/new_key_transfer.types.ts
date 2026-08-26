@@ -31,7 +31,12 @@ export type TNewKeyTransferTargetPlatform = TTransferTargetPlatform;
 export interface INewKeyTransferSdkSession {
   formatVersion: 1;
   phase: TNewKeyTransferSdkPhase;
-  targetPlatform: TNewKeyTransferTargetPlatform;
+  /**
+   * The Meteor Wallet platform this transfer runs against. Absent only while a start that left
+   * the choice to the popup is still `start_pending`; once the wallet answers the start turn it
+   * is always recorded (the verify turn is pinned to it).
+   */
+  targetPlatform?: TNewKeyTransferTargetPlatform;
   clientTransferId: string;
   canonicalInputHash: string;
   startRequest: TNewKeyTransferStartInputV1;
@@ -53,7 +58,13 @@ export interface INewKeyTransferSdkSession {
 
 export interface INewKeyTransferStartOptions {
   accounts: TNewKeyTransferStartInputV1["accounts"];
-  targetPlatform: TNewKeyTransferTargetPlatform;
+  /**
+   * Pin the Meteor Wallet platform up front and the popup opens straight onto it (contextual,
+   * no chooser). Omit it and the popup asks the user to choose (Meteor Web / Meteor Mobile),
+   * exactly like the regular action popup for a not-signed-in user. Either way the platform the
+   * wallet actually answered on is recorded on the session and reused for the verify turn.
+   */
+  targetPlatform?: TNewKeyTransferTargetPlatform;
   /** Supply this when resuming a caller-owned id; otherwise the SDK generates and persists one. */
   clientTransferId?: string;
 }
@@ -139,4 +150,8 @@ export interface INewKeyTransferArchiveOptions {
   chain: IAddKeyJournalChain;
 }
 
-export type { INewKeyTransferFencedOperation, INewKeyTransferReconcileResult, INewKeyTransferReconciliationReport };
+export type {
+  INewKeyTransferFencedOperation,
+  INewKeyTransferReconcileResult,
+  INewKeyTransferReconciliationReport,
+};

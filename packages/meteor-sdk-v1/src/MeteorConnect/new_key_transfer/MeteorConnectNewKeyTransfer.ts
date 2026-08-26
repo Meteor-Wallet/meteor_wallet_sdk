@@ -86,7 +86,8 @@ const vSession = v.object({
     "verification_pending_wallet",
     "destination_keys_verified",
   ]),
-  targetPlatform: vTargetPlatform,
+  // Absent only while a start that left the platform choice to the popup is still pending.
+  targetPlatform: v.optional(vTargetPlatform),
   clientTransferId: vNewKeyTransferOpaqueId,
   canonicalInputHash: vCanonicalInputHash,
   startRequest: vNewKeyTransferStartInputV1,
@@ -258,7 +259,8 @@ const migrateStoredSession = (value: unknown): unknown => {
   const session = asRecord(value);
   if (session == null) return value;
   if (hasOnlyKeys(session, PRE_STABILIZATION_SESSION_KEYS) && !("securedAccounts" in session)) {
-    const phase = session.phase === "destination_keys_verified" ? "verification_pending" : session.phase;
+    const phase =
+      session.phase === "destination_keys_verified" ? "verification_pending" : session.phase;
     return { ...session, phase, securedAccounts: [], pendingCompletionAccounts: [] };
   }
   return value;
@@ -375,7 +377,13 @@ const validateStoredSessions = (value: unknown): INewKeyTransferSdkSession[] => 
       }
       continue;
     }
-    if (session.startOutput == null || session.walletConnection == null) {
+    // Past start_pending the platform is always known — it lands in the same write as the
+    // wallet binding, whether the caller pinned it or the popup's chooser picked it.
+    if (
+      session.startOutput == null ||
+      session.walletConnection == null ||
+      session.targetPlatform == null
+    ) {
       throw new NewKeyTransferError("new_key_transfer_journal_corrupt");
     }
     validateNewKeyTransferStartOutputForInput({
@@ -629,9 +637,11 @@ export class MeteorConnectNewKeyTransfer {
         (session) => session.clientTransferId === request.clientTransferId,
       );
       if (existing != null) {
+        // The platform fence only binds when the caller pins one: a start that leaves the choice
+        // to the popup (no targetPlatform) replays cleanly against whatever was chosen there.
         if (
           existing.canonicalInputHash !== canonicalInputHash ||
-          existing.targetPlatform !== options.targetPlatform
+          (options.targetPlatform != null && existing.targetPlatform !== options.targetPlatform)
         ) {
           throw new NewKeyTransferError("new_key_transfer_client_id_conflict");
         }
@@ -643,9 +653,7 @@ export class MeteorConnectNewKeyTransfer {
             result: {
               output: existing.startOutput,
               session: existing,
-              externalWorkHeld: this.externalWorkHolds.has(
-                existing.startOutput.transferSessionId,
-              ),
+              externalWorkHeld: this.externalWorkHolds.has(existing.startOutput.transferSessionId),
             },
           };
         }
@@ -658,8 +666,7 @@ export class MeteorConnectNewKeyTransfer {
       const swept = sessions.filter((session) => {
         if (session.phase !== "start_pending") return true;
         if (session.clientTransferId === request.clientTransferId) return true;
-        if (journaledStartResult?.output.clientTransferId === session.clientTransferId)
-          return true;
+        if (journaledStartResult?.output.clientTransferId === session.clientTransferId) return true;
         return now - session.updatedAt < STALE_START_PENDING_MAX_AGE_MILLIS;
       });
 
@@ -722,6 +729,13 @@ export class MeteorConnectNewKeyTransfer {
     if (walletConnection == null) {
       throw new NewKeyTransferError("new_key_transfer_wallet_binding_missing");
     }
+    // When the popup's chooser picked the platform (no targetPlatform in the options), the
+    // action is the authoritative record of where the wallet answered. The verify turn is
+    // pinned to this platform, so a bound wallet with no known platform is a broken binding.
+    const targetPlatform = action.getTransferTargetPlatform() ?? options.targetPlatform;
+    if (targetPlatform == null) {
+      throw new NewKeyTransferError("new_key_transfer_wallet_binding_missing");
+    }
     const hold = action.getExternalWorkHold();
 
     return this.withJournalLock(async () => {
@@ -732,6 +746,7 @@ export class MeteorConnectNewKeyTransfer {
       const completed: INewKeyTransferSdkSession = {
         ...current,
         phase: "destination_keys_staged",
+        targetPlatform,
         startOutput: output,
         walletConnection,
         updatedAt: Date.now(),
@@ -1081,7 +1096,9 @@ export class MeteorConnectNewKeyTransfer {
     const runner = this.addKeyRunner();
     const prepared = await this.withJournalLock(async () => {
       const session = await this.requireSession(options.transferSessionId);
-      if (session.walletConnection == null) {
+      // The platform is recorded in the same write as the wallet binding; a session with one but
+      // not the other cannot pin the verify turn to the wallet that answered the start.
+      if (session.walletConnection == null || session.targetPlatform == null) {
         throw new NewKeyTransferError("new_key_transfer_wallet_connection_missing");
       }
       const activationKeys = options.activations.map(newKeyTransferAccountIdentityKey);
@@ -1247,9 +1264,7 @@ export class MeteorConnectNewKeyTransfer {
   async archiveCompletedSession(clientTransferId: string): Promise<void> {
     await this.withJournalLock(async () => {
       const sessions = await this.readSessions();
-      const session = sessions.find(
-        (candidate) => candidate.clientTransferId === clientTransferId,
-      );
+      const session = sessions.find((candidate) => candidate.clientTransferId === clientTransferId);
       if (session == null) throw new NewKeyTransferError("new_key_transfer_session_not_found");
       if (session.phase !== "destination_keys_verified") {
         throw new NewKeyTransferError("new_key_transfer_session_not_terminal");

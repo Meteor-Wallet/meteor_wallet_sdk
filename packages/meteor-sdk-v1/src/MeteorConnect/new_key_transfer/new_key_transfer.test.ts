@@ -363,11 +363,14 @@ function createBridgeDouble(outputs: unknown[]) {
       });
       return { status: "ok", output: nextOutput(), receipt: receiptFor(sequence) } as never;
     },
-    acknowledgeAndClose: base.verb((receipt: ISessionResultReceipt) => {
-      trace.events.push("verb:acknowledgeAndClose");
-      trace.closedReceipts.push(receipt);
-      return sessionFactsFor(ESessionPhase.closed);
-    }, { selfInitiated: true }),
+    acknowledgeAndClose: base.verb(
+      (receipt: ISessionResultReceipt) => {
+        trace.events.push("verb:acknowledgeAndClose");
+        trace.closedReceipts.push(receipt);
+        return sessionFactsFor(ESessionPhase.closed);
+      },
+      { selfInitiated: true },
+    ),
     acknowledgeAndBeginExternalWork: base.verb(
       (receipt: ISessionResultReceipt, journaledResultHash: string) => {
         trace.events.push("verb:acknowledgeAndBeginExternalWork");
@@ -422,7 +425,7 @@ function createHarness(input: { sessions?: Map<string, unknown>; outputs?: unkno
   const { client, trace } = createBridgeDouble(outputs);
   const targeted: Array<{
     id: string;
-    platform: string;
+    platform?: string;
     walletConnection?: IMeteorConnection_V2_BridgeMobile;
     continuedHold?: IMobileBridgeExternalWorkHold;
     retained: boolean;
@@ -451,7 +454,7 @@ function createHarness(input: { sessions?: Map<string, unknown>; outputs?: unkno
     },
     createAction: async (request: { id: string; input: Record<string, unknown> }) => {
       let target: {
-        platform: string;
+        platform?: string;
         walletConnection?: IMeteorConnection_V2_BridgeMobile;
         externalWorkJournal?: (input: {
           receipt: ISessionResultReceipt;
@@ -474,8 +477,13 @@ function createHarness(input: { sessions?: Map<string, unknown>; outputs?: unkno
         },
         getExternalWorkHold: () => session?.getExternalWorkHold(),
         getCompletedMobileConnection: () => session?.getCompletedConnection(),
+        getTransferTargetPlatform: () => target?.platform,
         promptForExecution: async () => {
           promptCount += 1;
+          // No pinned platform means the popup's chooser picks one before the bridge is
+          // prepared (the container calls prepareMobileBridge({ transferTargetPlatform })).
+          // The harness stands in for that choice with "web".
+          if (target.platform == null) target.platform = "web";
           const pending = values.get("newKeyTransferSessions") as Array<{
             clientTransferId: string;
             phase: string;
@@ -679,6 +687,24 @@ describe("MeteorConnectNewKeyTransfer journal", () => {
         accounts: [{ ...START_INPUT.accounts[0], accountId: "bob.testnet" }],
       }),
     ).rejects.toThrow("new_key_transfer_client_id_conflict");
+  });
+
+  it("records the popup-chosen platform when start omits targetPlatform and replays cleanly", async () => {
+    const harness = createHarness({ outputs: [START_OUTPUT] });
+    const options = { clientTransferId: CLIENT_ID, accounts: START_INPUT.accounts };
+    const first = await harness.api.start(options);
+    // The harness's prompt simulates the popup chooser answering on "web"; the session must
+    // record that choice so the verify turn can pin to it.
+    expect(first.session.targetPlatform).toBe("web");
+    // A repeat without a pinned platform replays the committed output instead of conflicting
+    // with the platform the chooser picked.
+    const replay = await harness.api.start(options);
+    expect(replay.output).toEqual(START_OUTPUT);
+    expect(harness.getPromptCount()).toBe(1);
+    // A repeat that pins a DIFFERENT platform than the one chosen is still refused.
+    await expect(harness.api.start({ ...options, targetPlatform: "mobile" })).rejects.toThrow(
+      "new_key_transfer_client_id_conflict",
+    );
   });
 
   it("serializes different transfers through the shared journal without losing either session", async () => {
@@ -1305,7 +1331,9 @@ describe("stabilization: SD4/SD6 completion facts", () => {
     await harness.api.runAddKeys({ transferSessionId: SESSION_ID, chain });
     const drifted = harness.api.verifyActive({
       transferSessionId: SESSION_ID,
-      activations: [{ ...VERIFY_INPUT.activations[0], addKeyTransactionHash: OTHER_TRANSACTION_HASH }],
+      activations: [
+        { ...VERIFY_INPUT.activations[0], addKeyTransactionHash: OTHER_TRANSACTION_HASH },
+      ],
     });
     await expect(drifted).rejects.toThrow("new_key_transfer_verify_hash_mismatch");
     await drifted.catch((error) => {

@@ -100,7 +100,12 @@ export class ExecutableAction<R extends TMCActionRequestUnion<TMCActionRegistry>
   }
 
   setTransferTarget(input: {
-    platform: TTransferTargetPlatform;
+    /**
+     * Omit to let the action UI's platform chooser pick it — the popup then calls
+     * `prepareMobileBridge({ transferTargetPlatform })` with the user's choice, and
+     * `getTransferTargetPlatform()` reports what was actually chosen after execution.
+     */
+    platform?: TTransferTargetPlatform;
     walletConnection?: IMeteorConnection_V2_BridgeMobile;
     /**
      * `new_key_account_transfer_start` only: the seam that durably journals the wallet's signed

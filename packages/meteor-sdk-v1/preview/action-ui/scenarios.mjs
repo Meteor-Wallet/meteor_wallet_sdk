@@ -19,7 +19,7 @@
  * - `element`     — container element tag (default "meteor-action-ui-container"; transfer
  *                   scenarios use "meteor-transfer-accounts-container").
  * - `transfer`    — transfer-container state: { accounts: [{accountId, networkId}],
- *                   screen: "review" | "connect", revealShown?: true, terminal?:
+ *                   screen: "choose" | "connect", revealShown?: true, terminal?:
  *                   "imported" | "declined" | "expired" }.
  */
 
@@ -304,14 +304,6 @@ function makeTransferScenarios() {
     ...extra,
   });
   return [
-    base(
-      "transfer-review",
-      "Transfer: staged-account review before bridge creation",
-      "initializing",
-      {
-        screen: "review",
-      },
-    ),
     base(
       "transfer-choose",
       "Transfer: wallet-platform choice (Meteor Web vs Mobile)",

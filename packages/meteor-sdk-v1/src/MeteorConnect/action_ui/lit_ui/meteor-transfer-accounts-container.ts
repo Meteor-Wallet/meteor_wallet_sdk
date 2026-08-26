@@ -1,9 +1,4 @@
 import { consume } from "@lit/context";
-import type {
-  TAllAccountsTransferDataEncrypted,
-  TNewKeyTransferStartInputV1,
-  TNewKeyTransferVerifyActiveInputV1,
-} from "@meteorwallet/connect-shared";
 import { css, html, LitElement, nothing } from "lit";
 import { property, state } from "lit/decorators.js";
 import { unsafeSVG } from "lit/directives/unsafe-svg.js";
@@ -80,9 +75,14 @@ const svg_check = html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor
 const svg_neutral = html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.4"/><path d="M8.6 12h6.8"/></svg>`;
 
 /**
- * The dedicated transfer-accounts popup flow (§ dedicated popup UI): Review (explicit start —
- * the 5-minute bridge TTL only starts burning on click) → Connect (bridge panel reuse: QR /
- * open link / PIN) → Reveal (key card, gated on authoritative wallet_action) → terminal states.
+ * The dedicated transfer-accounts popup flow (§ dedicated popup UI), shaped like the regular
+ * <meteor-action-ui-container>: a "Choose your wallet" screen when no target platform is known,
+ * or — when the action already carries one (the verify turn is pinned to the wallet that
+ * answered the start; the start turn when the caller pre-selected) — straight onto the Connect
+ * screen with the bridge preparing immediately, mirroring the regular popup's contextual
+ * (signed-in) behavior. Connect reuses the bridge panel (QR / open link / PIN) → Reveal (key
+ * card, gated on authoritative wallet_action) → terminal states. The account details themselves
+ * live on the partner frontends, not in this popup.
  * Satisfies the same ActionUi property contract as <meteor-action-ui-container>.
  */
 @customElement("meteor-transfer-accounts-container")
@@ -104,7 +104,7 @@ export class MeteorTransferAccountsContainer extends LitElement {
   @property({ attribute: false })
   public overlayCloseTrigger?: () => void;
 
-  @state() private screen: "review" | "choose_platform" | "connect" = "review";
+  @state() private screen: "choose_platform" | "connect" = "choose_platform";
   @state() private mobileSession?: MobileBridgeSession;
   @state() private snapshot?: IMobileBridgeSnapshot;
   @state() private startPending = false;
@@ -116,6 +116,8 @@ export class MeteorTransferAccountsContainer extends LitElement {
   private actionController!: ActionUiController;
   private unsubscribeSession?: () => void;
   private farewellShownResolve?: () => void;
+  /** Set once at mount: a pre-selected platform means the chooser is never offered. */
+  private platformLocked = false;
 
   static styles = css`
     :host {
@@ -161,20 +163,14 @@ export class MeteorTransferAccountsContainer extends LitElement {
     .close-circle:hover { background: rgba(255,255,255,.07); }
     .close-circle:focus-visible { outline: 2px solid rgba(155,140,255,.9); outline-offset: 1px; }
     .close-circle svg { width: 34%; height: 34%; color: rgba(var(--meteor-text-on-dark-light), 1); }
-    .content { position: relative; padding: .6rem .9rem .75rem; display: flex; flex-direction: column; justify-content: center; flex-grow: 1; gap: .6rem; overflow-y: auto; min-height: 0; }
+    .content { position: relative; padding: .6rem .9rem .75rem; display: flex; flex-direction: column; justify-content: flex-start; flex-grow: 1; gap: .6rem; overflow-y: auto; min-height: 0; }
+    .content.contextual { justify-content: center; }
     .content::-webkit-scrollbar { width: .35rem; }
     .content::-webkit-scrollbar-thumb { border-radius: 999px; background: rgba(255,255,255,.14); }
+    .background-graphics-box { position: absolute; top: 5%; left: 10%; right: 10%; bottom: 25%; z-index: -1; background: radial-gradient(rgba(0, 0, 0, 0.3), rgba(0, 0, 0, 0) 70%); }
+    .background-graphics-box img { filter: blur(0.5px) brightness(1.5); opacity: 0.2; width: 100%; height: 100%; object-fit: cover; pointer-events: none; user-select: none; }
 
     .section-kicker { font-size: .72rem; font-weight: 700; text-transform: uppercase; color: rgba(var(--meteor-text-on-dark-dark), 1); letter-spacing: .08rem; }
-    .review-title { margin: 0; color: rgba(var(--meteor-text-on-dark-light), 1); font-size: 1.12rem; line-height: 1.3rem; font-weight: 750; text-wrap: balance; }
-    .review-note { margin: 0; color: rgba(var(--meteor-text-on-dark-dark), 1); font-size: .74rem; line-height: 1rem; text-wrap: balance; }
-    .account-count { display: inline-flex; align-items: center; gap: .42rem; align-self: center; padding: .34rem .68rem; border-radius: 999px; font-size: .7rem; border: 1px solid var(--mc-hairline); color: rgba(var(--meteor-text-on-dark-dark), 1); background: rgba(255,255,255,.05); }
-    .account-list { width: 100%; max-height: 15.5rem; overflow-y: auto; display: flex; flex-direction: column; gap: .4rem; box-sizing: border-box; padding: .1rem; }
-    .account-list::-webkit-scrollbar { width: .35rem; }
-    .account-list::-webkit-scrollbar-thumb { border-radius: 999px; background: rgba(255,255,255,.14); }
-    .account-row { display: flex; align-items: center; justify-content: space-between; gap: .6rem; padding: .55rem .7rem; border-radius: .65rem; border: 1px solid var(--mc-hairline); background: rgba(255,255,255,.04); }
-    .account-id { font-size: .8rem; font-weight: 650; color: rgba(var(--meteor-text-on-dark-light), 1); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .account-network { flex-shrink: 0; font-size: .66rem; font-weight: 700; letter-spacing: .05rem; text-transform: uppercase; color: rgba(var(--meteor-text-on-dark-dark), 1); }
     .start-error { margin: 0; color: rgb(var(--mc-red)); font-size: .74rem; line-height: 1rem; }
     /* NEAR-popup option/divider patterns (mirrors meteor-action-ui-container). */
     .options { padding: 0; width: 100%; display: flex; flex-direction: column; justify-content: center; gap: .5rem; align-items: center; }
@@ -182,12 +178,10 @@ export class MeteorTransferAccountsContainer extends LitElement {
     .divider { display: flex; align-items: center; justify-content: center; width: 100%; }
     .divider .section-kicker { flex-shrink: 0; margin: 0 .7rem; }
     .divider .divider-line { flex-grow: 1; height: 1px; background: rgba(255,255,255,.2); }
-    .no-wallet-bottom-section { display: flex; flex-direction: column; align-items: stretch; gap: .55rem; margin-top: .35rem; }
+    .no-wallet-bottom-section { display: flex; flex-direction: column; align-items: stretch; gap: .55rem; margin-top: auto; }
     .subsection-title { margin: 0; font-size: 1.05rem; font-weight: 500; letter-spacing: .02rem; color: rgba(255,255,255,.9); }
     .back-link { align-self: center; border: 0; padding: .3rem .5rem; background: none; cursor: pointer; font-family: inherit; font-size: .72rem; color: rgba(var(--meteor-text-on-dark-dark), 1); text-decoration: underline; }
     .back-link:focus-visible { outline: 2px solid rgba(155,140,255,.95); outline-offset: 2px; }
-    .spinner { display: inline-block; width: .9rem; height: .9rem; border: 2px solid rgba(255,255,255,.38); border-top-color: white; border-radius: 50%; animation: spin .7s linear infinite; }
-    @keyframes spin { to { transform: rotate(360deg); } }
 
     .terminal-stage { display: flex; flex-direction: column; align-items: center; gap: .6rem; text-align: center; padding: 1rem 0; animation: stage-in .42s cubic-bezier(.16,1,.3,1) both; }
     .terminal-icon { width: 66px; height: 66px; display: grid; place-items: center; border-radius: 21px; color: white; background: linear-gradient(145deg, #8a718f, #51425e); box-shadow: 0 12px 34px rgba(40,30,70,.3), inset 0 1px rgba(255,255,255,.2); }
@@ -196,16 +190,32 @@ export class MeteorTransferAccountsContainer extends LitElement {
     .terminal-title { margin: 0; color: rgba(var(--meteor-text-on-dark-light), 1); font-size: 1.1rem; font-weight: 750; }
     .terminal-subtitle { max-width: 17rem; margin: 0; color: rgba(var(--meteor-text-on-dark-dark), 1); font-size: .76rem; line-height: 1.02rem; }
     @keyframes stage-in { from { opacity: 0; transform: translateY(7px) scale(.985); } to { opacity: 1; transform: translateY(0) scale(1); } }
-    @media (prefers-reduced-motion: reduce) { .terminal-stage, .spinner { animation: none !important; } }
+
+    /* Content transition animations (mirrors meteor-action-ui-container). */
+    @keyframes fadeInContent { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes contentFadeOut { from { opacity: 1; } to { opacity: 0; } }
+    .content, get-meteor-screen { animation: fadeInContent 300ms ease-out forwards; }
+    .meteor-connect-title-box { animation: fadeInContent 280ms ease-out forwards; animation-delay: 40ms; }
+    :host-context(meteor-action-ui-overlay[closing]) .content,
+    :host-context(meteor-action-ui-overlay[closing]) get-meteor-screen,
+    :host-context(meteor-action-ui-overlay[closing]) .meteor-connect-title-box { animation: contentFadeOut 200ms ease-in forwards; }
+
+    @media (prefers-reduced-motion: reduce) { .terminal-stage, .content, get-meteor-screen, .meteor-connect-title-box { animation: none !important; } }
   `;
 
   connectedCallback(): void {
     super.connectedCallback();
     this.actionController = new ActionUiController(this, this.action, this.closeAction);
     // Terminal screens: observe the action's settlement so a signed result / expiry renders a
-    // closing state during ActionUi's farewell grace instead of vanishing instantly. Attaching
-    // here never *creates* execution — the transfer only starts on the Review click.
+    // closing state during ActionUi's farewell grace instead of vanishing instantly.
     this.targetPlatform = this.action.getTransferTargetPlatform();
+    // A pre-selected platform (the verify turn is pinned to the wallet that answered the start;
+    // the start turn when the caller already chose) behaves like the regular popup's contextual
+    // target: skip the chooser and open straight onto that platform.
+    this.platformLocked = this.targetPlatform != null;
+    if (this.targetPlatform != null) {
+      void this.startTransfer(this.targetPlatform);
+    }
     this.action.waitForExecutionOutput().then(
       (output: unknown) => {
         if (this.action.id === "meteor_wallet_core::transfer_accounts") {
@@ -255,12 +265,14 @@ export class MeteorTransferAccountsContainer extends LitElement {
     this.startPending = true;
     this.startError = undefined;
     this.targetPlatform = platform;
+    // Show the connect screen right away — the bridge panel renders its own preparing state
+    // until the session exists, the same way the regular popup's contextual flow does.
+    this.screen = "connect";
     try {
       const session = await this.actionController.prepareMobileBridge({
         transferTargetPlatform: platform,
       });
       this.bindSession(session);
-      this.screen = "connect";
     } catch (error) {
       this.logger.err("Failed to start transfer bridge", error);
       this.startError = `Couldn't start the secure transfer: ${
@@ -298,62 +310,11 @@ export class MeteorTransferAccountsContainer extends LitElement {
     this.closeAction?.();
   }
 
-  private renderReview() {
-    const legacy = this.action.id === "meteor_wallet_core::transfer_accounts";
-    const verifying =
-      this.action.id === "meteor_wallet_core::new_key_account_transfer_verify_active";
-    const accounts = legacy
-      ? (this.action.expandedInput as TAllAccountsTransferDataEncrypted).allAccountsBasicInfo
-      : verifying
-        ? (this.action.expandedInput as TNewKeyTransferVerifyActiveInputV1).activations
-        : (this.action.expandedInput as TNewKeyTransferStartInputV1).accounts;
-    return html`
-      <span class="section-kicker">Transfer accounts</span>
-      <p class="review-title">${verifying ? "Verify destination keys" : "Transfer accounts to Meteor Wallet"}</p>
-      <span class="account-count">${accounts.length} account${accounts.length === 1 ? "" : "s"}${legacy ? " · encrypted end-to-end" : " · no signing secrets shared"}</span>
-      <div class="account-list" aria-label="Accounts to transfer">
-        ${accounts.map(
-          (account) => html`
-            <div class="account-row">
-              <span class="account-id">${account.accountId}</span>
-              <span class="account-network">NEAR · ${account.networkId}</span>
-            </div>
-          `,
-        )}
-      </div>
-      <p class="review-note">
-        ${
-          legacy
-            ? "Your account keys stay encrypted until you reveal the decrypt key to Meteor Wallet on the connected device."
-            : verifying
-              ? "Use the same Meteor Wallet selected earlier. It will prove each finalized AddKey transaction before local recovery and cleanup can continue."
-              : "Meteor creates and stores a recovery signer locally, then returns only its public key. Your current signing key never crosses this connection."
-        }
-      </p>
-      <div class="options">
-        <meteor-action-button
-          variant="primary"
-          label=${verifying ? "Verify destination keys" : "Start secure transfer"}
-          @meteor-button-click=${() => {
-            if (this.targetPlatform == null) this.screen = "choose_platform";
-            else void this.startTransfer(this.targetPlatform);
-          }}
-        ></meteor-action-button>
-      </div>
-    `;
-  }
-
   private renderChoosePlatform() {
-    const newKey = this.action.id !== "meteor_wallet_core::transfer_accounts";
     return html`
-      <p class="review-title">Where should your accounts go?</p>
-      <p class="review-note">
-        ${
-          newKey
-            ? "Pick the exact Meteor Wallet that should create and retain the destination signer."
-            : "Both options use the same end-to-end encrypted transfer — pick the Meteor Wallet you want to receive the accounts."
-        }
-      </p>
+      <div class="background-graphics-box">
+        <img src="https://storage.googleapis.com/meteor-apps-v2/graphics/meteor_connect_ui/star.gif" alt="Meteor Background Stars" class="star-gif" />
+      </div>
       <div class="options" aria-label="Wallet platform choices">
         <span class="section-kicker">Choose your wallet</span>
         <div class="option-buttons-row">
@@ -361,14 +322,12 @@ export class MeteorTransferAccountsContainer extends LitElement {
             variant="option"
             label="Meteor Web"
             .icon=${svg_icons_text.icon_web_globe}
-            .disabled=${this.startPending}
             @meteor-button-click=${() => this.startTransfer("web")}
           ></meteor-action-button>
           <meteor-action-button
             variant="option"
             label="Meteor Mobile"
             .icon=${svg_icon_mobile_phone}
-            .disabled=${this.startPending}
             @meteor-button-click=${() => this.startTransfer("mobile")}
           ></meteor-action-button>
           ${
@@ -378,15 +337,12 @@ export class MeteorTransferAccountsContainer extends LitElement {
             variant="option"
             label="Meteor Web (Local Dev)"
             .icon=${svg_icons_text.icon_web_globe}
-            .disabled=${this.startPending}
             @meteor-button-click=${() => this.startTransfer("web_local_dev")}
           ></meteor-action-button>`
               : nothing
           }
         </div>
       </div>
-      ${this.startPending ? html`<span class="spinner" aria-hidden="true"></span>` : nothing}
-      ${this.startError != null ? html`<p class="start-error">${this.startError}</p>` : nothing}
       <div class="no-wallet-bottom-section">
         <div class="divider">
           <span class="divider-line"></span>
@@ -403,14 +359,33 @@ export class MeteorTransferAccountsContainer extends LitElement {
           ></meteor-action-button>
         </div>
       </div>
-      <button type="button" class="back-link" @click=${() => {
-        this.screen = "review";
-        this.startError = undefined;
-      }}>Back to review</button>
     `;
   }
 
   private renderConnect() {
+    if (this.startError != null) {
+      return html`
+        <p class="start-error">${this.startError}</p>
+        <div class="options">
+          <meteor-action-button
+            variant="primary"
+            label="Try again"
+            @meteor-button-click=${() => {
+              const platform = this.targetPlatform;
+              if (platform != null) void this.startTransfer(platform);
+            }}
+          ></meteor-action-button>
+        </div>
+        ${
+          this.platformLocked
+            ? nothing
+            : html`<button type="button" class="back-link" @click=${() => {
+                this.screen = "choose_platform";
+                this.startError = undefined;
+              }}>Choose a different wallet</button>`
+        }
+      `;
+    }
     if (
       this.snapshot?.phase === "wallet_action" &&
       this.action.id === "meteor_wallet_core::transfer_accounts"
@@ -490,15 +465,13 @@ export class MeteorTransferAccountsContainer extends LitElement {
         ${
           showingGetMeteor
             ? html`<get-meteor-screen .supportedPlatforms=${TRANSFER_SUPPORTED_PLATFORMS}></get-meteor-screen>`
-            : html`<div class="content">
+            : html`<div class=${`content${terminal != null || this.screen === "connect" ? " contextual" : ""}`}>
           ${
             terminal != null
               ? this.renderTerminal(terminal)
-              : this.screen === "review"
-                ? this.renderReview()
-                : this.screen === "choose_platform"
-                  ? this.renderChoosePlatform()
-                  : this.renderConnect()
+              : this.screen === "choose_platform"
+                ? this.renderChoosePlatform()
+                : this.renderConnect()
           }
         </div>`
         }

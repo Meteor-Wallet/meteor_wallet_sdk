@@ -23,7 +23,7 @@ import { SCENARIOS } from "./scenarios.mjs";
 
 interface ScenarioTransferConfig {
   accounts: Array<{ accountId: string; networkId: string }>;
-  screen: "review" | "choose" | "connect";
+  screen: "choose" | "connect";
   platform?: "web" | "mobile";
   revealShown?: boolean;
   terminal?: "imported" | "declined" | "expired";
@@ -119,6 +119,8 @@ function makeMockAction(scenario: ScenarioConfig): ExecutableAction<any> {
     },
     getAllExecutionTargetConfigs: () => targets.map((executionTarget) => ({ executionTarget })),
     getActionKnownContextualTarget: () => scenario.knownTarget,
+    // Transfer previews drive the screen explicitly below, so no platform is pre-locked here.
+    getTransferTargetPlatform: () => undefined,
     addExecutionStateListener: (_cb: unknown) => () => {},
     getExecutionState: () => ({ isExecuting: false, targetedPlatform: "unset" }),
     prepareMobileBridge: async () => session,
@@ -169,10 +171,7 @@ document.body.appendChild(overlay);
 void (async () => {
   await (container as any).updateComplete;
   const transfer = scenario.transfer;
-  if (transfer != null && transfer.terminal == null && transfer.screen === "choose") {
-    (container as any).screen = "choose_platform";
-    await (container as any).updateComplete;
-  }
+  // "choose" is the container's default screen now — only "connect" needs advancing.
   if (transfer != null && transfer.terminal == null && transfer.screen === "connect") {
     await (container as any).startTransfer?.(transfer.platform ?? "web");
     await (container as any).updateComplete;
