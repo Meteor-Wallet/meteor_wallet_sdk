@@ -9,6 +9,7 @@ import {
   hasRequiredWalletCapabilities,
   METEOR_WALLET_PROTOCOL_VERSION,
 } from "@meteorwallet/connect-shared";
+import { SIGN_POPUP_HEIGHT, SIGN_POPUP_WIDTH } from "../../../ported_common/constants_theme";
 import type { ILocalStorageInterface } from "../../../ported_common/utils/storage/storage.types";
 import type { TMCActionOutput, TMCActionRegistry } from "../../action/mc_action.combined";
 import type { TMCActionRequestUnionExpandedInput } from "../../action/mc_action.types";
@@ -63,6 +64,27 @@ const ALLOWED_NATIVE_APP_SCHEMES: ReadonlySet<string> = new Set([
   "meteorwallet:",
   "meteorwalletdev:",
 ]);
+
+/**
+ * The same centered wallet-popup geometry the V1 web actions use (MeteorPostMessenger), so the
+ * Meteor Web wallet opened over the bridge looks identical to one opened for a regular action.
+ * Centering reads `window.top`, which a cross-origin frame cannot — there the browser places the
+ * popup itself; the geometry is cosmetic, never load-bearing.
+ */
+const centeredWalletPopupFeatures = (): string => {
+  const w = SIGN_POPUP_WIDTH;
+  const h = SIGN_POPUP_HEIGHT;
+  let features = `popup=1,width=${w},height=${h}`;
+  try {
+    const host = window.top ?? window;
+    const y = host.outerHeight / 2 + host.screenY - h / 2;
+    const x = host.outerWidth / 2 + host.screenX - w / 2;
+    if (Number.isFinite(y) && Number.isFinite(x)) features += `,top=${y},left=${x}`;
+  } catch {
+    // Cross-origin ancestor: no centering, sized popup only.
+  }
+  return `${features},noopener`;
+};
 
 export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
   readonly clientName = "Meteor Connect Mobile Bridge Client";
@@ -576,7 +598,7 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
         if (protocol !== "https:" && protocol !== "http:") {
           throw new Error("mobile_bridge_native_scheme_not_allowed");
         }
-        window.open(link, "_blank", "noopener");
+        window.open(link, "_blank", centeredWalletPopupFeatures());
         return;
       }
       if (!ALLOWED_NATIVE_APP_SCHEMES.has(protocol)) {

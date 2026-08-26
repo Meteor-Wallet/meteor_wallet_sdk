@@ -260,7 +260,10 @@ export class MeteorTransferAccountsContainer extends LitElement {
     });
   }
 
-  private async startTransfer(platform: TTransferTargetPlatform): Promise<void> {
+  private async startTransfer(
+    platform: TTransferTargetPlatform,
+    options?: { openWebWindow?: boolean },
+  ): Promise<void> {
     if (this.startPending) return;
     this.startPending = true;
     this.startError = undefined;
@@ -273,6 +276,16 @@ export class MeteorTransferAccountsContainer extends LitElement {
         transferTargetPlatform: platform,
       });
       this.bindSession(session);
+      // Choosing a web wallet was a user click, so open the sized wallet popup window right
+      // away — the same window a regular V1 web action opens. If the browser blocks it (or the
+      // link is not ready) the connect panel still offers the Open button and QR fallback.
+      if (options?.openWebWindow === true && (platform === "web" || platform === "web_local_dev")) {
+        try {
+          this.action.meteorConnect.mobileBridgeClient.openCurrentSessionInApp();
+        } catch (error) {
+          this.logger.log("Could not auto-open the web wallet window", error);
+        }
+      }
     } catch (error) {
       this.logger.err("Failed to start transfer bridge", error);
       this.startError = `Couldn't start the secure transfer: ${
@@ -322,7 +335,7 @@ export class MeteorTransferAccountsContainer extends LitElement {
             variant="option"
             label="Meteor Web"
             .icon=${svg_icons_text.icon_web_globe}
-            @meteor-button-click=${() => this.startTransfer("web")}
+            @meteor-button-click=${() => this.startTransfer("web", { openWebWindow: true })}
           ></meteor-action-button>
           <meteor-action-button
             variant="option"
@@ -337,7 +350,7 @@ export class MeteorTransferAccountsContainer extends LitElement {
             variant="option"
             label="Meteor Web (Local Dev)"
             .icon=${svg_icons_text.icon_web_globe}
-            @meteor-button-click=${() => this.startTransfer("web_local_dev")}
+            @meteor-button-click=${() => this.startTransfer("web_local_dev", { openWebWindow: true })}
           ></meteor-action-button>`
               : nothing
           }
@@ -372,7 +385,7 @@ export class MeteorTransferAccountsContainer extends LitElement {
             label="Try again"
             @meteor-button-click=${() => {
               const platform = this.targetPlatform;
-              if (platform != null) void this.startTransfer(platform);
+              if (platform != null) void this.startTransfer(platform, { openWebWindow: true });
             }}
           ></meteor-action-button>
         </div>

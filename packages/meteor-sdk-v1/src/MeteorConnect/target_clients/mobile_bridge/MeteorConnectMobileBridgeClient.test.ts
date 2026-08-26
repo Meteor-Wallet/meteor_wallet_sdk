@@ -41,6 +41,7 @@ describe("MeteorConnectMobileBridgeClient open-in-app allowlist", () => {
     const client = new MeteorConnectMobileBridgeClient({} as unknown as MeteorConnect);
     const opened: string[] = [];
     const windowOpened: string[] = [];
+    const windowFeatures: Array<string | undefined> = [];
     (client as unknown as { config?: unknown }).config = {
       enabled: true,
       meteorAppId: input.meteorAppId ?? EMeteorAppId.meteor_wallet_mobile,
@@ -53,11 +54,15 @@ describe("MeteorConnectMobileBridgeClient open-in-app allowlist", () => {
     const originalOpen = globalThis.window?.open;
     if (globalThis.window == null) {
       (globalThis as { window?: unknown }).window = {
-        open: (link: string) => windowOpened.push(link),
+        open: (link: string, _target?: string, features?: string) => {
+          windowOpened.push(link);
+          windowFeatures.push(features);
+        },
       };
     } else {
-      globalThis.window.open = ((link: string) => {
+      globalThis.window.open = ((link: string, _target?: string, features?: string) => {
         windowOpened.push(link);
+        windowFeatures.push(features);
         return null;
       }) as typeof globalThis.window.open;
     }
@@ -65,7 +70,7 @@ describe("MeteorConnectMobileBridgeClient open-in-app allowlist", () => {
       if (originalOpen == null) delete (globalThis as { window?: unknown }).window;
       else globalThis.window.open = originalOpen;
     };
-    return { client, opened, windowOpened, restore };
+    return { client, opened, windowOpened, windowFeatures, restore };
   };
 
   it("opens a deep link whose scheme comes from the selected link, not the configured app id", () => {
@@ -115,7 +120,7 @@ describe("MeteorConnectMobileBridgeClient open-in-app allowlist", () => {
     }
   });
 
-  it("opens a web wallet link in a new tab and refuses a non-http(s) one", () => {
+  it("opens a web wallet link as a sized popup window and refuses a non-http(s) one", () => {
     const web = prepare({
       selectedLink: { linkString: WEB_LINK, linkType: EBridgeLinkType.web_app_url },
       presentedLink: `${WEB_LINK}#partnerSecret=abc`,
@@ -123,6 +128,9 @@ describe("MeteorConnectMobileBridgeClient open-in-app allowlist", () => {
     try {
       web.client.openCurrentSessionInApp();
       expect(web.windowOpened).toEqual([`${WEB_LINK}#partnerSecret=abc`]);
+      // Same sized wallet popup the regular V1 web actions open (MeteorPostMessenger geometry);
+      // centering coordinates are absent here because the test window has no screen metrics.
+      expect(web.windowFeatures).toEqual(["popup=1,width=390,height=650,noopener"]);
     } finally {
       web.restore();
     }
