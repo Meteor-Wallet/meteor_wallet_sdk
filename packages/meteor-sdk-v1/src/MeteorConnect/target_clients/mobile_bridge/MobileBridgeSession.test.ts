@@ -426,9 +426,9 @@ describe("MobileBridgeSession session creation", () => {
     expect(session.getBridgeId()).toBe("b1");
   });
 
-  it("selects `resourceProfile` only for the one action whose policy permits two", async () => {
+  it("selects `single_turn_v1` explicitly for every action except the external-work start turn", async () => {
     const seen: ICreateSessionInput[] = [];
-    const build = (sharedActionId: string) => {
+    const build = (domain: string, sharedActionId: string) => {
       const double = createClientDouble({
         createSession: async (createInput) => {
           seen.push({ ...createInput });
@@ -437,16 +437,20 @@ describe("MobileBridgeSession session creation", () => {
       });
       const session = new MobileBridgeSession({
         ...sessionInputFor(double.client),
-        prepared: { ...PREPARED, kind: { domain: "meteor_wallet_core", sharedActionId } as never },
+        prepared: { ...PREPARED, kind: { domain, sharedActionId } as never },
       });
       return session;
     };
-    await build("transfer_accounts").startPreparation();
-    await build("new_key_account_transfer_start").startPreparation();
-    await build("new_key_account_transfer_verify_active").startPreparation();
+    await build("meteor_wallet_core", "transfer_accounts").startPreparation();
+    await build("meteor_wallet_core", "new_key_account_transfer_start").startPreparation();
+    await build("meteor_wallet_core", "new_key_account_transfer_verify_active").startPreparation();
+    // NEAR policy permits both single_turn_v1 and interactive_v1 — the SDK's one-request-per-
+    // session model always selects single_turn_v1, so creation never hits the ambiguity guard.
+    await build("near", "sign_in").startPreparation();
     expect(seen.map((input) => input.resourceProfile)).toEqual([
+      ESessionResourceProfile.single_turn_v1,
       undefined,
-      undefined,
+      ESessionResourceProfile.single_turn_v1,
       ESessionResourceProfile.single_turn_v1,
     ]);
     // Never hand-computed: the policy owns the authorization mode and capability set.

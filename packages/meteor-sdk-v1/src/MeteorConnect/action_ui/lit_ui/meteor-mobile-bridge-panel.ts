@@ -836,8 +836,11 @@ export class MeteorMobileBridgePanel extends LitElement {
     }
     const mobile = isMobile();
     // The ticker follows the IDLE deadline — the one a successful transition (or a refreshed code)
-    // pushes out. The absolute deadline is the wall nothing moves, so once it is the binding one
-    // the copy has to stop promising that a refresh buys more time.
+    // pushes out. The absolute deadline is the wall nothing moves, so once it is STRICTLY the
+    // binding one the copy has to stop promising that a refresh buys more time. A tie (a backend
+    // that issues equal idle and absolute deadlines at creation) keeps the idle presentation:
+    // "Refresh code" tears the session down and mints a whole new one, so a new code genuinely
+    // does extend the wait.
     const idleSecondsLeft =
       snapshot.idleExpiresAt == null
         ? undefined
@@ -848,7 +851,7 @@ export class MeteorMobileBridgePanel extends LitElement {
         : Math.max(0, Math.ceil((snapshot.absoluteExpiresAt - this.now) / 1000));
     const hardStopBinding =
       hardStopSecondsLeft != null &&
-      (idleSecondsLeft == null || hardStopSecondsLeft <= idleSecondsLeft);
+      (idleSecondsLeft == null || hardStopSecondsLeft < idleSecondsLeft);
     const secondsLeft = hardStopBinding ? hardStopSecondsLeft : idleSecondsLeft;
     const liveFooter = this.renderLiveFooter(snapshot);
     const stagePanelClass = `panel stage-panel${liveFooter === "" ? "" : " auto"}`;

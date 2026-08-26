@@ -359,13 +359,16 @@ export class MobileBridgeSession {
               },
             }),
         // Everything else is policy-derived server-side: the idempotency id, authorizationMode,
-        // the required wallet capability set, and — for every id but one — the resource profile.
-        // `verify_active` permits two profiles, so omitting it there throws
+        // and the required wallet capability set. The resource profile is selected explicitly:
+        // this SDK runs exactly one request per bridge session, so every action is
+        // `single_turn_v1` — except the new-key start turn, whose only permitted profile is
+        // `external_work_v1` (the AddKey hold) and is left to policy derivation. Actions whose
+        // policy permits several profiles (the NEAR ids, `verify_active`) would otherwise throw
         // SessionResourceProfileAmbiguityError.
         ...(this.prepared.kind.domain === "meteor_wallet_core" &&
-        this.prepared.kind.sharedActionId === "new_key_account_transfer_verify_active"
-          ? { resourceProfile: ESessionResourceProfile.single_turn_v1 }
-          : {}),
+        this.prepared.kind.sharedActionId === "new_key_account_transfer_start"
+          ? {}
+          : { resourceProfile: ESessionResourceProfile.single_turn_v1 }),
       });
       this.createdSession = session;
       this.partnerRequestId = session.partnerRequestId;
