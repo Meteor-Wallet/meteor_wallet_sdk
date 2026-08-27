@@ -72,7 +72,7 @@ const svg_neutral = html`<svg viewBox="0 0 24 24" fill="none" stroke="currentCol
 
 /**
  * The dedicated transfer-accounts popup flow (§ dedicated popup UI), shaped like the regular
- * <meteor-action-ui-container>: a "Choose your wallet" screen when no target platform is known,
+ * <meteor-action-ui-container>: a "Choose your platform" screen when no target platform is known,
  * or — when the action already carries one (the verify turn is pinned to the wallet that
  * answered the start; the start turn when the caller pre-selected) — straight onto the Connect
  * screen with the bridge preparing immediately, mirroring the regular popup's contextual
@@ -285,6 +285,17 @@ export class MeteorTransferAccountsContainer extends LitElement {
     this.startPending = true;
     this.startError = undefined;
     this.targetPlatform = platform;
+    // Choosing a web wallet should land the user straight in the wallet window, but its URL only
+    // exists once the bridge session is created — and window.open is only reliably permitted
+    // inside the user's click gesture. So claim a placeholder popup window synchronously now and
+    // navigate it once the session publishes the wallet link. Best-effort: on the verify turn's
+    // gesture-less auto-reopen the browser may return null, and the connect panel's Open button
+    // and QR remain the fallback.
+    const wantsWebWindow =
+      options?.openWebWindow === true && (platform === "web" || platform === "web_local_dev");
+    const pendingWebWindow = wantsWebWindow
+      ? this.action.meteorConnect.mobileBridgeClient.openPendingWalletWindow()
+      : null;
     // Show the connect screen right away — the bridge panel renders its own preparing state
     // until the session exists, the same way the regular popup's contextual flow does.
     this.screen = "connect";
@@ -302,23 +313,62 @@ export class MeteorTransferAccountsContainer extends LitElement {
               transferTargetPlatform: platform,
             });
       this.bindSession(session);
-      // Choosing a web wallet was a user click, so open the sized wallet popup window right
-      // away — the same window a regular V1 web action opens. If the browser blocks it (or the
-      // link is not ready) the connect panel still offers the Open button and QR fallback.
-      if (options?.openWebWindow === true && (platform === "web" || platform === "web_local_dev")) {
-        try {
-          this.action.meteorConnect.mobileBridgeClient.openCurrentSessionInApp();
-        } catch (error) {
-          this.logger.log("Could not auto-open the web wallet window", error);
-        }
+      if (wantsWebWindow && session != null) {
+        void this.openWebWalletWhenReady(session, pendingWebWindow);
+      } else {
+        pendingWebWindow?.close();
       }
     } catch (error) {
+      pendingWebWindow?.close();
       this.logger.err("Failed to start transfer bridge", error);
       this.startError = `Couldn't start the secure transfer: ${
         error instanceof Error ? error.message : String(error)
       }`;
     } finally {
       this.startPending = false;
+    }
+  }
+
+  /** Resolves true once the session has published its wallet link, false if it ends first. */
+  private waitForWalletLink(session: MobileBridgeSession): Promise<boolean> {
+    return new Promise<boolean>((resolve) => {
+      let unsubscribe: (() => void) | undefined;
+      let settled = false;
+      const settle = (ready: boolean) => {
+        if (settled) return;
+        settled = true;
+        resolve(ready);
+        // subscribe() invokes the listener synchronously before handing back the unsubscriber.
+        queueMicrotask(() => unsubscribe?.());
+      };
+      unsubscribe = session.subscribe((snapshot) => {
+        if (snapshot.deepLink != null) settle(true);
+        else if (["completed", "failed", "cancelled"].includes(snapshot.phase)) settle(false);
+      });
+    });
+  }
+
+  /**
+   * Navigate the gesture-claimed placeholder window to the web wallet the moment the session
+   * publishes its link — the sized popup a regular V1 web action would open. The placeholder is
+   * closed instead when the session died first or was replaced while waiting (refresh, reset).
+   */
+  private async openWebWalletWhenReady(
+    session: MobileBridgeSession,
+    pendingWebWindow: Window | null,
+  ): Promise<void> {
+    const ready = await this.waitForWalletLink(session);
+    if (!ready || this.mobileSession !== session) {
+      pendingWebWindow?.close();
+      return;
+    }
+    try {
+      this.action.meteorConnect.mobileBridgeClient.openCurrentSessionInApp(
+        pendingWebWindow ?? undefined,
+      );
+    } catch (error) {
+      pendingWebWindow?.close();
+      this.logger.log("Could not auto-open the web wallet window", error);
     }
   }
 
@@ -367,7 +417,7 @@ export class MeteorTransferAccountsContainer extends LitElement {
         <img src="https://storage.googleapis.com/meteor-apps-v2/graphics/meteor_connect_ui/star.gif" alt="Meteor Background Stars" class="star-gif" />
       </div>
       <div class="options" aria-label="Wallet platform choices">
-        <span class="section-kicker">Choose your wallet</span>
+        <span class="section-kicker">Choose your platform</span>
         <div class="option-buttons-row">
           <meteor-action-button
             variant="option"
@@ -440,7 +490,7 @@ export class MeteorTransferAccountsContainer extends LitElement {
             : html`<button type="button" class="back-link" @click=${() => {
                 this.screen = "choose_platform";
                 this.startError = undefined;
-              }}>Choose a different wallet</button>`
+              }}>Choose a different platform</button>`
         }
       `;
     }

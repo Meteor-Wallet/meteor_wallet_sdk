@@ -70,6 +70,9 @@ const ALLOWED_NATIVE_APP_SCHEMES: ReadonlySet<string> = new Set([
  * Meteor Web wallet opened over the bridge looks identical to one opened for a regular action.
  * Centering reads `window.top`, which a cross-origin frame cannot — there the browser places the
  * popup itself; the geometry is cosmetic, never load-bearing.
+ * `noopener` is NOT part of the returned features — with it, `window.open` returns null, which
+ * the placeholder-window flow (`openPendingWalletWindow`) cannot live with. Direct opens append
+ * it themselves; the placeholder flow severs `opener` on the handle instead.
  */
 const centeredWalletPopupFeatures = (): string => {
   const w = SIGN_POPUP_WIDTH;
@@ -83,7 +86,7 @@ const centeredWalletPopupFeatures = (): string => {
   } catch {
     // Cross-origin ancestor: no centering, sized popup only.
   }
-  return `${features},noopener`;
+  return features;
 };
 
 export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
@@ -572,10 +575,50 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
     return connection;
   }
 
-  openCurrentSessionInApp(): void {
+  /**
+   * Synchronously claim the sized wallet popup window during a user gesture, before the bridge
+   * session (and thus the wallet URL) exists. Browsers only reliably allow `window.open` inside
+   * the gesture's own call stack, so a caller that must first await session creation opens this
+   * placeholder immediately on click and hands it to `openCurrentSessionInApp` once the link is
+   * published. The popup's `opener` is severed right away — navigation happens through the handle
+   * this side keeps, and the wallet page never sees `window.opener` (the same isolation the
+   * direct-open path gets from `noopener`). Returns null when the browser blocks the popup;
+   * callers then fall back to the connect panel's Open button / QR.
+   */
+  openPendingWalletWindow(): Window | null {
+    try {
+      const pending = window.open("about:blank", "_blank", centeredWalletPopupFeatures());
+      if (pending == null) return null;
+      pending.opener = null;
+      try {
+        pending.document.title = "Meteor Wallet";
+        pending.document.body.style.cssText =
+          "margin:0;display:grid;place-items:center;min-height:100vh;background:#0e0e17;color:#bebee6;font-family:sans-serif;font-size:14px;";
+        pending.document.body.textContent = "Opening Meteor Wallet…";
+      } catch {
+        // Cosmetic only — a browser that refuses writes to the about:blank document still
+        // navigates the window fine.
+      }
+      return pending;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * @param pendingWindow A placeholder window from `openPendingWalletWindow`, claimed inside the
+   * user gesture that chose a web wallet. When given, a web link navigates it instead of opening
+   * a fresh popup; a placeholder the user already closed is respected as a decline. Native deep
+   * links never navigate it — it is closed rather than stranded.
+   */
+  openCurrentSessionInApp(pendingWindow?: Window): void {
     const opener = this.config?.nativeAppOpener ?? directBrowserNativeAppOpener;
     const session = this.currentSession;
-    session?.openInApp((link) => {
+    if (session == null) {
+      pendingWindow?.close();
+      return;
+    }
+    session.openInApp((link) => {
       // Both branches allow exactly the backend-issued wallet URL, extended only by the SDK's own
       // `#partnerSecret` fragment. The allowlist derives from the SELECTED walletLink — never
       // from a partner-supplied URL, and never from `config.meteorAppId`, which describes the
@@ -589,12 +632,17 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
         if (protocol !== "https:" && protocol !== "http:") {
           throw new Error("mobile_bridge_native_scheme_not_allowed");
         }
-        window.open(link, "_blank", centeredWalletPopupFeatures());
+        if (pendingWindow != null) {
+          if (!pendingWindow.closed) pendingWindow.location.href = link;
+          return;
+        }
+        window.open(link, "_blank", `${centeredWalletPopupFeatures()},noopener`);
         return;
       }
       if (!ALLOWED_NATIVE_APP_SCHEMES.has(protocol)) {
         throw new Error("mobile_bridge_native_scheme_not_allowed");
       }
+      pendingWindow?.close();
       opener.open(link);
     });
   }

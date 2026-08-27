@@ -113,6 +113,8 @@ function makeMockAction(scenario: ScenarioConfig): ExecutableAction<any> {
       supportedPlatforms: targets,
       mobileBridgeClient: {
         openCurrentSessionInApp() {},
+        // Previews never open real windows — pretend the browser blocked the placeholder.
+        openPendingWalletWindow: () => null,
         // Previews always show the dev-gated "Meteor Web (Local Dev)" transfer option.
         isTransferLocalDevWebAvailable: async () => true,
       },

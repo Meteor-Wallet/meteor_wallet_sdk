@@ -521,8 +521,8 @@ export class MeteorActionUiContainer extends LitElement {
               !isPlatformLocked &&
               (extensionWalletAvailable || webWalletAvailable || includeWebDevLocalhost)
                 ? html`
-            <div class="options" aria-label="Wallet choices">
-              <span class="section-action-title">Choose your wallet</span>
+            <div class="options" aria-label="Platform choices">
+              <span class="section-action-title">Choose your platform</span>
               <div class="option-buttons-row">
               ${
                 extensionWalletAvailable
