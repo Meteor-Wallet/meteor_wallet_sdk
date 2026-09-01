@@ -12,13 +12,14 @@ import { Button } from "~/ui/Button";
 import { createHarnessAddKeyChain } from "./nearAddKeyChain";
 
 /**
- * Test harness for the NEW-KEY transfer — the flow where secrets never move.
+ * Test harness for the NEW-KEY transfer — the flow where secrets never move, and the only
+ * transfer method this harness exercises.
  *
- * The older `transferAccounts` flow encrypts the staged secrets and hands them to the wallet,
- * which decrypts them with the PIN-derived key. This one does the opposite: the wallet mints a
- * fresh keypair per account and returns only the PUBLIC halves, this side AddKeys them on-chain
- * with the source account's own full-access key, and the wallet then verifies each key is live
- * before importing. The private material for both ends stays where it was born.
+ * The older `transferAccounts.prompt()` flow encrypted the staged secrets and handed them to the
+ * wallet, which decrypted them with the PIN-derived key. This one does the opposite: the wallet
+ * mints a fresh keypair per account and returns only the PUBLIC halves, this side AddKeys them
+ * on-chain with the source account's own full-access key, and the wallet then verifies each key
+ * is live before importing. The private material for both ends stays where it was born.
  *
  * Three wallet turns, in order, over one held bridge session:
  *
@@ -306,8 +307,8 @@ export const NewKeyTransferTest = ({ meteorConnect }: { meteorConnect: MeteorCon
       <p className={"text-sm text-gray-500"}>
         The secret-free transfer: the wallet mints fresh keys, this side AddKeys them on-chain with
         each account&apos;s own full-access key, and the wallet verifies them live before importing.
-        Uses the same staged accounts as the transfer above ({staged.length} staged) — but sends
-        only their <b>public</b> keys.
+        Uses the accounts staged above ({staged.length} staged) — but sends only their <b>public</b>{" "}
+        keys.
       </p>
 
       <p className={"text-sm text-gray-500"}>

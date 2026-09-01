@@ -22,7 +22,7 @@ import { NetworkSelector } from "~/pages/near-connect/NetworkSelector";
 import { Button } from "~/ui/Button";
 import { NewKeyTransferTest } from "./NewKeyTransferTest";
 import { SignDelegateActionTest } from "./SignDelegateActionTest";
-import { TransferAccountsTest } from "./TransferAccountsTest";
+import { StagedAccountsPanel } from "./StagedAccountsPanel";
 
 const LOCAL_BACKEND_URL = "http://localhost:8787";
 
@@ -91,8 +91,8 @@ const initializedMeteorConnect = async (): Promise<MeteorConnect> => {
         // Uncomment to test against the local mc_backend demo wallet instead:
         // meteorAppIds: [EMeteorAppId.meteor_bridge_test_web],
         // TEST HARNESS ONLY: stage far beyond the 50-per-transfer protocol bound so volume
-        // testing isn't capped; the demo transfers the first 50 when over (see
-        // TransferAccountsTest).
+        // testing isn't capped (see StagedAccountsPanel). Still required by the new-key flow:
+        // this config gates the transfer execution targets for both transfer action families.
         maxStagedAccounts: 250,
       },
     },
@@ -193,7 +193,7 @@ const MeteorConnectTestInitialized = ({ meteorConnect }: { meteorConnect: Meteor
           setNetwork(network);
         }}
       />
-      <TransferAccountsTest
+      <StagedAccountsPanel
         meteorConnect={meteorConnect}
         network={network}
         backendUrl={MOBILE_BRIDGE_BACKEND_URL}

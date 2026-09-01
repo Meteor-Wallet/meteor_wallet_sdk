@@ -1,24 +1,23 @@
-import type {
-  MeteorConnect,
-  TStagedTransferAccountSummary,
-  TTransferAccountsOutcome,
-} from "@meteorwallet/sdk";
-import {
-  METEOR_CONNECT_BACKENDS,
-  parseTransferSecretInput,
-  TRANSFER_ACCOUNTS_MAX_ACCOUNTS,
-} from "@meteorwallet/sdk";
+import type { MeteorConnect, TStagedTransferAccountSummary } from "@meteorwallet/sdk";
+import { METEOR_CONNECT_BACKENDS, parseTransferSecretInput } from "@meteorwallet/sdk";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Button } from "~/ui/Button";
 import { buildFakeTransferAccountBatch } from "./fakeTransferAccounts";
 
 /**
- * Test harness for the account-transfer flow: stage accountId + secret pairs, then run the
- * dedicated transfer popup (`meteorConnect.transferAccounts.prompt()`). Staged secrets persist
- * in plaintext localStorage (harness opt-in) so runs are repeatable — testnet material only.
+ * Source-account staging for the new-key transfer, plus the harness's backend switcher.
+ *
+ * Staging is deliberately separate from the transfer itself: `NewKeyTransferTest` reads the same
+ * staged set through `transferAccounts.getStagedWithSecrets()` and sends only the PUBLIC halves.
+ * Staged secrets persist in plaintext localStorage (harness opt-in) so runs are repeatable —
+ * testnet material only.
+ *
+ * The old existing-secret flow (`transferAccounts.prompt()`) was removed from this harness: it is
+ * not the method we ship, and no Meteor mobile wallet advertises `transfer_accounts_v1`, so its
+ * mobile QR could only ever end in `wallet_update_required`.
  */
-export const TransferAccountsTest = ({
+export const StagedAccountsPanel = ({
   meteorConnect,
   network,
   backendUrl,
@@ -45,8 +44,6 @@ export const TransferAccountsTest = ({
   const [accountId, setAccountId] = useState("");
   const [secretInput, setSecretInput] = useState("");
   const [stageError, setStageError] = useState<string>();
-  const [outcome, setOutcome] = useState<TTransferAccountsOutcome | undefined>();
-  const [flowError, setFlowError] = useState<string>();
 
   const stagedQuery = useQuery({
     queryKey: ["transfer-accounts", "staged"],
@@ -81,7 +78,8 @@ export const TransferAccountsTest = ({
     mutationFn: async () => {
       setStageError(undefined);
       // Volume testing: 5 diverse fake accounts per click (see fakeTransferAccounts.ts). A
-      // mid-batch failure (e.g. hitting the 50-account cap) stops and surfaces the reason.
+      // mid-batch failure (e.g. hitting the harness `maxStagedAccounts` cap) stops and surfaces
+      // the reason.
       for (const account of buildFakeTransferAccountBatch(network)) {
         for (const secret of account.secrets) {
           const result = await meteorConnect.transferAccounts.stage({
@@ -101,39 +99,13 @@ export const TransferAccountsTest = ({
     },
   });
 
-  const transferMutation = useMutation({
-    mutationFn: async () => {
-      setFlowError(undefined);
-      setOutcome(undefined);
-      try {
-        // The protocol caps a single transfer at 50 accounts (schemas, backend, and wallet all
-        // enforce it). With an oversized staged set (harness maxStagedAccounts), transfer the
-        // first 50 via the prompt({ accounts }) override instead of throwing.
-        const result =
-          staged.length > TRANSFER_ACCOUNTS_MAX_ACCOUNTS
-            ? await meteorConnect.transferAccounts.prompt({
-                accounts: (await meteorConnect.transferAccounts.getStagedWithSecrets()).slice(
-                  0,
-                  TRANSFER_ACCOUNTS_MAX_ACCOUNTS,
-                ),
-              })
-            : await meteorConnect.transferAccounts.prompt();
-        setOutcome(result);
-      } catch (error) {
-        // Integration/config errors throw; flow endings resolve to an outcome.
-        setFlowError(error instanceof Error ? error.message : String(error));
-      }
-      await refreshStaged();
-    },
-  });
-
   return (
-    <div className={"mt-6 p-4 border-2 border-purple-800 rounded-xl flex flex-col gap-3"}>
-      <h2 className={"text-lg font-bold"}>Transfer Accounts to Meteor Wallet</h2>
+    <div className={"mt-6 p-4 border-2 border-slate-500 rounded-xl flex flex-col gap-3"}>
+      <h2 className={"text-lg font-bold"}>Staged source accounts</h2>
       <p className={"text-sm text-gray-500"}>
         Stage account secrets below (testnet material only — staged secrets persist in plaintext
-        localStorage for repeatable test runs), then start the secure transfer popup. Network for
-        new stages: <b>{network}</b>
+        localStorage for repeatable test runs), then run the new-key transfer underneath. Network
+        for new stages: <b>{network}</b>
       </p>
       {usingLocalBackend ? (
         <p className={"text-sm text-green-700"}>
@@ -240,22 +212,6 @@ export const TransferAccountsTest = ({
 
       <div className={"flex flex-row flex-wrap gap-3 items-center"}>
         <Button
-          disabled={transferMutation.isPending || staged.length === 0}
-          onClick={() => transferMutation.mutate()}
-        >
-          {transferMutation.isPending
-            ? "Transfer in progress..."
-            : staged.length > TRANSFER_ACCOUNTS_MAX_ACCOUNTS
-              ? `Transfer first ${TRANSFER_ACCOUNTS_MAX_ACCOUNTS} of ${staged.length}`
-              : "Transfer to Meteor Wallet"}
-        </Button>
-        {staged.length > TRANSFER_ACCOUNTS_MAX_ACCOUNTS && (
-          <span className={"text-xs text-amber-700"}>
-            The protocol caps one transfer at {TRANSFER_ACCOUNTS_MAX_ACCOUNTS} accounts — the demo
-            sends the first {TRANSFER_ACCOUNTS_MAX_ACCOUNTS}.
-          </span>
-        )}
-        <Button
           disabled={staged.length === 0}
           onClick={async () => {
             await meteorConnect.transferAccounts.clearStaged();
@@ -265,14 +221,6 @@ export const TransferAccountsTest = ({
           Clear staged
         </Button>
       </div>
-
-      {outcome != null && (
-        <p className={"text-sm"}>
-          Outcome: <b>{outcome.status}</b>
-          {outcome.status === "failed" ? ` (${outcome.reason})` : ""}
-        </p>
-      )}
-      {flowError != null && <p className={"text-sm text-red-700"}>Error: {flowError}</p>}
     </div>
   );
 };
