@@ -116,6 +116,23 @@ export const SCENARIOS = [
     },
   },
   {
+    name: "review-mobile",
+    description: "Review & approve stage on a phone — the Open button is the only usable escape",
+    targets: ALL_TARGETS,
+    knownTarget: "v2_bridge_mobile",
+    mobileUa: true,
+    snapshot: {
+      phase: "wallet_action",
+      push: "delivered",
+      deepLink: DEEP_LINK,
+      idleExpiresAt: EXPIRES_SOON(),
+      absoluteExpiresAt: HARD_STOP(),
+      pinAttemptsUsed: 0,
+      linkPhase: "live",
+      linkRedialAttempt: 0,
+    },
+  },
+  {
     name: "pin",
     description: "First-pairing PIN entry stage",
     targets: ALL_TARGETS,

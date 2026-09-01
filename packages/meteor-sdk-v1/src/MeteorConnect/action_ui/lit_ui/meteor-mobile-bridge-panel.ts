@@ -58,6 +58,12 @@ export class MeteorMobileBridgePanel extends LitElement {
   @property() walletPlatform: "mobile" | "web" = "mobile";
   @state() private snapshot?: IMobileBridgeSnapshot;
   @state() private showQr = !isMobile();
+  /**
+   * The PIN stage keeps its fallback QR collapsed by default — the wallet is demonstrably awake
+   * there (it is displaying the PIN), so the QR is the rarer of the two escapes and must not push
+   * the PIN cells off screen.
+   */
+  @state() private pinQrOpen = false;
   @state() private pin = "";
   @state() private pinPending = false;
   @state() private pinShake = false;
@@ -179,6 +185,7 @@ export class MeteorMobileBridgePanel extends LitElement {
     .fallback-slot { width: 150px; min-height: 220px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .38rem; }
     .fallback-label { min-height: .85rem; color: var(--mc-kicker); font-size: .66rem; font-weight: 700; letter-spacing: .06rem; text-transform: uppercase; }
     .fallback-slot .qr-frame { padding: 3px; }
+    .fallback-slot .error { font-size: .66rem; line-height: .9rem; text-wrap: balance; }
     .fallback-slot .qr { width: 144px; height: 144px; }
     .qr-placeholder { width: 150px; height: 150px; display: grid; place-items: center; box-sizing: border-box; border: 1px solid var(--mc-hairline); border-radius: 11px; overflow: hidden; color: var(--mc-muted); font-size: .68rem; background: linear-gradient(110deg, rgba(255,255,255,.035) 20%, rgba(255,255,255,.08) 38%, rgba(255,255,255,.035) 56%); background-size: 220% 100%; animation: qr-shimmer 1.8s linear infinite; }
 
@@ -193,6 +200,11 @@ export class MeteorMobileBridgePanel extends LitElement {
     /* Browser-window variant of the device visual, used when the paired wallet is a web wallet. */
     .review-phone.web { width: 66px; height: 48px; border-radius: 8px; }
     .review-phone.web::before { width: 30px; left: 7px; top: 6px; }
+    /* Compact variant, used wherever the device visual shares its row with the fallback QR. */
+    .review-visual.compact { width: 66px; height: 66px; }
+    .review-phone.compact { width: 34px; height: 54px; border-radius: 9px; }
+    .review-phone.compact.web { width: 54px; height: 40px; border-radius: 7px; }
+    .review-phone.compact.web::before { width: 24px; left: 6px; top: 5px; }
     .review-check { width: 18px; height: 9px; margin-top: -2px; border-left: 2px solid #82ebbd; border-bottom: 2px solid #82ebbd; transform: rotate(-45deg); }
     .phone-pin-dots { display: flex; gap: 3px; margin-top: -2px; }
     .phone-pin-dots span { width: 5px; height: 5px; border-radius: 50%; background: rgba(210,200,255,.95); box-shadow: 0 0 6px rgba(170,150,255,.8); animation: phone-dot 1.6s ease-in-out infinite; }
@@ -214,6 +226,12 @@ export class MeteorMobileBridgePanel extends LitElement {
     .pin-hidden-input { position: absolute; inset: 0; width: 100%; height: 100%; box-sizing: border-box; opacity: 0; border: 0; padding: 0; margin: 0; background: transparent; color: transparent; caret-color: transparent; font-size: 16px; text-align: center; outline: none; cursor: pointer; }
     .pin-actions { display: flex; flex-direction: column; align-items: center; gap: .45rem; width: 100%; }
     .pin-verify { min-width: 232px; }
+    /* The PIN stage carries the most content of any stage — with the Open/QR escapes added below
+       the attempts pill, the device visual is what gives up the room to keep the modal in bounds. */
+    .pin-stage .review-visual { width: 74px; height: 74px; }
+    .pin-stage .review-phone { width: 38px; height: 60px; border-radius: 10px; }
+    .stage-fallback { display: flex; flex-direction: column; align-items: center; gap: .45rem; }
+    .stage-fallback-row { display: flex; gap: .45rem; flex-wrap: wrap; justify-content: center; }
 
     /* ---------- Identity reset ---------- */
     .reset-card { display: flex; flex-direction: column; align-items: center; gap: .5rem; max-width: 19rem; }
@@ -266,7 +284,10 @@ export class MeteorMobileBridgePanel extends LitElement {
 
   protected updated(): void {
     const link = this.snapshot?.deepLink;
-    if (this.showQr && link != null) void this.updateComplete.then(() => this.drawQr(link));
+    // Any stage may host the fallback QR, so draw wherever the target actually rendered instead of
+    // re-deriving which stage was supposed to own it.
+    if (link != null && this.qrTarget != null)
+      void this.updateComplete.then(() => this.drawQr(link));
     if (
       this.snapshot?.phase === "wallet_verification" &&
       !this.pinWasFocused &&
@@ -294,6 +315,7 @@ export class MeteorMobileBridgePanel extends LitElement {
       this.presentedPushStage = "sending";
       this.presentationStartedAt = Date.now();
       this.closeConfirmation = false;
+      this.pinQrOpen = false;
       if (this.presentationTimer != null) clearTimeout(this.presentationTimer);
     }
     this.unsubscribe?.();
@@ -344,6 +366,9 @@ export class MeteorMobileBridgePanel extends LitElement {
 
   private drawQr(link: string): void {
     if (this.qrTarget == null) return;
+    // `updated()` fires on every tick of the 1s clock; only redraw when the link actually changed
+    // or the host element is a fresh one (a stage swap hands us an empty div).
+    if (this.qrValue === link && this.qrTarget.childElementCount > 0) return;
     if (this.qr == null) {
       this.qr = new QRCodeStyling({
         width: 128,
@@ -601,14 +626,42 @@ export class MeteorMobileBridgePanel extends LitElement {
     return html`<div class="live-footer">${link}${close}</div>`;
   }
 
+  /**
+   * The escape hatch every non-terminal stage has to offer: this bridge's own link, as a QR and as
+   * a direct "Open <wallet>" button. A delivered push is NEVER proof that the wallet surfaced the
+   * request — a trusted wallet can claim the bridge from the background and land the session in
+   * `wallet_action` with nothing on screen — so no stage may present waiting as the only option.
+   */
+  private renderFallbackSlot(snapshot: IMobileBridgeSnapshot | undefined, secondsLeft?: number) {
+    const deepLink = snapshot?.deepLink;
+    const ready = deepLink != null;
+    return html`<div class="fallback-slot">
+      <span class="fallback-label">${ready ? "Scan instead" : "Preparing backup QR"}</span>
+      ${
+        ready && this.showQr
+          ? html`<div class="qr-frame"><div id="mobile-bridge-qr" class="qr" role="img" aria-label="Scan with ${this.walletLabel}"></div></div>`
+          : html`<div class="qr-placeholder">
+              ${
+                ready
+                  ? html`<button class="ghost" @click=${() => (this.showQr = true)}>Show QR</button>`
+                  : "Preparing secure code"
+              }
+            </div>`
+      }
+      ${
+        ready
+          ? html`<button class="ghost" @click=${() => this.openMobileApp()}>Open ${this.walletLabel}</button>`
+          : html`<span class="status-line">${secondsLeft == null ? "" : `Expires in ${this.formatCountdown(secondsLeft)}`}</span>`
+      }
+      ${this.interactionError ? html`<span class="error">${this.interactionError}</span>` : ""}
+    </div>`;
+  }
+
   private renderPushStage(
     snapshot: IMobileBridgeSnapshot | undefined,
     stage: "sending" | "sent" | "unavailable",
     secondsLeft?: number,
   ) {
-    const deepLink = snapshot?.deepLink;
-    const mobile = isMobile();
-    const showFallbackQr = stage !== "sending" && deepLink != null && this.showQr;
     const title =
       stage === "sending"
         ? "Sending push notification to wallet"
@@ -648,45 +701,35 @@ export class MeteorMobileBridgePanel extends LitElement {
               }</span>
             </div>
           </div>
-          <div class="fallback-slot">
-            <span class="fallback-label">${stage === "sending" ? "Preparing backup QR" : "Scan instead"}</span>
-            ${
-              showFallbackQr
-                ? html`<div class="qr-frame"><div id="mobile-bridge-qr" class="qr" role="img" aria-label="Scan with ${this.walletLabel}"></div></div>`
-                : html`<div class="qr-placeholder">
-                    ${
-                      deepLink != null && mobile
-                        ? html`<button class="ghost" @click=${() => (this.showQr = true)}>Show QR</button>`
-                        : stage === "sending"
-                          ? "Preparing secure code"
-                          : "QR code loading"
-                    }
-                  </div>`
-            }
-            ${
-              stage !== "sending" && deepLink != null
-                ? html`<button class="ghost" @click=${() => this.openMobileApp()}>Open ${this.walletLabel}</button>`
-                : html`<span class="status-line">${secondsLeft == null ? "" : `Expires in ${this.formatCountdown(secondsLeft)}`}</span>`
-            }
-          </div>
+          ${this.renderFallbackSlot(snapshot, secondsLeft)}
         </div>
       </div>`,
     );
   }
 
-  private renderReviewStage() {
+  /**
+   * The wallet has claimed the bridge — but a claim can happen entirely in the background, so this
+   * stage keeps the same QR/Open pair as the earlier ones rather than leaving "waiting" as the
+   * user's only move.
+   */
+  private renderReviewStage(snapshot: IMobileBridgeSnapshot, secondsLeft?: number) {
     return keyed(
       "wallet-review",
-      html`<div class="stage review-stage">
-        <span class="stage-kicker">Request received</span>
-        <div class="review-visual" aria-hidden="true">
-          <div class=${`review-phone${this.walletPlatform === "web" ? " web" : ""}`}><span class="review-check"></span></div>
-        </div>
-        <h2 class="review-title">Review and approve this request in ${this.walletLabel}</h2>
-        <p class="review-subtitle">Your wallet has securely received the request and is ready for your approval.</p>
-        <div class="pill good" role="status">
-          <span class="pill-dot"></span>
-          <span>Waiting for your approval</span>
+      html`<div class="stage">
+        <div class="push-layout">
+          <div class="stage-primary">
+            <span class="stage-kicker">Request received</span>
+            <div class="review-visual compact" aria-hidden="true">
+              <div class=${`review-phone compact${this.walletPlatform === "web" ? " web" : ""}`}><span class="review-check"></span></div>
+            </div>
+            <h2 class="stage-title">Review and approve this request in ${this.walletLabel}</h2>
+            <p class="stage-subtitle">Nothing showing up? Open ${this.walletLabel} again or scan the code.</p>
+            <div class="pill good" role="status">
+              <span class="pill-dot"></span>
+              <span>Waiting for your approval</span>
+            </div>
+          </div>
+          ${this.renderFallbackSlot(snapshot, secondsLeft)}
         </div>
       </div>`,
     );
@@ -765,8 +808,38 @@ export class MeteorMobileBridgePanel extends LitElement {
           }
           ${this.interactionError ? html`<span class="error">${this.interactionError}</span>` : ""}
         </div>
+        ${this.renderPinFallback(snapshot)}
       </div>`,
     );
+  }
+
+  /**
+   * The PIN is only readable on the wallet's own screen, so a wallet that slipped into the
+   * background strands this stage exactly like the review stage. Same two escapes, laid out inline
+   * because the PIN cells already own the width: Open first, QR behind a toggle.
+   */
+  private renderPinFallback(snapshot: IMobileBridgeSnapshot) {
+    if (snapshot.deepLink == null) return "";
+    return html`<div class="stage-fallback">
+      <div class="stage-fallback-row">
+        <button type="button" class="ghost" @click=${() => this.openMobileApp()}>
+          Open ${this.walletLabel}
+        </button>
+        <button
+          type="button"
+          class="ghost"
+          aria-pressed=${this.pinQrOpen ? "true" : "false"}
+          @click=${() => (this.pinQrOpen = !this.pinQrOpen)}
+        >
+          ${this.pinQrOpen ? "Hide QR" : "Show QR"}
+        </button>
+      </div>
+      ${
+        this.pinQrOpen
+          ? html`<div class="qr-frame"><div id="mobile-bridge-qr" class="qr" role="img" aria-label="Scan with ${this.walletLabel}"></div></div>`
+          : ""
+      }
+    </div>`;
   }
 
   /** Compact icon stage for terminal and transient whole-panel states. */
@@ -854,7 +927,7 @@ export class MeteorMobileBridgePanel extends LitElement {
       (idleSecondsLeft == null || hardStopSecondsLeft < idleSecondsLeft);
     const secondsLeft = hardStopBinding ? hardStopSecondsLeft : idleSecondsLeft;
     const liveFooter = this.renderLiveFooter(snapshot);
-    const stagePanelClass = `panel stage-panel${liveFooter === "" ? "" : " auto"}`;
+    const stagePanelClass = `panel stage-panel${liveFooter === "" && this.interactionError == null ? "" : " auto"}`;
     const showRequestAccess = snapshot.deepLink != null && snapshot.phase === "waiting_for_wallet";
     const showRequestQr = showRequestAccess && this.showQr;
     const inPushPresentation =
@@ -892,7 +965,7 @@ export class MeteorMobileBridgePanel extends LitElement {
 
     if (snapshot.phase === "wallet_action") {
       return html`<section class=${stagePanelClass} aria-live="polite" aria-label="${this.walletLabel}">
-        ${this.renderReviewStage()}
+        ${this.renderReviewStage(snapshot, secondsLeft)}
         ${liveFooter}
       </section>`;
     }
