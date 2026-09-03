@@ -52,6 +52,31 @@ try {
     // Let entrance animations settle, the QR draw, and stage transitions run.
     await page.waitForTimeout(scenario.settleMs ?? 900);
 
+    // States behind a toggle (the mobile QR reveal, the PIN stage's QR) need the toggle pressed
+    // first. The control lives in a shadow root, so reach it by aria-label or button text rather
+    // than a CSS path.
+    if (scenario.clickLabel != null) {
+      const clicked = await page.evaluate((label) => {
+        const all = [];
+        const walk = (node) => {
+          for (const el of node.querySelectorAll("*")) {
+            all.push(el);
+            if (el.shadowRoot) walk(el.shadowRoot);
+          }
+        };
+        walk(document);
+        const button = all.find(
+          (el) =>
+            el.getAttribute?.("aria-label") === label ||
+            (el.tagName === "BUTTON" && el.textContent.trim() === label),
+        );
+        button?.click();
+        return button != null;
+      }, scenario.clickLabel);
+      if (!clicked) console.log(`[${scenario.name}] no control labelled "${scenario.clickLabel}"`);
+      await page.waitForTimeout(500);
+    }
+
     await page.screenshot({ path: path.join(outDir, `${scenario.name}-full.png`) });
     const modal = await page.locator(".modal-container").boundingBox();
     if (modal) {

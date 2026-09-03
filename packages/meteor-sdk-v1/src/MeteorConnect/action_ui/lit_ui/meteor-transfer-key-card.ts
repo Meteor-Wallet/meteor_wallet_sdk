@@ -25,6 +25,11 @@ const svg_key_glyph = html`<svg viewBox="0 0 24 24" fill="none" stroke="currentC
  * click (conditional render, not CSS), and never in aria-live regions, tooltips, inputs, or data
  * attributes.
  */
+/** Matches the bridge panel: a thin quiet zone, since the code sits on its own white card. */
+const QR_QUIET_ZONE_PX = 4;
+/** Only used before the card is laid out and the box measures 0 — matches `--qr-size` in CSS. */
+const QR_FALLBACK_BOX_PX = 160;
+
 @customElement("meteor-transfer-key-card")
 export class MeteorTransferKeyCard extends LitElement {
   @property({ attribute: false }) session?: MobileBridgeSession;
@@ -38,6 +43,8 @@ export class MeteorTransferKeyCard extends LitElement {
   private boundSession?: MobileBridgeSession;
   private qr?: QRCodeStyling;
   private qrValue?: string;
+  /** Box the current code was drawn into, so a resize redraws instead of scaling a stale SVG. */
+  private qrSize?: number;
   private timer?: ReturnType<typeof setInterval>;
   private copiedTimer?: ReturnType<typeof setTimeout>;
 
@@ -69,8 +76,8 @@ export class MeteorTransferKeyCard extends LitElement {
     button:focus-visible { outline: 2px solid rgba(155,140,255,.95); outline-offset: 2px; }
     .key-tile { width: 100%; box-sizing: border-box; padding: .6rem .65rem; border-radius: .7rem; border: 1px solid rgba(150,140,255,.22); background: rgba(var(--meteor-dark-gray-darkest, 14,14,23), .75); box-shadow: inset 0 2px 10px rgba(0,0,0,.3); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .78rem; line-height: 1.15rem; letter-spacing: .04rem; color: var(--mc-ink); word-break: break-all; user-select: all; text-align: center; }
     .reveal-actions { display: flex; gap: .5rem; flex-wrap: wrap; justify-content: center; }
-    .qr-frame { padding: 3px; border-radius: 13px; background: linear-gradient(150deg, rgba(139,119,255,.55), rgba(69,50,160,.2) 55%, rgba(69,193,255,.3)); box-shadow: 0 10px 26px rgba(30,15,90,.35); }
-    .qr { width: 128px; height: 128px; display: grid; place-items: center; box-sizing: border-box; border-radius: 10px; background: white; overflow: hidden; }
+    .qr-frame { padding: 2px; border-radius: 12px; background: linear-gradient(150deg, rgba(139,119,255,.55), rgba(69,50,160,.2) 55%, rgba(69,193,255,.3)); box-shadow: 0 10px 26px rgba(30,15,90,.35); }
+    .qr { --qr-size: 160px; width: var(--qr-size); height: var(--qr-size); display: grid; place-items: center; box-sizing: border-box; border-radius: 10px; background: white; overflow: hidden; }
     .clipboard-note { margin: 0; color: var(--mc-muted); font-size: .68rem; line-height: .92rem; }
     .countdown { display: inline-flex; align-items: center; gap: .4rem; font-size: .71rem; color: var(--mc-muted); font-variant-numeric: tabular-nums; }
     .countdown.urgent { color: rgb(var(--mc-amber)); }
@@ -130,19 +137,25 @@ export class MeteorTransferKeyCard extends LitElement {
 
   private drawQr(value: string): void {
     const target = this.qrTarget;
-    if (target == null || this.qrValue === value) return;
+    if (target == null) return;
+    // CSS owns the size (`--qr-size` on `.qr`); measure the box rather than hard-coding a number
+    // that then disagrees with it. A zero measurement means the card is not laid out yet.
+    const size = target.clientWidth > 0 ? target.clientWidth : QR_FALLBACK_BOX_PX;
+    if (this.qrValue === value && this.qrSize === size && target.childElementCount > 0) return;
     this.qrValue = value;
+    this.qrSize = size;
     target.replaceChildren();
-    // Same settings as the bridge panel's link QR — svg + roundSize:false is load-bearing for
-    // dense payloads like the key string.
+    // Same settings as the bridge panel's link QR: level L because this is a screen with no centre
+    // logo, square modules because rounded ones smear at these sizes, and roundSize:false so the
+    // drawn code fills the box we just measured instead of being floored well inside it.
     this.qr = new QRCodeStyling({
-      width: 120,
-      height: 120,
+      width: size,
+      height: size,
       type: "svg",
       data: value,
-      margin: 4,
-      qrOptions: { errorCorrectionLevel: "M" },
-      dotsOptions: { color: "#22105f", type: "rounded", roundSize: false },
+      margin: QR_QUIET_ZONE_PX,
+      qrOptions: { errorCorrectionLevel: "L" },
+      dotsOptions: { color: "#22105f", type: "square", roundSize: false },
       backgroundOptions: { color: "#ffffff" },
     });
     this.qr.append(target);
@@ -151,6 +164,7 @@ export class MeteorTransferKeyCard extends LitElement {
   private clearQr(): void {
     this.qr = undefined;
     this.qrValue = undefined;
+    this.qrSize = undefined;
     this.qrTarget?.replaceChildren();
   }
 

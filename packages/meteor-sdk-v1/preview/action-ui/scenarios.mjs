@@ -13,6 +13,9 @@
  * - `pendingTarget` — when set, shows the "continue on your platform" screen.
  * - `view`        — set to "get-meteor" to open on the Get Meteor Wallet screen.
  * - `mobileUa`    — screenshot.mjs uses a mobile user agent for this scenario.
+ * - `clickLabel`  — screenshot.mjs clicks the control with this aria-label (or button text)
+ *                   before capturing, for states only reachable through a toggle (e.g. the mobile
+ *                   QR reveal, or the PIN stage's collapsed QR).
  * - `settleMs`    — how long screenshot.mjs waits before capturing (default 900).
  * - `snapshot`    — IMobileBridgeSnapshot fields the mock mobile session emits. `facts` is
  *                   derived from `snapshot.phase` by the preview entry unless a scenario sets it.
@@ -24,11 +27,13 @@
  */
 
 const ALL_TARGETS = ["v1_ext", "v1_web", "v1_web_localhost", "v2_bridge_mobile"];
-// Realistic-length bridge link so the QR density matches the real app
-// (short links produce unrealistically sparse QR codes).
+// A real-shaped `linkFormat=s2` bridge link (147 chars: 34-char route, `f=s2`, a 71-char lease,
+// and the 32-char partner secret in the fragment). The QR density here must match the real app —
+// a shorter stand-in produces an unrealistically sparse code and hides regressions.
 const DEEP_LINK =
-  "https://link.meteorwallet.app/bridge?requestId=8f3a9c2e-1b4d-4e7a-9c5f-2d6e8a0b1c3d" +
-  "&version=2&origin=https%3A%2F%2Fdemo-dapp.example.com";
+  "https://wallet.meteorwallet.app/b?f=s2&l=" +
+  "AaGxs8PU5fYHGKGxs8PU5fYHGKGxs8PU5fYHGGmImYCTq83f8xkpS7dvH1yQ4tBnZeXwK9m" +
+  "#s=V1StGXR8_Z5jdHi6B-myT_kR9pQwXzL7";
 const EXPIRES_SOON = () => Date.now() + 4 * 60_000 + 48_000;
 /** The absolute wall no refresh moves — comfortably beyond the idle deadline in most scenarios. */
 const HARD_STOP = () => Date.now() + 25 * 60_000;
@@ -55,6 +60,25 @@ export const SCENARIOS = [
     description: "Same as main, but with a mobile user agent (stacked layout)",
     targets: ALL_TARGETS,
     mobileUa: true,
+    snapshot: {
+      phase: "waiting_for_wallet",
+      push: "not_attempted",
+      deepLink: DEEP_LINK,
+      idleExpiresAt: EXPIRES_SOON(),
+      absoluteExpiresAt: HARD_STOP(),
+      pinAttemptsUsed: 0,
+      linkPhase: "live",
+      linkRedialAttempt: 0,
+    },
+  },
+  {
+    // The mobile panel hides the QR behind a toggle, so nothing else captures the stacked layout
+    // WITH the code open — the one state where the code pays full height for its size.
+    name: "mobile-main-qr",
+    description: "Mobile stacked layout with the QR revealed (tightest vertical budget)",
+    targets: ALL_TARGETS,
+    mobileUa: true,
+    clickLabel: "Show QR code",
     snapshot: {
       phase: "waiting_for_wallet",
       push: "not_attempted",
@@ -161,6 +185,23 @@ export const SCENARIOS = [
       absoluteExpiresAt: HARD_STOP(),
       pinAttemptsUsed: 1,
       pinError: "Incorrect PIN",
+      linkPhase: "live",
+      linkRedialAttempt: 0,
+    },
+  },
+  {
+    name: "pin-qr",
+    clickLabel: "Show QR",
+    description: "PIN stage with its collapsed QR revealed (least vertical room of any stage)",
+    targets: ALL_TARGETS,
+    knownTarget: "v2_bridge_mobile",
+    snapshot: {
+      phase: "wallet_verification",
+      push: "delivered",
+      deepLink: DEEP_LINK,
+      idleExpiresAt: EXPIRES_SOON(),
+      absoluteExpiresAt: HARD_STOP(),
+      pinAttemptsUsed: 0,
       linkPhase: "live",
       linkRedialAttempt: 0,
     },

@@ -42,6 +42,19 @@ const CLOSE_OPERATION_COPY: Record<
 
 const svg_qr_glyph = html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3.5" width="6.4" height="6.4" rx="1.4"/><rect x="14.1" y="3.5" width="6.4" height="6.4" rx="1.4"/><rect x="3.5" y="14.1" width="6.4" height="6.4" rx="1.4"/><path d="M14.1 14.1h2.6v2.6h-2.6zM17.9 17.9h2.6v2.6h-2.6z"/></svg>`;
 
+/**
+ * White border drawn inside the code's own canvas. Kept small on purpose — the code already sits on
+ * a white card inside a dark panel, so the card edge is the quiet zone a scanner keys on, and every
+ * pixel spent here is a pixel not spent on module size.
+ */
+const QR_QUIET_ZONE_PX = 4;
+/**
+ * Only used when the host div has not been laid out yet and measures 0 — the smallest box any stage
+ * gives the code (`--qr-size` on `.request-access.stacked`). Never the size a laid-out code draws
+ * at.
+ */
+const QR_MIN_BOX_PX = 132;
+
 @customElement("meteor-mobile-bridge-panel")
 export class MeteorMobileBridgePanel extends LitElement {
   @property({ attribute: false }) session?: MobileBridgeSession;
@@ -81,6 +94,8 @@ export class MeteorMobileBridgePanel extends LitElement {
   private unsubscribe?: () => void;
   private qr?: QRCodeStyling;
   private qrValue?: string;
+  /** Box the current code was drawn into, so a stage swap to a different `--qr-size` redraws. */
+  private qrSize?: number;
   private pinWasFocused = false;
   private lastPinError?: string;
   private timer?: ReturnType<typeof setInterval>;
@@ -111,7 +126,7 @@ export class MeteorMobileBridgePanel extends LitElement {
     }
 
     /* ---------- Card shell ---------- */
-    .panel { position: relative; isolation: isolate; overflow: hidden; display: flex; flex-direction: column; gap: .42rem; align-items: center; padding: .55rem .8rem; border: 1px solid rgba(150,140,255,.13); border-radius: .9rem; background: linear-gradient(155deg, rgba(var(--meteor-dark-gray-lightest, 34,34,41), .32), rgba(var(--meteor-dark-gray-darkest, 14,14,23), .55) 70%); box-shadow: inset 0 2px 16px rgba(0,0,0,.22), inset 0 1px rgba(255,255,255,.035); box-sizing: border-box; }
+    .panel { position: relative; isolation: isolate; overflow: hidden; display: flex; flex-direction: column; gap: .32rem; align-items: center; padding: .45rem .8rem; border: 1px solid rgba(150,140,255,.13); border-radius: .9rem; background: linear-gradient(155deg, rgba(var(--meteor-dark-gray-lightest, 34,34,41), .32), rgba(var(--meteor-dark-gray-darkest, 14,14,23), .55) 70%); box-shadow: inset 0 2px 16px rgba(0,0,0,.22), inset 0 1px rgba(255,255,255,.035); box-sizing: border-box; }
     .panel::before { content: ""; position: absolute; width: 240px; height: 240px; left: -90px; top: -110px; z-index: -1; border-radius: 50%; background: radial-gradient(circle, rgba(105,79,244,.12), transparent 68%); pointer-events: none; }
     .panel::after { content: ""; position: absolute; width: 200px; height: 200px; right: -90px; bottom: -120px; z-index: -1; border-radius: 50%; background: radial-gradient(circle, rgba(69,193,255,.07), transparent 70%); pointer-events: none; }
     :host([contextual]) .panel { padding: .9rem; }
@@ -148,13 +163,20 @@ export class MeteorMobileBridgePanel extends LitElement {
     .pill.good .pill-dot { animation: dot-pulse 1.4s ease-in-out infinite; }
 
     /* ---------- QR / waiting card ---------- */
-    .request-access { display: flex; align-items: center; justify-content: center; gap: .75rem; width: 100%; }
-    .request-access.stacked { flex-direction: column; gap: .6rem; }
+    /* 168px is what this screen can actually afford: it shares the modal with the platform picker,
+       and the controls column beside the code still has to fit "Open <wallet>" on one line. */
+    .request-access { --qr-size: 168px; display: flex; align-items: center; justify-content: center; gap: .7rem; width: 100%; }
+    /* Stacked, the code no longer shares its row with the controls — it pays full height for its
+       size, and this screen also carries the platform picker above it. Keep the box near its
+       original footprint; level L alone still buys this layout a third more module size. */
+    .request-access.stacked { --qr-size: 132px; flex-direction: column; gap: .55rem; }
     .request-controls { display: flex; flex: 1; min-width: 0; flex-direction: column; align-items: center; justify-content: center; gap: .55rem; }
     .request-access.stacked .request-controls { flex: none; }
     .actions { display: flex; gap: .5rem; flex-wrap: wrap; justify-content: center; }
-    .qr-frame { position: relative; flex: 0 0 auto; padding: 3px; border-radius: 13px; background: linear-gradient(150deg, rgba(139,119,255,.55), rgba(69,50,160,.2) 55%, rgba(69,193,255,.3)); box-shadow: 0 10px 26px rgba(30,15,90,.35); }
-    .qr { width: 128px; height: 128px; display: grid; place-items: center; padding: 0; box-sizing: border-box; border-radius: 10px; background: white; overflow: hidden; }
+    .qr-frame { position: relative; flex: 0 0 auto; padding: 2px; border-radius: 12px; background: linear-gradient(150deg, rgba(139,119,255,.55), rgba(69,50,160,.2) 55%, rgba(69,193,255,.3)); box-shadow: 0 10px 26px rgba(30,15,90,.35); }
+    /* Every stage sets its own --qr-size against the room it actually has; drawQr() measures this
+       box, so CSS is the only place the drawn size is decided. */
+    .qr { width: var(--qr-size, 168px); height: var(--qr-size, 168px); display: grid; place-items: center; padding: 0; box-sizing: border-box; border-radius: 10px; background: white; overflow: hidden; }
     .countdown { display: inline-flex; align-items: center; gap: .4rem; font-size: .71rem; color: var(--mc-muted); font-variant-numeric: tabular-nums; }
     .countdown.urgent { color: rgb(var(--mc-amber)); }
     .live-footer { display: flex; flex-direction: column; align-items: center; gap: .45rem; width: 100%; }
@@ -168,11 +190,11 @@ export class MeteorMobileBridgePanel extends LitElement {
     .stage-panel.slim { height: auto; min-height: 190px; }
     .stage { width: 100%; min-height: 258px; display: flex; align-items: center; justify-content: center; animation: stage-in .42s cubic-bezier(.16,1,.3,1) both; }
     .stage.compact { min-height: 0; flex-direction: column; gap: .6rem; text-align: center; padding: .35rem 0; }
-    .push-layout { width: 100%; display: grid; grid-template-columns: minmax(0,1fr) 150px; align-items: center; gap: .85rem; }
+    .push-layout { width: 100%; display: grid; grid-template-columns: minmax(0,1fr) 176px; align-items: center; gap: .7rem; }
     .stage-primary { min-width: 0; min-height: 220px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .55rem; text-align: center; }
     .stage-kicker { color: var(--mc-kicker); font-size: .72rem; font-weight: 700; letter-spacing: .08rem; text-transform: uppercase; }
-    .stage-title { min-height: 2.44rem; max-width: 12rem; margin: 0; display: flex; align-items: center; justify-content: center; color: var(--mc-ink); font-size: 1.03rem; line-height: 1.22rem; font-weight: 750; text-wrap: balance; }
-    .stage-subtitle { min-height: 2rem; max-width: 12rem; margin: 0; display: flex; align-items: center; color: var(--mc-muted); font-size: .74rem; line-height: 1rem; text-wrap: balance; }
+    .stage-title { min-height: 2.44rem; max-width: 10.2rem; margin: 0; display: flex; align-items: center; justify-content: center; color: var(--mc-ink); font-size: 1.03rem; line-height: 1.22rem; font-weight: 750; text-wrap: balance; }
+    .stage-subtitle { min-height: 2rem; max-width: 10.2rem; margin: 0; display: flex; align-items: center; color: var(--mc-muted); font-size: .74rem; line-height: 1rem; text-wrap: balance; }
     .stage-icon { position: relative; width: 66px; height: 66px; display: grid; place-items: center; border-radius: 21px; color: white; background: linear-gradient(145deg, rgba(112,88,248,.95), rgba(63,44,165,.9)); box-shadow: 0 12px 34px rgba(62,38,184,.35), inset 0 1px rgba(255,255,255,.2); }
     .stage-icon svg { width: 31px; height: 31px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
     .stage-icon.small { width: 48px; height: 48px; border-radius: 15px; }
@@ -182,12 +204,10 @@ export class MeteorMobileBridgePanel extends LitElement {
     .stage-icon.sent, .stage-icon.good { background: linear-gradient(145deg, #40bc86, #227a61); box-shadow: 0 12px 34px rgba(32,157,109,.27), inset 0 1px rgba(255,255,255,.2); }
     .stage-icon.unavailable, .stage-icon.neutral { background: linear-gradient(145deg, #8a718f, #51425e); }
     .status-line { min-height: 1rem; display: flex; align-items: center; justify-content: center; gap: .4rem; color: var(--mc-body); font-size: .7rem; }
-    .fallback-slot { width: 150px; min-height: 220px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .38rem; }
+    .fallback-slot { --qr-size: 176px; width: 176px; min-height: 220px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .38rem; }
     .fallback-label { min-height: .85rem; color: var(--mc-kicker); font-size: .66rem; font-weight: 700; letter-spacing: .06rem; text-transform: uppercase; }
-    .fallback-slot .qr-frame { padding: 3px; }
     .fallback-slot .error { font-size: .66rem; line-height: .9rem; text-wrap: balance; }
-    .fallback-slot .qr { width: 144px; height: 144px; }
-    .qr-placeholder { width: 150px; height: 150px; display: grid; place-items: center; box-sizing: border-box; border: 1px solid var(--mc-hairline); border-radius: 11px; overflow: hidden; color: var(--mc-muted); font-size: .68rem; background: linear-gradient(110deg, rgba(255,255,255,.035) 20%, rgba(255,255,255,.08) 38%, rgba(255,255,255,.035) 56%); background-size: 220% 100%; animation: qr-shimmer 1.8s linear infinite; }
+    .qr-placeholder { width: calc(var(--qr-size, 168px) + 4px); height: calc(var(--qr-size, 168px) + 4px); display: grid; place-items: center; box-sizing: border-box; border: 1px solid var(--mc-hairline); border-radius: 11px; overflow: hidden; color: var(--mc-muted); font-size: .68rem; background: linear-gradient(110deg, rgba(255,255,255,.035) 20%, rgba(255,255,255,.08) 38%, rgba(255,255,255,.035) 56%); background-size: 220% 100%; animation: qr-shimmer 1.8s linear infinite; }
 
     /* ---------- Review stage ---------- */
     .review-stage { flex-direction: column; gap: .65rem; text-align: center; }
@@ -230,7 +250,10 @@ export class MeteorMobileBridgePanel extends LitElement {
        the attempts pill, the device visual is what gives up the room to keep the modal in bounds. */
     .pin-stage .review-visual { width: 74px; height: 74px; }
     .pin-stage .review-phone { width: 38px; height: 60px; border-radius: 10px; }
-    .stage-fallback { display: flex; flex-direction: column; align-items: center; gap: .45rem; }
+    /* The PIN stage is full before the code is even revealed, so opening it always scrolls — which
+       is exactly why it starts collapsed. Since the scroll is unavoidable at any size (measured:
+       104px still scrolls), the code may as well be big enough to scan once you have scrolled. */
+    .stage-fallback { --qr-size: 176px; display: flex; flex-direction: column; align-items: center; gap: .45rem; }
     .stage-fallback-row { display: flex; gap: .45rem; flex-wrap: wrap; justify-content: center; }
 
     /* ---------- Identity reset ---------- */
@@ -251,7 +274,7 @@ export class MeteorMobileBridgePanel extends LitElement {
     }
 
     @media (max-width: 370px) {
-      .request-access { flex-direction: column; }
+      .request-access { --qr-size: 132px; flex-direction: column; }
       .request-controls { flex: none; }
       .stage-panel { height: 420px; }
       .stage-panel.auto, .stage-panel.slim { height: auto; }
@@ -306,6 +329,7 @@ export class MeteorMobileBridgePanel extends LitElement {
     if (this.pinShakeTimer != null) clearTimeout(this.pinShakeTimer);
     if (this.presentationTimer != null) clearTimeout(this.presentationTimer);
     this.qr = undefined;
+    this.qrSize = undefined;
     super.disconnectedCallback();
   }
 
@@ -366,26 +390,40 @@ export class MeteorMobileBridgePanel extends LitElement {
 
   private drawQr(link: string): void {
     if (this.qrTarget == null) return;
-    // `updated()` fires on every tick of the 1s clock; only redraw when the link actually changed
-    // or the host element is a fresh one (a stage swap hands us an empty div).
-    if (this.qrValue === link && this.qrTarget.childElementCount > 0) return;
-    if (this.qr == null) {
-      this.qr = new QRCodeStyling({
-        width: 128,
-        height: 128,
-        type: "svg",
-        data: link,
-        margin: 5,
-        // roundSize must stay false: when true (the default) the module size is
-        // floored to whole pixels, which shrinks dense QR codes (long bridge links)
-        // to as little as ~50% of the intended size.
-        dotsOptions: { color: "#22105f", type: "rounded", roundSize: false },
-        backgroundOptions: { color: "#ffffff" },
-      });
-    } else if (this.qrValue !== link) {
-      this.qr.update({ data: link });
-    }
+    // Each stage gives the code a different box (see `--qr-size`), so CSS is the single source of
+    // truth for the drawn size — measure it rather than hard-coding one. A zero measurement means
+    // the host is not laid out yet; fall back to the smallest box any stage uses.
+    const size = this.qrTarget.clientWidth > 0 ? this.qrTarget.clientWidth : QR_MIN_BOX_PX;
+    // `updated()` fires on every tick of the 1s clock; only redraw when the link or the box
+    // actually changed, or the host element is a fresh one (a stage swap hands us an empty div).
+    if (this.qrValue === link && this.qrSize === size && this.qrTarget.childElementCount > 0) return;
+    const options = {
+      width: size,
+      height: size,
+      type: "svg" as const,
+      data: link,
+      // The quiet zone is deliberately thin. The spec's 4 modules would cost ~16px of a ~150px box
+      // here, and the code sits on its own white card inside a dark panel — the contrast boundary
+      // scanners actually key on is the card edge, which is well outside this margin.
+      margin: QR_QUIET_ZONE_PX,
+      qrOptions: {
+        // Level L, not the library's default Q. Q buys damage tolerance a screen cannot suffer,
+        // and there is no centre logo eating modules — at 147 characters it costs 57x57 modules
+        // against L's 45x45, which is a third of the resolution for nothing.
+        errorCorrectionLevel: "L" as const,
+      },
+      // Square, not rounded: at these module sizes a rounded dot is mostly anti-aliased edge, so
+      // each module renders as a grey smear and the decoder loses its black/white threshold long
+      // before it runs out of resolution.
+      // roundSize must stay false: when true (the default) the module size is floored to whole
+      // pixels, which shrinks the drawn code well inside the box we just measured.
+      dotsOptions: { color: "#22105f", type: "square" as const, roundSize: false },
+      backgroundOptions: { color: "#ffffff" },
+    };
+    if (this.qr == null) this.qr = new QRCodeStyling(options);
+    else this.qr.update(options);
     this.qrValue = link;
+    this.qrSize = size;
     this.qrTarget.innerHTML = "";
     this.qr.append(this.qrTarget);
   }
@@ -1008,6 +1046,12 @@ export class MeteorMobileBridgePanel extends LitElement {
       </section>`;
     }
 
+    // `showRequestAccess` is true only in `waiting_for_wallet`, where the close verb is
+    // `close_session` — no note, no confirmation step. That is what lets it sit in the controls
+    // column beside the code instead of claiming a row of its own underneath, and that row is
+    // most of the height the code needs to be scannable.
+    const closeControl = this.renderCloseControl(snapshot);
+
     return html`
       <section class="panel" aria-live="polite" aria-label="${this.walletLabel}">
         <div class="heading">
@@ -1041,6 +1085,7 @@ export class MeteorMobileBridgePanel extends LitElement {
                     ? html`<button class="ghost" @click=${() => void this.refreshMobileCode()}>Refresh code</button>`
                     : ""
               }
+              ${closeControl}
             </div>
           </div>`
             : ""
@@ -1053,7 +1098,7 @@ export class MeteorMobileBridgePanel extends LitElement {
                 ${snapshot.errorDetail ? html`<span class="muted">${snapshot.errorDetail}</span>` : ""}
                 ${snapshot.error ? html`<span class="fineprint">${snapshot.error}</span>` : ""}`
         }
-        ${this.renderCloseControl(snapshot)}
+        ${showRequestAccess ? "" : closeControl}
       </section>
     `;
   }
