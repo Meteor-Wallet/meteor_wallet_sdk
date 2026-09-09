@@ -94,6 +94,20 @@ export const convertSelectorActionToNearAction = (action: Action) => {
 
       return actionCreators.withdrawFromGasKey(PublicKey.from(publicKey), amount)
     }
+    case 'DeployGlobalContract': {
+      const { code, deployMode } = action.params;
+      const modeInstance = deployMode === 'CodeHash' ? 'codeHash' : 'accountId';
+
+      return actionCreators.deployGlobalContract(Uint8Array.from(Object.entries(code).map(([_, val]) => val)), modeInstance);
+    }
+    case 'UseGlobalContract': {
+      const { contractIdentifier } = action.params;
+      const idInstance =
+          'codeHash' in contractIdentifier
+              ? { codeHash: typeof contractIdentifier.codeHash === 'string' ? contractIdentifier.codeHash : Uint8Array.from(Object.entries(contractIdentifier.codeHash).map(([_, val]) => val))}
+              : { accountId: contractIdentifier.accountId };
+      return actionCreators.useGlobalContract(idInstance);
+    }
     default:
       throw new Error("Invalid action type");
   }

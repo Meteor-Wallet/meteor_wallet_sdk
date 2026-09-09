@@ -155,5 +155,32 @@ export const nearActionToSdkV1Action = (action: Action): SdkV1Action => {
     };
   }
 
+  if (action.useGlobalContract) {
+    return {
+      type: "UseGlobalContract",
+      params: {
+        contractIdentifier:
+          "CodeHash" in action.useGlobalContract.contractIdentifier
+            ? {
+                codeHash: action.useGlobalContract.contractIdentifier.CodeHash,
+              }
+            : {
+                accountId:
+                  action.useGlobalContract.contractIdentifier.AccountId,
+              },
+      },
+    };
+  }
+  
+  if(action.deployGlobalContract){
+    return {
+      type: "DeployGlobalContract",
+      params: {
+        code: action.deployGlobalContract.code,
+        deployMode: "CodeHash" in action.deployGlobalContract.deployMode ? "CodeHash" : "AccountId"
+      }
+    }
+  }
+
   throw new Error("Unsupported action type");
 };

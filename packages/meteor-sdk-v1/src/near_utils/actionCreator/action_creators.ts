@@ -239,9 +239,14 @@ function deleteAccount(beneficiaryId: string): Action {
  * @param deployMode The deploy mode for the global contract.
  * @returns A new global contract deployment action.
  */
-function deployGlobalContract(code: Uint8Array, deployMode: GlobalContractDeployMode): Action {
+function deployGlobalContract(code: Uint8Array, deployMode: 'codeHash' | 'accountId'): Action {
+    const mode =
+        deployMode === 'codeHash'
+            ? new GlobalContractDeployMode({ CodeHash: null })
+            : new GlobalContractDeployMode({ AccountId: null });
+
     return new Action({
-        deployGlobalContract: new DeployGlobalContract({ code, deployMode }),
+        deployGlobalContract: new DeployGlobalContract({ code, deployMode: mode }),
     });
 }
 
@@ -250,10 +255,21 @@ function deployGlobalContract(code: Uint8Array, deployMode: GlobalContractDeploy
  * @param contractIdentifier The identifier for the global contract.
  * @returns A new action for selecting a global contract.
  */
-function useGlobalContract(contractIdentifier: GlobalContractIdentifier): Action {
-    return new Action({
-        useGlobalContract: new UseGlobalContract({ contractIdentifier }),
-    });
+function useGlobalContract(contractIdentifier: { accountId: string } | { codeHash: string | Uint8Array }): Action {
+    const identifier =
+        'accountId' in contractIdentifier
+            ? new GlobalContractIdentifier({
+                  AccountId: contractIdentifier.accountId,
+              })
+            : new GlobalContractIdentifier({
+                  CodeHash:
+                      typeof contractIdentifier.codeHash === 'string'
+                          ? new Uint8Array(
+                                contractIdentifier.codeHash.match(/.{1,2}/g)!.map((byte) => parseInt(byte, 16))
+                            )
+                          : contractIdentifier.codeHash,
+              });
+    return new Action({ useGlobalContract: new UseGlobalContract({ contractIdentifier: identifier }) });
 }
 
 /**

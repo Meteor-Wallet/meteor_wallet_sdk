@@ -4,7 +4,6 @@ import { KeyStore } from "@near-js/keystores";
 import { JsonRpcProvider } from "@near-js/providers";
 // import { KeyPairSigner } from "@near-js/signers";
 import {
-  buildDelegateAction,
   createTransaction,
   SCHEMA,
 } from "@near-js/transactions";
@@ -65,7 +64,7 @@ import { resolveWalletUrl } from "./utils/MeteorSdkUtils";
 import { SignedDelegate } from "./near_utils/actionCreator/actions";
 import { KeyType } from "./near_utils/actionCreator/constants";
 import { Signature } from "./near_utils/actionCreator/signature";
-import { DelegateAction } from "./near_utils/actionCreator/delegate";
+import { buildDelegateAction, DelegateAction } from "./near_utils/actionCreator/delegate";
 
 const MULTISIG_HAS_METHOD = "add_request_and_confirm";
 
@@ -633,7 +632,6 @@ export class MeteorWallet {
 
     const block = await this._provider.viewBlock({ finality: "optimistic" });
 
-    // @ts-expect-error added more actions
     return delegateActions.map((delegateAction, idx) => {
       return buildDelegateAction({
         actions: delegateAction.actions,

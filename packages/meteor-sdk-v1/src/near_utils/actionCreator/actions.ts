@@ -138,12 +138,11 @@ export class DeleteAccount {
 }
 
 export class GlobalContractDeployMode extends Enum {
-    // @ts-ignore
-    enum: string;
-    CodeHash?: Record<string, never>;
-    AccountId?: Record<string, never>;
+    enum!: string;
+    CodeHash?: null;
+    AccountId?: null;
 
-    constructor(props: { CodeHash?: Record<string, never>, AccountId?: Record<string, never> }) {
+    constructor(props: { CodeHash?: null; AccountId?: null }) {
         super(props);
         for (const [k, v] of Object.entries(props || {})) {
             this[k] = v;

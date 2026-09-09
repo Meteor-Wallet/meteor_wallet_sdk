@@ -100,11 +100,6 @@ export function buildDelegateAction({
                     // @ts-expect-error type workaround
                     return deployContract(a.params.code);
                 }
-                case 'DeployGlobalContract': {
-                    // @ts-expect-error type workaround
-                    const { code, deployMode } = a.params;
-                    return deployGlobalContract(code, deployMode);
-                }
                 case 'DeterministicStateInit': {
                     // @ts-expect-error type workaround
                     const { deposit, stateInit } = a.params;
@@ -129,9 +124,23 @@ export function buildDelegateAction({
                     const { publicKey, deposit } = a.params;
                     return transferToGasKey(publicKey, deposit);
                 }
+                case 'DeployGlobalContract': {
+                    // @ts-expect-error type workaround
+                    const { code, deployMode } = a.params;
+                    // Ensure deployMode is an instance if passed as a plain object
+                    const modeInstance = deployMode === 'CodeHash' ? 'codeHash' : 'accountId';
+
+                    return deployGlobalContract(Uint8Array.from(Object.entries(code).map(([_, val]) => val)), modeInstance);
+                }
                 case 'UseGlobalContract': {
                     // @ts-expect-error type workaround
-                    return useGlobalContract(a.params.contractIdentifier);
+                    const { contractIdentifier } = a.params;
+                    // Ensure identifier is an instance if passed as a plain object
+                    const idInstance =
+                        'codeHash' in contractIdentifier
+                            ? { codeHash: typeof contractIdentifier.codeHash === 'string' ? contractIdentifier.codeHash : Uint8Array.from(Object.entries(contractIdentifier.codeHash).map(([_, val]) => val))}
+                            : { accountId: contractIdentifier.accountId };
+                    return useGlobalContract(idInstance);
                 }
                 case 'WithdrawFromGasKey': {
                     // @ts-expect-error type workaround
