@@ -13,15 +13,21 @@ export const isExtensionNewKeyTransferAvailable = (): boolean =>
   typeof injected()?.directAction === "function" &&
   injected()?.features?.includes(EMeteorInjectedFeature.new_key_transfer) === true;
 
-export async function openExtensionNewKeyTransfer(link: string): Promise<void> {
+export async function openExtensionNewKeyTransfer(link: string, backendUrl: string): Promise<void> {
   if (!isExtensionNewKeyTransferAvailable()) throw new Error("extension_update_required");
+  // Extension URLs have no backend hostname. Carry the session's backend in the
+  // fragment alongside the existing claim secret; the wallet resolves it against its allowlist.
+  const walletLink = new URL(link);
+  const fragment = new URLSearchParams(walletLink.hash.slice(1));
+  fragment.set("backendUrl", backendUrl);
+  walletLink.hash = fragment.toString();
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     const response = await Promise.race([
       injected()!.directAction<
         TMeteorExtensionDirectAction_OpenMeteorConnect_Input,
         IMeteorExtensionDirectAction_OpenPage_Output
-      >({ actionType: EMeteorExtensionDirectActionType.open_meteor_connect, inputs: { link } }),
+      >({ actionType: EMeteorExtensionDirectActionType.open_meteor_connect, inputs: { link: walletLink.href } }),
       new Promise<never>((_, reject) => {
         timer = setTimeout(() => reject(new Error("extension_popup_timeout")), 10_000);
       }),

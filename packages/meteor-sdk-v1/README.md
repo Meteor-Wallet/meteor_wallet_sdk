@@ -24,7 +24,8 @@ For new-key transfers, the popup offers **Meteor Extension** when the installed 
 advertises `new_key_transfer` support. Partners may also select `targetPlatform: "extension"`
 in `newKeyTransfer.start(...)`; the saved destination is reused for verification and recovery.
 The extension opens its own popup through the injected transport and uses the V1 wallet's
-production web identity and bridge backend. Use the production bridge for this destination.
+production web identity. The session's backend travels in the link fragment, and the extension
+accepts only its configured production or development bridge backend.
 Older extensions need an update before they can receive new-key transfers. Legacy NEAR actions
 continue through the existing extension transport; secret-key `transfer_accounts` destinations
 remain web and mobile.

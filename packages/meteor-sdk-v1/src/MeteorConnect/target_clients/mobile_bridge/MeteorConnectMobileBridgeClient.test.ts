@@ -37,6 +37,7 @@ describe("MeteorConnectMobileBridgeClient open-in-app allowlist", () => {
     selectedLink: { linkString: string; linkType: EBridgeLinkType };
     presentedLink: string;
     extension?: boolean;
+    backendUrl?: string;
     meteorAppId?: EMeteorAppId.meteor_wallet_mobile | EMeteorAppId.meteor_wallet_mobile_dev;
   }) => {
     const client = new MeteorConnectMobileBridgeClient({} as unknown as MeteorConnect);
@@ -48,6 +49,7 @@ describe("MeteorConnectMobileBridgeClient open-in-app allowlist", () => {
     const windowFeatures: Array<string | undefined> = [];
     (client as unknown as { config?: unknown }).config = {
       enabled: true,
+      backendUrl: input.backendUrl ?? "https://mc.meteorwallet.app",
       meteorAppId: input.meteorAppId ?? EMeteorAppId.meteor_wallet_mobile,
       nativeAppOpener: { open: (link: string) => opened.push(link) },
     };
@@ -82,6 +84,7 @@ describe("MeteorConnectMobileBridgeClient open-in-app allowlist", () => {
       selectedLink: { linkString: WEB_LINK, linkType: EBridgeLinkType.web_app_url },
       presentedLink: `${WEB_LINK}#partnerSecret=abc`,
       extension: true,
+      backendUrl: "https://meteor-connect-backend-development.meteorwallet.workers.dev",
     });
     const requests: any[] = [];
     try {
@@ -94,7 +97,7 @@ describe("MeteorConnectMobileBridgeClient open-in-app allowlist", () => {
       };
       await harness.client.openCurrentSessionInApp();
       expect(requests).toEqual([
-        { actionType: "open_meteor_connect", inputs: { link: `${WEB_LINK}#partnerSecret=abc` } },
+        { actionType: "open_meteor_connect", inputs: { link: `${WEB_LINK}#partnerSecret=abc&backendUrl=https%3A%2F%2Fmeteor-connect-backend-development.meteorwallet.workers.dev` } },
       ]);
       expect(harness.windowOpened).toEqual([]);
       expect(harness.opened).toEqual([]);
@@ -193,7 +196,7 @@ describe("extension new-key transfer handoff", () => {
         meteorCom: { directAction: async () => ({ opened: true }), features: ["open_page"] },
       };
       expect(isExtensionNewKeyTransferAvailable()).toBe(false);
-      await expect(openExtensionNewKeyTransfer("unused")).rejects.toThrow(
+      await expect(openExtensionNewKeyTransfer("unused", "https://mc.meteorwallet.app")).rejects.toThrow(
         "extension_update_required",
       );
       const calls: unknown[] = [];
@@ -206,8 +209,8 @@ describe("extension new-key transfer handoff", () => {
       };
       expect(isExtensionNewKeyTransferAvailable()).toBe(true);
       const link = "https://wallet.meteorwallet.app/b?f=s2&l=lease#s=secret";
-      await expect(openExtensionNewKeyTransfer(link)).rejects.toThrow("extension_popup_failed");
-      expect(calls).toEqual([{ actionType: "open_meteor_connect", inputs: { link } }]);
+      await expect(openExtensionNewKeyTransfer(link, "https://mc.meteorwallet.app")).rejects.toThrow("extension_popup_failed");
+      expect(calls).toEqual([{ actionType: "open_meteor_connect", inputs: { link: `${link}&backendUrl=https%3A%2F%2Fmc.meteorwallet.app` } }]);
     } finally {
       if (previous == null) delete (globalThis as any).window;
       else (globalThis as any).window = previous;

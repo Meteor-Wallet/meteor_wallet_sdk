@@ -653,7 +653,7 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
         }
         if (this.currentTransferTargetPlatform === "extension") {
           pendingWindow?.close();
-          extensionOpen = openExtensionNewKeyTransfer(link);
+          extensionOpen = openExtensionNewKeyTransfer(link, this.config!.backendUrl);
           return;
         }
         if (pendingWindow != null) {
