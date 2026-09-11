@@ -183,9 +183,10 @@ export class MeteorActionUiContainer extends LitElement {
             <div class="options" aria-label="Platform choices">
               <span class="section-action-title">Choose how you’d like to connect</span>
               <div class="option-buttons-row">
-                ${mobileDevice && mobileWalletAvailable ? html`<button class="platform-button primary" ?disabled=${this.mobilePreparing} aria-busy=${this.mobilePreparing ? "true" : "false"} @click=${() => void this.selectMobile()}>
-                  ${this.mobilePreparing ? html`<span class="mobile-request-spinner" role="status" aria-label="Creating mobile request"></span>` : html`<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 2h10a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1Zm5 16a1 1 0 1 0 0 2 1 1 0 0 0 0-2Z"/></svg>`}
-                  <span>${this.mobilePreparing ? "Preparing connection" : "Meteor Mobile"}</span>
+                ${mobileDevice && mobileWalletAvailable ? html`<button class="platform-button primary mobile-option-button" ?disabled=${this.mobilePreparing} aria-busy=${this.mobilePreparing ? "true" : "false"} aria-label=${this.mobilePreparing ? "Meteor Mobile — preparing connection" : "Meteor Mobile"} @click=${() => void this.selectMobile()}>
+                  <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 2h10a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1Zm5 16a1 1 0 1 0 0 2 1 1 0 0 0 0-2Z"/></svg>
+                  <span>Meteor Mobile</span>
+            ${this.mobilePreparing ? html`<span class="mobile-request-spinner button-spinner" aria-hidden="true"></span>` : ""}
                 </button>` : ""}
                   ${webWalletAvailable ? html`<button class=${`platform-button${mobileDevice ? "" : " primary"}`} @click=${() => this.actionController.executeAction("v1_web")}>
                     ${unsafeSVG(svg_icons_text.icon_web_globe)}<span>Meteor Web</span>

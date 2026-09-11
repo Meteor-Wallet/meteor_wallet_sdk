@@ -51,7 +51,7 @@ The user reduced all sizes by a total of 4px. The shared bridge panel receives `
 
 - Desktop: platform buttons side by side; conditional Dev Web (Localhost) on a full-width second row. Mobile QR/loading card below, no Open Meteor Mobile button on desktop.
 - Mobile: stacked Meteor Mobile primary and Meteor Web secondary buttons; no extension or QR/toggle. Preserve the existing dev-option visibility rule.
-- Create the mobile request eagerly. Until its link is ready, show a spinner and “Preparing connection” in a disabled mobile button.
+- Create the mobile request eagerly. Until its link is ready, keep the mobile icon and “Meteor Mobile” visible in the disabled button; show a small spinner inside the button at its trailing edge with an accessible preparing-connection label. Do not add a loading row above the button or replace its label.
 - Clicking Meteor Mobile directly calls the same `openCurrentSessionInApp` path as Open Meteor Mobile; do not toggle the QR/connection panel on click. Session advancement can reveal required pairing/approval states.
 - Get Meteor Wallet keeps internal installation navigation despite the arrow decoration.
 - No cancel-request or refresh-code button on these redesigned pages. Retain header close behavior and existing protocol lifecycle/recovery behavior.

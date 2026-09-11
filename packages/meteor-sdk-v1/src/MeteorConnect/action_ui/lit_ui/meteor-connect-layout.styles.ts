@@ -406,7 +406,10 @@ export const meteorConnectLayoutStyles = [
       .section-action-title { text-transform: none; color: #999; text-align: left; filter: none; }
       .option-buttons-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .5rem; align-items: stretch; }
       .platform-button { display: flex; align-items: center; justify-content: center; gap: .5rem; width: 100%; min-height: 3rem; padding: .65rem .8rem; background: #21213f; color: #fff; border: 0; border-radius: .4rem; font-family: 'Gilroy', sans-serif; font-weight: 600; font-style: normal; font-size: 16px; line-height: normal; letter-spacing: 0; text-align: center; cursor: pointer; }
+      .mobile-option-button { position: relative; padding-inline: 2.5rem; }
+      .button-spinner { position: absolute; right: .8rem; width: 1rem; height: 1rem; }
       .mobile-request-spinner { width: 1.3rem; height: 1.3rem; flex-shrink: 0; border: 2px solid rgba(255,255,255,.35); border-top-color: white; border-radius: 50%; animation: mobile-request-spin .8s linear infinite; }
+      .mobile-option-button .button-spinner { width: 1rem; height: 1rem; }
       @keyframes mobile-request-spin { to { transform: rotate(360deg); } }
       .platform-button:disabled { cursor: not-allowed; background: #29263f; color: #aaa6bf; filter: none; }
       .platform-button:disabled[aria-busy="true"] { cursor: wait; }
