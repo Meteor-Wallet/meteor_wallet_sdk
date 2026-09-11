@@ -124,11 +124,9 @@ export class MeteorActionUiOverlay extends LitElement {
 
       :host([connect-design]) .modal-container {
         box-sizing: border-box;
-        width: auto;
         height: auto;
-        min-width: min(480px, calc(var(--meteor-viewport-width, 100vw) - 1rem));
+        width: min(480px, calc(var(--meteor-viewport-width, 100vw) - 1rem));
         min-height: min(670px, calc(var(--meteor-viewport-height, 100dvh) - 1rem));
-        max-width: calc(var(--meteor-viewport-width, 100vw) - 1rem);
         max-height: calc(var(--meteor-viewport-height, 100dvh) - 1rem);
       }
 

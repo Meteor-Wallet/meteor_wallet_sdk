@@ -8,6 +8,7 @@ import { css, html, LitElement } from "lit";
 import { property, query, state } from "lit/decorators.js";
 import { keyed } from "lit/directives/keyed.js";
 import "./meteor-wallet-continuation";
+import { meteorWarning } from "./graphical/meteor-warning";
 import { METEOR_QR_SIZE, METEOR_QR_COMPACT_SIZE, METEOR_QR_FRAME_PADDING } from "./meteor-qr-layout";
 import QRCodeStyling from "qr-code-styling";
 import type {
@@ -221,6 +222,15 @@ export class MeteorMobileBridgePanel extends LitElement {
 
     .continuation-qr { --qr-size: ${METEOR_QR_SIZE}px; }
     @media (max-height: 760px) { .continuation-qr { --qr-size: ${METEOR_QR_COMPACT_SIZE}px; } }
+    :host section.panel.error-panel { padding: 0; background: #12121D; border: 0; border-radius: .4rem; box-shadow: none; }
+    .error-panel::before, .error-panel::after { display: none; }
+    .error-card { width: 100%; box-sizing: border-box; padding: 1.5rem; text-align: left; color: #fff; }
+    .warning-asset { display: block; width: 96px; height: auto; margin: .5rem auto 1.5rem; }
+    .error-card h2 { margin: 0 0 .4rem; font-size: 18px; font-weight: 600; line-height: normal; }
+    .error-description { margin: 0; color: #999; font-size: 14px; font-weight: 400; line-height: normal; overflow-wrap: anywhere; }
+    .error-message { margin-top: 1.25rem; }
+    .error-message > span { color: #999; font-size: 12px; font-weight: 400; }
+    .error-message p { margin: .4rem 0 0; padding: .85rem 1rem; border-radius: .25rem; background: #181823; color: #fff; font-size: 14px; font-weight: 400; line-height: normal; white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
     /* ---------- Stage cards (push / review / pin / status) ---------- */
     .stage-panel { height: 292px; justify-content: center; }
     .stage-panel.auto { height: auto; min-height: 292px; padding: 1rem .9rem; }
@@ -953,6 +963,16 @@ export class MeteorMobileBridgePanel extends LitElement {
     /** The untouched original error message — searchable fine print, never the headline. */
     fineprint?: string,
   ) {
+    if (tone === "bad") {
+      const heading = title === "Something failed in the session flow" || title === "The request could not be completed."
+        ? "Something Went Wrong" : title;
+      return keyed(key, html`<div class="error-card" role="alert" aria-label="${this.walletLabel} request status">
+        <img class="warning-asset" src=${meteorWarning} alt="" />
+        <h2>${heading}</h2>
+        ${subtitle ? html`<p class="error-description">${subtitle}</p>` : ""}
+        ${fineprint ? html`<div class="error-message"><span>Error Message</span><p>${fineprint}</p></div>` : ""}
+      </div>`);
+    }
     return keyed(
       key,
       html`<div class="stage compact">
@@ -1121,7 +1141,7 @@ export class MeteorMobileBridgePanel extends LitElement {
       // one typed id with a remedy of its own, and it is matched by ID, never by message.
       const walletUpdateRequired =
         snapshot.errorIds?.includes(EErr_Bridge_Session.wallet_update_required) === true;
-      return html`<section class="panel stage-panel slim" aria-live="polite" aria-label="${this.walletLabel}">
+      return html`<section class="panel stage-panel slim error-panel" aria-label="${this.walletLabel}">
         ${this.renderStatusStage(
           `mobile-${snapshot.phase}`,
           "cross",
