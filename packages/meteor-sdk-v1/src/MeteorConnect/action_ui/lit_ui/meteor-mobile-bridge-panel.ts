@@ -619,6 +619,8 @@ export class MeteorMobileBridgePanel extends LitElement {
         return this.walletPlatform === "mobile"
           ? `Scan or open ${this.walletLabel} to continue.`
           : `Open ${this.walletLabel} to continue.`;
+      case "wallet_confirmation":
+        return `Review the partner details and confirm the link in ${this.walletLabel}.`;
       case "wallet_verification":
         return `Enter the 4-digit PIN shown on ${this.walletLabel}.`;
       case "wallet_action":
@@ -1022,6 +1024,7 @@ export class MeteorMobileBridgePanel extends LitElement {
     return html`<meteor-wallet-continuation
       .walletLabel=${this.walletLabel} .walletPlatform=${this.walletPlatform}
       .preparing=${preparing} .scanMobile=${scanMobile}
+      .instruction=${snapshot?.phase === "wallet_confirmation" ? this.statusText(snapshot) : undefined}
       .onOpen=${scanMobile ? undefined : () => this.openMobileApp()}>
       ${scanMobile && !preparing ? html`<div slot="visual" class="qr-frame continuation-qr"><div id="mobile-bridge-qr" class="qr" role="img" aria-label="Scan with ${this.walletLabel}"></div></div>` : ""}
       <span slot="countdown">${this.renderCountdown(secondsLeft, "Session expires in")}</span>
@@ -1090,7 +1093,7 @@ export class MeteorMobileBridgePanel extends LitElement {
       </section>`;
     }
 
-    if (this.continuation && ["initializing", "creating_bridge", "busy_other_tab", "waiting_for_wallet", "wallet_action"].includes(snapshot.phase)) {
+    if (this.continuation && ["initializing", "creating_bridge", "busy_other_tab", "waiting_for_wallet", "wallet_confirmation", "wallet_action"].includes(snapshot.phase)) {
       return this.renderContinuation(snapshot, secondsLeft);
     }
 
@@ -1101,6 +1104,15 @@ export class MeteorMobileBridgePanel extends LitElement {
           this.presentedPushStage === "sending" ? "sending" : "sent",
           secondsLeft,
         )}
+        ${liveFooter}
+      </section>`;
+    }
+
+    if (snapshot.phase === "wallet_confirmation") {
+      return html`<section class=${stagePanelClass} aria-live="polite" aria-label="${this.walletLabel}">
+        ${this.renderStatusStage("partner-confirmation", "spinner", "neutral", `Confirm link in ${this.walletLabel}`, this.statusText(snapshot))}
+        ${this.renderCountdown(secondsLeft, "Session expires in")}
+        ${this.renderLinkStatus(snapshot)}
         ${liveFooter}
       </section>`;
     }

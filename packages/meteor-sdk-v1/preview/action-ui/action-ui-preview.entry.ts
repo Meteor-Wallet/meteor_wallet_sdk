@@ -59,6 +59,7 @@ document.head.appendChild(style);
 const PREVIEW_SESSION_PHASE: Partial<Record<IMobileBridgeSnapshot["phase"], ESessionPhase>> = {
   creating_bridge: ESessionPhase.initializing,
   waiting_for_wallet: ESessionPhase.waiting_for_wallet,
+  wallet_confirmation: ESessionPhase.wallet_confirmation,
   wallet_verification: ESessionPhase.wallet_verification,
   wallet_action: ESessionPhase.wallet_action,
   result_ready: ESessionPhase.result_ready,

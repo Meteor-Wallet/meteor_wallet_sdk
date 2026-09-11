@@ -248,6 +248,7 @@ describe("MobileBridgeSession session-facts projection", () => {
     // `wallet_verification` is owned by the first-pairing lease and is asserted separately.
     const projected: Array<[ESessionPhase, TMobileBridgePhase]> = [
       [ESessionPhase.waiting_for_wallet, "waiting_for_wallet"],
+      [ESessionPhase.wallet_confirmation, "wallet_confirmation"],
       [ESessionPhase.wallet_action, "wallet_action"],
       [ESessionPhase.result_ready, "result_ready"],
       [ESessionPhase.external_work, "external_work"],
@@ -256,6 +257,37 @@ describe("MobileBridgeSession session-facts projection", () => {
       double.emit("factsChanged", { facts: sessionFactsFor(sessionPhase), source: "realm" });
       expect(session.getSnapshot().phase).toBe(flowPhase);
     }
+  });
+
+  it("waits for explicit wallet consent without requesting a PIN lease", async () => {
+    const double = createClientDouble();
+    let leases = 0;
+    const session = new MobileBridgeSession({
+      ...sessionInputFor(double.client),
+      acquireFirstPairingLease: async () => { leases += 1; throw new Error("PIN lease unexpected"); },
+    });
+    double.emit("factsChanged", { facts: sessionFactsFor(ESessionPhase.wallet_confirmation), source: "realm" });
+    await Promise.resolve();
+    expect(session.getSnapshot().phase).toBe("wallet_confirmation");
+    expect(leases).toBe(0);
+    double.emit("factsChanged", { facts: sessionFactsFor(ESessionPhase.wallet_action), source: "realm" });
+    expect(session.getSnapshot().phase).toBe("wallet_action");
+    await session.dispose();
+  });
+
+  it("still acquires the PIN lease when the authenticated request requires it", async () => {
+    const double = createClientDouble();
+    let leases = 0;
+    const input = sessionInputFor(double.client);
+    const session = new MobileBridgeSession({
+      ...input,
+      acquireFirstPairingLease: async () => { leases += 1; return input.acquireFirstPairingLease(); },
+    });
+    double.emit("factsChanged", { facts: sessionFactsFor(ESessionPhase.wallet_verification), source: "realm" });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(leases).toBe(1);
+    expect(session.getSnapshot().phase).toBe("wallet_verification");
+    await session.dispose();
   });
 
   it("treats result_ready and external_work as committed — a refresh may not discard them", () => {

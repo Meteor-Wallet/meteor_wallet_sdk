@@ -16,6 +16,7 @@ export function continuationPlatform(target: TMeteorConnectionExecutionTarget | 
 export class MeteorWalletContinuation extends LitElement {
   @property() walletLabel = "Meteor Wallet";
   @property() walletPlatform = "web";
+  @property() instruction?: string;
   @property({ type: Boolean }) preparing = false;
   @property({ type: Boolean }) scanMobile = false;
   @property({ attribute: false }) onOpen?: () => void | Promise<void>;
@@ -40,7 +41,7 @@ export class MeteorWalletContinuation extends LitElement {
       <slot name="visual"><img src=${meteorConnectLogo} alt="" /></slot>
       <div class="copy" aria-live="polite">
         <h2>${this.preparing ? "Creating secure request" : `Continue in ${this.walletLabel}`}</h2>
-        <p>${this.preparing ? `Preparing your connection to ${this.walletLabel}…` : this.scanMobile ? `Scan with ${this.walletLabel} to continue` : `Complete the action in the ${location}`}</p>
+        <p>${this.preparing ? `Preparing your connection to ${this.walletLabel}…` : this.instruction ?? (this.scanMobile ? `Scan with ${this.walletLabel} to continue` : `Complete the action in the ${location}`)}</p>
       </div>
       <slot name="countdown"></slot>
       ${this.preparing ? html`<span class="spinner" role="status" aria-label="Creating secure request"></span>` : this.onOpen ? html`<button @click=${() => this.onOpen?.()}>Open ${this.walletLabel}</button>` : ""}

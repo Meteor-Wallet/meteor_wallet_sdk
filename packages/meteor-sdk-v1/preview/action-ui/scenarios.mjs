@@ -162,6 +162,17 @@ export const SCENARIOS = [
       linkRedialAttempt: 0,
     },
   },
+  ...[false, true].map((mobileUa) => ({
+    name: mobileUa ? "mobile-confirmation" : "confirmation",
+    description: "Explicit partner-link confirmation in the wallet (no PIN)",
+    targets: ALL_TARGETS,
+    mobileUa,
+    snapshot: {
+      phase: "wallet_confirmation", push: "delivered", deepLink: DEEP_LINK,
+      idleExpiresAt: EXPIRES_SOON(), absoluteExpiresAt: HARD_STOP(),
+      pinAttemptsUsed: 0, linkPhase: "live", linkRedialAttempt: 0,
+    },
+  })),
   {
     name: "pin",
     description: "First-pairing PIN entry stage",

@@ -84,6 +84,7 @@ export type TMobileBridgePhase =
   | "busy_other_tab"
   | "creating_bridge"
   | "waiting_for_wallet"
+  | "wallet_confirmation"
   | "wallet_verification"
   | "wallet_action"
   /** The wallet's signed result is staged on the bridge and has not been acknowledged yet. */
@@ -205,6 +206,8 @@ function flowPhaseForSessionPhase(phase: ESessionPhase): TMobileBridgePhase | un
       return "creating_bridge";
     case ESessionPhase.waiting_for_wallet:
       return "waiting_for_wallet";
+    case ESessionPhase.wallet_confirmation:
+      return "wallet_confirmation";
     case ESessionPhase.wallet_verification:
       return "wallet_verification";
     case ESessionPhase.wallet_action:
