@@ -26,6 +26,7 @@ export class MeteorActionUiOverlay extends LitElement {
 
   @property({ type: Boolean }) private closing: boolean = false;
   @property({ attribute: false }) canClose?: () => boolean;
+  @property({ attribute: false }) canCloseOnBackdrop?: () => boolean;
 
   @provide({ context: overlayCloseTriggerContext })
   @property({ attribute: false })
@@ -134,6 +135,7 @@ export class MeteorActionUiOverlay extends LitElement {
 
   private _handleOverlayClick() {
     if (this.closing) return; // Prevent multiple close triggers
+    if (this.canCloseOnBackdrop?.() === false) return;
     this.logger.log("Overlay backdrop clicked, closing with animation");
     this._animateClose();
   }

@@ -243,6 +243,9 @@ export class ActionUi {
     const popupOverlay = new MeteorActionUiOverlay();
     this.logger.log("Created popup overlay for action UI", popupOverlay);
     popupOverlay.canClose = () => this.confirmCommittedMobileClose(action);
+    // Returning from the wallet popup can land a click on the backdrop during PIN entry.
+    popupOverlay.canCloseOnBackdrop = () =>
+      action.getPreparedMobileSession()?.getSnapshot().phase !== "wallet_verification";
     popupOverlay.closeAction = () => {
       void action.cancelAction().catch((error) => {
         this.logger.err("Failed to clean up cancelled Meteor Connect action", error);
