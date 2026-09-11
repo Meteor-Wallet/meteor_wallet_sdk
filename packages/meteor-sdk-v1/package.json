@@ -52,7 +52,7 @@
     "@noble/curves": "2.0.1",
     "@meteorwallet/connect": "0.22.0",
     "@meteorwallet/connect-shared": "0.22.0",
-    "@nice-code/util": "0.89.0",
+    "@nice-code/util": "0.95.0",
     "@near-js/accounts": "2.2.5",
     "@near-js/crypto": "2.2.5",
     "@near-js/transactions": "2.2.5",
