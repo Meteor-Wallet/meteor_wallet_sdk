@@ -440,12 +440,14 @@ export class MeteorTransferAccountsContainer extends LitElement {
 
   private renderChoosePlatform() {
     const mobile = isMobile();
+    const sessionFailed = ["failed", "cancelled"].includes(this.snapshot?.phase ?? "");
+    const showSessionIssue = sessionFailed || this.snapshot?.identityResetRequired === true;
     const preparing = this.snapshot?.deepLink == null && this.startError == null && !["failed", "cancelled", "completed"].includes(this.snapshot?.phase ?? "");
     return html`
       <div class="options" aria-label="Wallet platform choices">
         <span class="section-action-title">Choose how you’d like to connect</span>
         <div class="option-buttons-row">
-          ${mobile ? html`<button class="platform-button primary" ?disabled=${preparing || this.snapshot?.deepLink == null} aria-busy=${preparing ? "true" : "false"} @click=${() => void this.selectPreparedMobile()}>
+          ${mobile ? html`<button class="platform-button primary" ?disabled=${preparing || sessionFailed || this.snapshot?.deepLink == null} aria-busy=${preparing ? "true" : "false"} @click=${() => void this.selectPreparedMobile()}>
             ${preparing ? html`<span class="mobile-request-spinner" role="status" aria-label="Creating mobile request"></span>` : html`<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 2h10a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1Zm5 16a1 1 0 1 0 0 2 1 1 0 0 0 0-2Z"/></svg>`}
             <span>${preparing ? "Preparing connection" : "Meteor Mobile"}</span>
           </button>` : nothing}
@@ -463,8 +465,8 @@ export class MeteorTransferAccountsContainer extends LitElement {
         </div>
       </div>
       ${this.startError ? html`<p class="start-error" role="alert">${this.startError}</p>` : nothing}
-      ${!mobile ? html`
-        <div class="mobile-divider"><span></span><div>or connect with <strong>mobile</strong></div><span></span></div>
+      ${!mobile || showSessionIssue ? html`
+        ${!mobile ? html`<div class="mobile-divider"><span></span><div>or connect with <strong>mobile</strong></div><span></span></div>` : nothing}
         <meteor-mobile-bridge-panel connectDesign
           .session=${this.mobileSession} walletLabel="Meteor Mobile" walletPlatform="mobile" .contextual=${false}
           .openInApp=${() => this.action.meteorConnect.mobileBridgeClient.openCurrentSessionInApp()}

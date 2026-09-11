@@ -405,6 +405,7 @@ function makeTransferScenarios() {
         screen: "choose",
       },
     ),
+    base("transfer-error-phone", "Transfer: failed eager request on mobile chooser", "failed", { screen: "choose" }, { mobileUa: true, snapshot: { phase: "failed", push: "not_attempted", pinAttemptsUsed: 0, linkPhase: "offline", linkRedialAttempt: 0, errorHeadline: "Something failed in the session flow", errorDetail: "The connection expired. Close this window and start a new request.", error: "mobile_bridge_expired" } }),
     base("transfer-choose-phone", "Transfer: mobile chooser", "waiting_for_wallet", { screen: "choose" }, { mobileUa: true }),
     base("transfer-loading-phone", "Transfer: preparing mobile connection", "creating_bridge", { screen: "choose" }, { mobileUa: true, snapshot: { phase: "creating_bridge", push: "not_attempted", pinAttemptsUsed: 0, linkPhase: "joining", linkRedialAttempt: 0 } }),
     base(
