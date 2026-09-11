@@ -36,9 +36,13 @@ describe("MeteorConnectMobileBridgeClient open-in-app allowlist", () => {
   const prepare = (input: {
     selectedLink: { linkString: string; linkType: EBridgeLinkType };
     presentedLink: string;
+    extension?: boolean;
     meteorAppId?: EMeteorAppId.meteor_wallet_mobile | EMeteorAppId.meteor_wallet_mobile_dev;
   }) => {
     const client = new MeteorConnectMobileBridgeClient({} as unknown as MeteorConnect);
+    if (input.extension) {
+      (client as any).currentTransferTargetPlatform = "extension";
+    }
     const opened: string[] = [];
     const windowOpened: string[] = [];
     const windowFeatures: Array<string | undefined> = [];
@@ -72,6 +76,33 @@ describe("MeteorConnectMobileBridgeClient open-in-app allowlist", () => {
     };
     return { client, opened, windowOpened, windowFeatures, restore };
   };
+
+  it("opens extension transfers through the injected transport, never a browser popup", async () => {
+    const harness = prepare({
+      selectedLink: { linkString: WEB_LINK, linkType: EBridgeLinkType.web_app_url },
+      presentedLink: `${WEB_LINK}#partnerSecret=abc`,
+      extension: true,
+    });
+    const requests: any[] = [];
+    try {
+      (window as any).meteorCom = {
+        features: ["new_key_transfer"],
+        directAction: async (data: unknown) => {
+          requests.push(data);
+          return { opened: true };
+        },
+      };
+      await harness.client.openCurrentSessionInApp();
+      expect(requests).toEqual([
+        { actionType: "open_meteor_connect", inputs: { link: `${WEB_LINK}#partnerSecret=abc` } },
+      ]);
+      expect(harness.windowOpened).toEqual([]);
+      expect(harness.opened).toEqual([]);
+    } finally {
+      delete (window as any).meteorCom;
+      harness.restore();
+    }
+  });
 
   it("opens a deep link whose scheme comes from the selected link, not the configured app id", () => {
     // The configured app id is the PROD mobile wallet, while this session targets the dev wallet.
@@ -147,6 +178,89 @@ describe("MeteorConnectMobileBridgeClient open-in-app allowlist", () => {
       expect(hostile.windowOpened).toEqual([]);
     } finally {
       hostile.restore();
+    }
+  });
+});
+
+describe("extension new-key transfer handoff", () => {
+  it("detects capability support and fails closed on old extensions or refused popups", async () => {
+    const { isExtensionNewKeyTransferAvailable, openExtensionNewKeyTransfer } = await import(
+      "../../utils/extensionNewKeyTransfer"
+    );
+    const previous = globalThis.window;
+    try {
+      (globalThis as any).window = {
+        meteorCom: { directAction: async () => ({ opened: true }), features: ["open_page"] },
+      };
+      expect(isExtensionNewKeyTransferAvailable()).toBe(false);
+      await expect(openExtensionNewKeyTransfer("unused")).rejects.toThrow(
+        "extension_update_required",
+      );
+      const calls: unknown[] = [];
+      (window as any).meteorCom = {
+        features: ["new_key_transfer"],
+        directAction: async (data: unknown) => {
+          calls.push(data);
+          return { opened: false };
+        },
+      };
+      expect(isExtensionNewKeyTransferAvailable()).toBe(true);
+      const link = "https://wallet.meteorwallet.app/b?f=s2&l=lease#s=secret";
+      await expect(openExtensionNewKeyTransfer(link)).rejects.toThrow("extension_popup_failed");
+      expect(calls).toEqual([{ actionType: "open_meteor_connect", inputs: { link } }]);
+    } finally {
+      if (previous == null) delete (globalThis as any).window;
+      else (globalThis as any).window = previous;
+    }
+  });
+});
+
+describe("extension legacy NEAR compatibility", () => {
+  it("keeps legacy NEAR targets available without requiring the new transfer capability", async () => {
+    const { MeteorConnectV1Client } = await import("../v1_client/MeteorConnectV1Client");
+    const previous = globalThis.window;
+    try {
+      (globalThis as any).window = {
+        meteorComV2: { featureFlags: ["near::sign_in_and_sign_message"] },
+      };
+      const client = new MeteorConnectV1Client({
+        storage: { getJsonOrDef: async (_key: string, fallback: unknown) => fallback },
+      } as unknown as MeteorConnect);
+      for (const id of [
+        "near::sign_in",
+        "near::sign_in_and_sign_message",
+        "near::sign_message",
+        "near::sign_transactions",
+        "near::sign_delegate_actions",
+        "near::verify_owner",
+        "near::sign_out",
+      ]) {
+        const targets = await client.getExecutionTargetConfigs({ id } as any);
+        expect(targets.map((target) => target.executionTarget)).toContain("v1_ext");
+      }
+      expect(
+        await client.getExecutionTargetConfigs({
+          id: "meteor_wallet_core::new_key_account_transfer_start",
+        } as any),
+      ).toEqual([]);
+    } finally {
+      if (previous == null) delete (globalThis as any).window;
+      else (globalThis as any).window = previous;
+    }
+  });
+
+  it("refuses NEAR and secret-key transfers through the extension bridge destination", async () => {
+    const client = new MeteorConnectMobileBridgeClient({} as unknown as MeteorConnect);
+    for (const id of [
+      "near::sign_in",
+      "near::sign_transactions",
+      "meteor_wallet_core::transfer_accounts",
+    ]) {
+      await expect(
+        client.prepareRequest({ id } as any, undefined, {
+          transferTargetPlatform: "extension",
+        }),
+      ).rejects.toThrow("extension_transfer_action_unsupported");
     }
   });
 });

@@ -44,6 +44,11 @@ import {
   sdkActionToMobileBridge,
 } from "./sdkActionToMobileBridge";
 
+import {
+  isExtensionNewKeyTransferAvailable,
+  openExtensionNewKeyTransfer,
+} from "../../utils/extensionNewKeyTransfer";
+
 const activeClientsByStorage = new WeakMap<object, Map<string, MeteorConnectMobileBridgeClient>>();
 
 /** Wall-clock deadline for each HTTP carrier request — a hung fetch must never park a prompt. */
@@ -102,6 +107,7 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
   private initializePromise?: Promise<void>;
   private currentSession?: MobileBridgeSession;
   private currentToken?: string;
+  private currentTransferTargetPlatform?: TTransferTargetPlatform;
   private sessionDisposalPromise?: Promise<void>;
   private coordinatorKey?: string;
   private leaseProvider?: IMeteorConnectBridgeLeaseProvider;
@@ -310,6 +316,8 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
   ): EMeteorAppId[] {
     if (prepared.kind.domain !== "meteor_wallet_core") return [this.config!.meteorAppId];
     if (targetWalletConnection != null) return [targetWalletConnection.meteorAppId];
+    // The installed V1 extension uses the production web wallet identity.
+    if (transferTargetPlatform === "extension") return [EMeteorAppId.meteor_wallet_web];
     if (transferTargetPlatform === "mobile") return [this.config!.meteorAppId];
     if (transferTargetPlatform === "web_local_dev") {
       // A locally served meteor-frontend always identifies as the dev web identity.
@@ -384,6 +392,15 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
     target: IMobileBridgeRequestTarget = {},
   ): Promise<MobileBridgeSession> {
     const { transferTargetPlatform, walletConnection: targetWalletConnection } = target;
+    if (transferTargetPlatform === "extension") {
+      if (
+        request.id !== "meteor_wallet_core::new_key_account_transfer_start" &&
+        request.id !== "meteor_wallet_core::new_key_account_transfer_verify_active"
+      ) {
+        throw new Error("extension_transfer_action_unsupported");
+      }
+      if (!isExtensionNewKeyTransferAvailable()) throw new Error("extension_update_required");
+    }
     await this.initializeBridgeClient();
     await this.sessionDisposalPromise?.catch((error) => {
       this.logger.err("Previous mobile bridge session disposal failed", error);
@@ -462,6 +479,7 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
     // observe it — a key generated for one bridge can never meet another bridge's wallet_action.
     sensitiveTransferSource?.bindPendingHandleToSession(session);
     this.currentSession = session;
+    this.currentTransferTargetPlatform = transferTargetPlatform;
     void session.startPreparation().catch(() => {});
     return session;
   }
@@ -611,13 +629,14 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
    * a fresh popup; a placeholder the user already closed is respected as a decline. Native deep
    * links never navigate it — it is closed rather than stranded.
    */
-  openCurrentSessionInApp(pendingWindow?: Window): void {
+  openCurrentSessionInApp(pendingWindow?: Window): void | Promise<void> {
     const opener = this.config?.nativeAppOpener ?? directBrowserNativeAppOpener;
     const session = this.currentSession;
     if (session == null) {
       pendingWindow?.close();
       return;
     }
+    let extensionOpen: Promise<void> | undefined;
     session.openInApp((link) => {
       // Both branches allow exactly the backend-issued wallet URL, extended only by the SDK's own
       // `#partnerSecret` fragment. The allowlist derives from the SELECTED walletLink — never
@@ -632,6 +651,11 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
         if (protocol !== "https:" && protocol !== "http:") {
           throw new Error("mobile_bridge_native_scheme_not_allowed");
         }
+        if (this.currentTransferTargetPlatform === "extension") {
+          pendingWindow?.close();
+          extensionOpen = openExtensionNewKeyTransfer(link);
+          return;
+        }
         if (pendingWindow != null) {
           if (!pendingWindow.closed) pendingWindow.location.href = link;
           return;
@@ -645,6 +669,7 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
       pendingWindow?.close();
       opener.open(link);
     });
+    return extensionOpen;
   }
 
   async resetPartnerIdentity(): Promise<void> {

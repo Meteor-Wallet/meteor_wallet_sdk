@@ -667,6 +667,20 @@ async function strandWithOrphanedSignedAddKey(
 }
 
 describe("MeteorConnectNewKeyTransfer journal", () => {
+  it("persists the extension destination for recovery and verification", async () => {
+    const harness = createHarness();
+    await harness.api.start({
+      clientTransferId: CLIENT_ID,
+      targetPlatform: "extension",
+      accounts: START_INPUT.accounts,
+    });
+    expect((await harness.api.getSessions())[0]?.targetPlatform).toBe("extension");
+    const { chain } = createChainDouble();
+    const addKeys = await harness.api.runAddKeys({ transferSessionId: SESSION_ID, chain });
+    await harness.api.verifyActive(addKeys.verifyInput!);
+    expect(harness.targeted.map((target) => target.platform)).toEqual(["extension", "extension"]);
+  });
+
   it("commits before prompting, replays once, and rejects changed input under the same id", async () => {
     const harness = createHarness({ outputs: [START_OUTPUT] });
     const options = {

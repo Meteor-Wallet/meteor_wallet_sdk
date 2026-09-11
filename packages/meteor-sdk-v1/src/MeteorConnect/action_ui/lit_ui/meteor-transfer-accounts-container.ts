@@ -22,7 +22,9 @@ import type { ITransferKeyRevealSource } from "./meteor-transfer-key-card";
 import "./meteor-transfer-key-card";
 import { overlayCloseTriggerContext } from "./meteor-action-ui-context";
 
-/** Transfer supports web + mobile wallets only — the extension is deliberately excluded. */
+import { isExtensionNewKeyTransferAvailable } from "../../utils/extensionNewKeyTransfer";
+
+/** Secret-key transfers retain their existing web and mobile destinations. */
 const TRANSFER_SUPPORTED_PLATFORMS: TMeteorConnectionExecutionTarget[] = [
   "v1_web",
   "v2_bridge_mobile",
@@ -93,7 +95,7 @@ export class MeteorTransferAccountsContainer extends LitElement {
   @property({ attribute: false }) previewRevealSource?: ITransferKeyRevealSource;
   /** Preview-harness override to inspect terminal screens directly. */
   @property({ attribute: false }) previewTerminalState?: TTransferTerminalState;
-  /** "Get Meteor Wallet" sub-page (same as the NEAR popup), minus the extension wallet. */
+  /** "Get Meteor Wallet" sub-page (same as the NEAR popup). */
   @property({ type: Boolean }) showGetMeteor = false;
 
   @consume({ context: overlayCloseTriggerContext })
@@ -161,8 +163,8 @@ export class MeteorTransferAccountsContainer extends LitElement {
     .close-circle:hover { background: rgba(255,255,255,.07); }
     .close-circle:focus-visible { outline: 2px solid rgba(155,140,255,.9); outline-offset: 1px; }
     .close-circle svg { width: 34%; height: 34%; color: rgba(var(--meteor-text-on-dark-light), 1); }
-    .content { position: relative; padding: .6rem .9rem .75rem; display: flex; flex-direction: column; justify-content: flex-start; flex-grow: 1; gap: .6rem; overflow-y: auto; min-height: 0; }
-    .content.contextual { justify-content: center; }
+    .content { position: relative; padding: .5rem .9rem; display: flex; flex-direction: column; justify-content: flex-start; flex-grow: 1; gap: .4rem; overflow-y: auto; min-height: 0; }
+    .content.contextual { justify-content: safe center; }
     .content::-webkit-scrollbar { width: .35rem; }
     .content::-webkit-scrollbar-thumb { border-radius: 999px; background: rgba(255,255,255,.14); }
     .background-graphics-box { position: absolute; top: 5%; left: 10%; right: 10%; bottom: 25%; z-index: -1; background: radial-gradient(rgba(0, 0, 0, 0.3), rgba(0, 0, 0, 0) 70%); }
@@ -277,6 +279,10 @@ export class MeteorTransferAccountsContainer extends LitElement {
     });
   }
 
+  private get isNewKeyTransfer(): boolean {
+    return this.action.id.startsWith("meteor_wallet_core::new_key_account_transfer_");
+  }
+
   private async startTransfer(
     platform: TTransferTargetPlatform,
     options?: { openWebWindow?: boolean },
@@ -313,7 +319,7 @@ export class MeteorTransferAccountsContainer extends LitElement {
               transferTargetPlatform: platform,
             });
       this.bindSession(session);
-      if (wantsWebWindow && session != null) {
+      if ((wantsWebWindow || platform === "extension") && session != null) {
         void this.openWebWalletWhenReady(session, pendingWebWindow);
       } else {
         pendingWebWindow?.close();
@@ -363,16 +369,21 @@ export class MeteorTransferAccountsContainer extends LitElement {
       return;
     }
     try {
-      this.action.meteorConnect.mobileBridgeClient.openCurrentSessionInApp(
+      await this.action.meteorConnect.mobileBridgeClient.openCurrentSessionInApp(
         pendingWebWindow ?? undefined,
       );
     } catch (error) {
       pendingWebWindow?.close();
-      this.logger.log("Could not auto-open the web wallet window", error);
+      this.logger.log("Could not auto-open the wallet window", error);
+      if (this.targetPlatform === "extension") {
+        this.startError =
+          "Could not open Meteor Extension. Check that the extension is enabled and up to date, then try again.";
+      }
     }
   }
 
   private get walletLabel(): string {
+    if (this.targetPlatform === "extension") return "Meteor Extension";
     if (this.targetPlatform === "mobile") return "Meteor Mobile";
     if (this.targetPlatform === "web_local_dev") return "Meteor Web (Local Dev)";
     return "Meteor Web";
@@ -419,6 +430,17 @@ export class MeteorTransferAccountsContainer extends LitElement {
       <div class="options" aria-label="Wallet platform choices">
         <span class="section-kicker">Choose your platform</span>
         <div class="option-buttons-row">
+          ${
+            this.isNewKeyTransfer && isExtensionNewKeyTransferAvailable()
+              ? html`
+          <meteor-action-button
+            variant="option"
+            label="Meteor Extension"
+            .icon=${svg_icons_text.icon_extension_puzzle}
+            @meteor-button-click=${() => this.startTransfer("extension")}
+          ></meteor-action-button>`
+              : nothing
+          }
           <meteor-action-button
             variant="option"
             label="Meteor Web"
@@ -509,7 +531,7 @@ export class MeteorTransferAccountsContainer extends LitElement {
       <meteor-mobile-bridge-panel
         .session=${this.mobileSession}
         .walletLabel=${this.walletLabel}
-        .walletPlatform=${this.targetPlatform === "mobile" ? "mobile" : "web"}
+        .walletPlatform=${this.targetPlatform === "extension" ? "extension" : this.targetPlatform === "mobile" ? "mobile" : "web"}
         .contextual=${true}
         .openInApp=${() => this.action.meteorConnect.mobileBridgeClient.openCurrentSessionInApp()}
         .refreshCode=${async () => {
@@ -573,7 +595,7 @@ export class MeteorTransferAccountsContainer extends LitElement {
         </div>
         ${
           showingGetMeteor
-            ? html`<get-meteor-screen .supportedPlatforms=${TRANSFER_SUPPORTED_PLATFORMS}></get-meteor-screen>`
+            ? html`<get-meteor-screen .supportedPlatforms=${this.isNewKeyTransfer ? [...TRANSFER_SUPPORTED_PLATFORMS, "v1_ext"] : TRANSFER_SUPPORTED_PLATFORMS}></get-meteor-screen>`
             : html`<div class=${`content${terminal != null || this.screen === "connect" ? " contextual" : ""}`}>
           ${
             terminal != null

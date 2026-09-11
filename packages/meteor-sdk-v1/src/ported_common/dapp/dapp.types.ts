@@ -251,6 +251,7 @@ export interface IDappAction_Logout_Data {
 export type TMeteorComListener<D> = (data?: D) => void;
 
 export enum EMeteorExtensionDirectActionType {
+  open_meteor_connect = "open_meteor_connect",
   check_sync_status = "check_sync_status",
   sync_accounts = "sync_accounts",
   open_page = "open_page",
@@ -269,6 +270,12 @@ export type TMeteorExtensionDirectAction_OpenPage_Input = IMeteorExtensionDirect
     hash: string;
   }
 >;
+
+export type TMeteorExtensionDirectAction_OpenMeteorConnect_Input =
+  IMeteorExtensionDirectAction_Input<
+    EMeteorExtensionDirectActionType.open_meteor_connect,
+    { link: string }
+  >;
 
 export interface IMeteorExtensionDirectAction_OpenPage_Output {
   opened: boolean;

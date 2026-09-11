@@ -363,6 +363,35 @@ function makeTransferScenarios() {
   });
   return [
     base(
+      "new-key-extension-choose",
+      "New-key transfer: extension, web and mobile choices",
+      "waiting_for_wallet",
+      {
+        screen: "choose",
+        newKey: true,
+      },
+    ),
+    base(
+      "new-key-extension-connect",
+      "New-key transfer: extension open button without web QR",
+      "waiting_for_wallet",
+      {
+        screen: "connect",
+        platform: "extension",
+        newKey: true,
+      },
+    ),
+    base(
+      "new-key-extension-pin",
+      "New-key transfer: extension PIN and reopen",
+      "wallet_verification",
+      {
+        screen: "connect",
+        platform: "extension",
+        newKey: true,
+      },
+    ),
+    base(
       "transfer-choose",
       "Transfer: wallet chooser with the inline Meteor Mobile QR panel",
       "waiting_for_wallet",

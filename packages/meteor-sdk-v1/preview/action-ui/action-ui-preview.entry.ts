@@ -24,7 +24,8 @@ import { SCENARIOS } from "./scenarios.mjs";
 interface ScenarioTransferConfig {
   accounts: Array<{ accountId: string; networkId: string }>;
   screen: "choose" | "connect";
-  platform?: "web" | "mobile";
+  platform?: "web" | "mobile" | "extension";
+  newKey?: boolean;
   revealShown?: boolean;
   terminal?: "imported" | "declined" | "expired";
 }
@@ -97,7 +98,11 @@ function makeMockAction(scenario: ScenarioConfig): ExecutableAction<any> {
   const session = makeMockSession(scenario.snapshot);
   const targets = scenario.targets ?? ["v1_web", "v2_bridge_mobile"];
   return {
-    id: scenario.transfer != null ? "meteor_wallet_core::transfer_accounts" : "near::sign_in",
+    id: scenario.transfer?.newKey
+      ? "meteor_wallet_core::new_key_account_transfer_start"
+      : scenario.transfer != null
+        ? "meteor_wallet_core::transfer_accounts"
+        : "near::sign_in",
     expandedInput:
       scenario.transfer != null
         ? {
@@ -151,6 +156,13 @@ const PREVIEW_REVEAL_SOURCE = {
 const params = new URLSearchParams(location.search);
 const scenarioName = params.get("scenario") ?? "main";
 const scenario = scenarios.find((s) => s.name === scenarioName) ?? scenarios[0];
+
+if (scenario.transfer?.newKey) {
+  (window as any).meteorCom = {
+    features: ["new_key_transfer"],
+    directAction: async () => ({ opened: true }),
+  };
+}
 
 const overlay = document.createElement("meteor-action-ui-overlay") as any;
 overlay.closeAction = () => {};

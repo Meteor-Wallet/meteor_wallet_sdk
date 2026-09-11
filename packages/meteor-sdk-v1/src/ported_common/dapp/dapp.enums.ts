@@ -22,6 +22,7 @@ export enum EWalletExternalActionStatus {
 }
 
 export enum EMeteorInjectedFeature {
+  new_key_transfer = "new_key_transfer",
   open_page = "open_page",
   batch_import = "batch_import",
   sync_check = "sync_check",

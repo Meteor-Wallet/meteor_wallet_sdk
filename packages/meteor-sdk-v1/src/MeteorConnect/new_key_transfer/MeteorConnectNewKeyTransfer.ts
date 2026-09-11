@@ -54,7 +54,7 @@ type TVerifyRequest = Extract<
   { id: "meteor_wallet_core::new_key_account_transfer_verify_active" }
 >;
 
-const vTargetPlatform = v.picklist(["web", "mobile", "web_local_dev"]);
+const vTargetPlatform = v.picklist(["web", "mobile", "web_local_dev", "extension"]);
 const vCanonicalInputHash = v.pipe(v.string(), v.length(44), v.regex(/^[A-Za-z0-9+/]{43}=$/u));
 const vAccountIdentityKeys = v.pipe(
   v.array(

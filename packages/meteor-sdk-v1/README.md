@@ -8,7 +8,8 @@ import) that handles the entire wallet interaction for you:
 - **Regular wallet actions** — sign-in, message signing, transactions, meta-transactions — executed
   through the user's choice of **Meteor Web** or the **Meteor browser extension**.
 - **Account transfer** — a dedicated secure flow for **partner wallets** that lets users migrate
-  their accounts *into* Meteor Wallet — web or **Meteor Mobile**, paired over an end-to-end
+  their accounts *into* Meteor Wallet — web, **Meteor Mobile**, or the **Meteor browser extension**
+  (new-key transfers), paired over an end-to-end
   encrypted bridge with QR / deep-link + push notifications — without secrets ever touching a
   server in plaintext.
 
@@ -18,6 +19,15 @@ import) that handles the entire wallet interaction for you:
 > `new_key_account_transfer_*` steps. NEAR actions also keep running over Meteor Web and the
 > extension exactly as before; Meteor Mobile is offered alongside them whenever the bridge is
 > enabled.
+
+For new-key transfers, the popup offers **Meteor Extension** when the installed extension
+advertises `new_key_transfer` support. Partners may also select `targetPlatform: "extension"`
+in `newKeyTransfer.start(...)`; the saved destination is reused for verification and recovery.
+The extension opens its own popup through the injected transport and uses the V1 wallet's
+production web identity and bridge backend. Use the production bridge for this destination.
+Older extensions need an update before they can receive new-key transfers. Legacy NEAR actions
+continue through the existing extension transport; secret-key `transfer_accounts` destinations
+remain web and mobile.
 
 Every action is a simple promise: `createAction(...)` → `promptForExecution()` → typed result.
 

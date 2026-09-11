@@ -59,7 +59,7 @@ const QR_MIN_BOX_PX = 132;
 export class MeteorMobileBridgePanel extends LitElement {
   @property({ attribute: false }) session?: MobileBridgeSession;
   @property({ type: Boolean, reflect: true }) contextual = false;
-  @property({ attribute: false }) openInApp?: () => void;
+  @property({ attribute: false }) openInApp?: () => void | Promise<void>;
   @property({ attribute: false }) refreshCode?: () => Promise<void>;
   @property({ attribute: false }) resetIdentity?: () => Promise<void>;
   /** Wallet name shown in all copy — "Meteor Mobile" by default; transfer-to-web passes "Meteor Web". */
@@ -68,7 +68,7 @@ export class MeteorMobileBridgePanel extends LitElement {
    * Which kind of device the targeted wallet runs on — steers copy like "Scan or open …" (a
    * phone can scan the QR; a web wallet opens in a browser window instead).
    */
-  @property() walletPlatform: "mobile" | "web" = "mobile";
+  @property() walletPlatform: "mobile" | "web" | "extension" = "mobile";
   @state() private snapshot?: IMobileBridgeSnapshot;
   @state() private showQr = !isMobile();
   /**
@@ -396,7 +396,8 @@ export class MeteorMobileBridgePanel extends LitElement {
     const size = this.qrTarget.clientWidth > 0 ? this.qrTarget.clientWidth : QR_MIN_BOX_PX;
     // `updated()` fires on every tick of the 1s clock; only redraw when the link or the box
     // actually changed, or the host element is a fresh one (a stage swap hands us an empty div).
-    if (this.qrValue === link && this.qrSize === size && this.qrTarget.childElementCount > 0) return;
+    if (this.qrValue === link && this.qrSize === size && this.qrTarget.childElementCount > 0)
+      return;
     const options = {
       width: size,
       height: size,
@@ -463,12 +464,15 @@ export class MeteorMobileBridgePanel extends LitElement {
     this.requestPinSubmission();
   }
 
-  private openMobileApp(): void {
+  private async openMobileApp(): Promise<void> {
     try {
-      this.openInApp?.();
+      await this.openInApp?.();
       this.interactionError = undefined;
     } catch {
-      this.interactionError = `${this.walletLabel} could not be opened automatically. Scan the QR code instead.`;
+      this.interactionError =
+        this.walletPlatform === "extension"
+          ? "Could not open Meteor Extension. Check that it is enabled and up to date, then try again."
+          : `${this.walletLabel} could not be opened automatically. Scan the QR code instead.`;
       this.showQr = true;
     }
   }
@@ -671,6 +675,12 @@ export class MeteorMobileBridgePanel extends LitElement {
    * `wallet_action` with nothing on screen — so no stage may present waiting as the only option.
    */
   private renderFallbackSlot(snapshot: IMobileBridgeSnapshot | undefined, secondsLeft?: number) {
+    if (this.walletPlatform === "extension") {
+      return html`<div class="stage-fallback">
+        <button class="ghost" ?disabled=${snapshot?.deepLink == null} @click=${() => this.openMobileApp()}>Open ${this.walletLabel}</button>
+        ${this.interactionError ? html`<span class="error">${this.interactionError}</span>` : ""}
+      </div>`;
+    }
     const deepLink = snapshot?.deepLink;
     const ready = deepLink != null;
     return html`<div class="fallback-slot">
@@ -711,7 +721,9 @@ export class MeteorMobileBridgePanel extends LitElement {
         ? `Securely contacting your paired ${this.walletLabel} wallet.`
         : stage === "sent"
           ? `Waiting for ${this.walletLabel} to receive the request.`
-          : `Use the secure QR code to continue in ${this.walletLabel}.`;
+          : this.walletPlatform === "extension"
+            ? "Open Meteor Extension to continue."
+            : `Use the secure QR code to continue in ${this.walletLabel}.`;
 
     return keyed(
       `push-${stage}`,
@@ -735,7 +747,9 @@ export class MeteorMobileBridgePanel extends LitElement {
                   ? "Contacting paired device"
                   : stage === "sent"
                     ? "Waiting for wallet"
-                    : "QR fallback ready"
+                    : this.walletPlatform === "extension"
+                      ? "Open wallet to continue"
+                      : "QR fallback ready"
               }</span>
             </div>
           </div>
@@ -758,10 +772,10 @@ export class MeteorMobileBridgePanel extends LitElement {
           <div class="stage-primary">
             <span class="stage-kicker">Request received</span>
             <div class="review-visual compact" aria-hidden="true">
-              <div class=${`review-phone compact${this.walletPlatform === "web" ? " web" : ""}`}><span class="review-check"></span></div>
+              <div class=${`review-phone compact${this.walletPlatform !== "mobile" ? " web" : ""}`}><span class="review-check"></span></div>
             </div>
             <h2 class="stage-title">Review and approve this request in ${this.walletLabel}</h2>
-            <p class="stage-subtitle">Nothing showing up? Open ${this.walletLabel} again or scan the code.</p>
+            <p class="stage-subtitle">Nothing showing up? Open ${this.walletLabel} again${this.walletPlatform === "extension" ? "." : " or scan the code."}</p>
             <div class="pill good" role="status">
               <span class="pill-dot"></span>
               <span>Waiting for your approval</span>
@@ -799,7 +813,7 @@ export class MeteorMobileBridgePanel extends LitElement {
       html`<div class="stage review-stage pin-stage">
         <span class="stage-kicker">Secure pairing</span>
         <div class="review-visual violet" aria-hidden="true">
-          <div class=${`review-phone${this.walletPlatform === "web" ? " web" : ""}`}>
+          <div class=${`review-phone${this.walletPlatform !== "mobile" ? " web" : ""}`}>
             <div class="phone-pin-dots"><span></span><span></span><span></span><span></span></div>
           </div>
         </div>
@@ -858,6 +872,7 @@ export class MeteorMobileBridgePanel extends LitElement {
    */
   private renderPinFallback(snapshot: IMobileBridgeSnapshot) {
     if (snapshot.deepLink == null) return "";
+    if (this.walletPlatform === "extension") return this.renderFallbackSlot(snapshot);
     return html`<div class="stage-fallback">
       <div class="stage-fallback-row">
         <button type="button" class="ghost" @click=${() => this.openMobileApp()}>
@@ -922,7 +937,7 @@ export class MeteorMobileBridgePanel extends LitElement {
         <span class="error">This dApp's saved ${this.walletLabel} pairing no longer matches the server.</span>
         ${
           this.resetConfirmation
-            ? html`<span class="muted">Resetting removes this dApp's saved wallet pairings for this environment. Your NEAR accounts remain listed and will pair again by QR.</span>`
+            ? html`<span class="muted">Resetting removes this dApp's saved wallet pairings for this environment. Your NEAR accounts remain listed and will pair again ${this.walletPlatform === "extension" ? "when you open the extension" : "by QR"}.</span>`
             : ""
         }
         <button ?disabled=${this.resetPending} @click=${() => void this.confirmIdentityReset()}>
@@ -967,7 +982,7 @@ export class MeteorMobileBridgePanel extends LitElement {
     const liveFooter = this.renderLiveFooter(snapshot);
     const stagePanelClass = `panel stage-panel${liveFooter === "" && this.interactionError == null ? "" : " auto"}`;
     const showRequestAccess = snapshot.deepLink != null && snapshot.phase === "waiting_for_wallet";
-    const showRequestQr = showRequestAccess && this.showQr;
+    const showRequestQr = showRequestAccess && this.showQr && this.walletPlatform !== "extension";
     const inPushPresentation =
       this.contextual &&
       snapshot.push !== "not_attempted" &&
@@ -1059,8 +1074,8 @@ export class MeteorMobileBridgePanel extends LitElement {
           <p class="status">${this.statusText(snapshot)}</p>
         </div>
         ${this.renderLinkStatus(snapshot)}
-        ${showRequestAccess && snapshot.push === "delivered" ? html`<span class="pill good"><span class="pill-dot"></span><span>Notification sent — QR remains available</span></span>` : ""}
-        ${showRequestAccess && snapshot.push === "not_delivered" ? html`<span class="pill warn"><span class="pill-dot"></span><span>Notification unavailable — use the code below</span></span>` : ""}
+        ${showRequestAccess && snapshot.push === "delivered" ? html`<span class="pill good"><span class="pill-dot"></span><span>${this.walletPlatform === "extension" ? "Notification sent — open the extension to continue" : "Notification sent — QR remains available"}</span></span>` : ""}
+        ${showRequestAccess && snapshot.push === "not_delivered" ? html`<span class="pill warn"><span class="pill-dot"></span><span>${this.walletPlatform === "extension" ? "Notification unavailable — open the extension to continue" : "Notification unavailable — use the code below"}</span></span>` : ""}
         ${
           showRequestAccess
             ? html`
@@ -1070,7 +1085,7 @@ export class MeteorMobileBridgePanel extends LitElement {
               <div class="actions">
                 <button @click=${() => this.openMobileApp()}>Open ${this.walletLabel}</button>
                 ${
-                  mobile
+                  mobile && this.walletPlatform !== "extension"
                     ? html`<button class="secondary icon-toggle" aria-label=${this.showQr ? "Hide QR code" : "Show QR code"}
                         aria-pressed=${this.showQr ? "true" : "false"}
                         @click=${() => (this.showQr = !this.showQr)}>${svg_qr_glyph}</button>`

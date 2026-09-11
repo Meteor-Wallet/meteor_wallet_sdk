@@ -29,7 +29,8 @@ export type TMobileNearActionId =
  * `webDevLocalhostBaseUrl` origin (default https://localhost:3001) so QR/open-link land on a
  * locally running meteor-frontend.
  */
-export type TTransferTargetPlatform = "web" | "mobile" | "web_local_dev";
+/** "extension" opens the V1 extension popup and is supported only for new-key transfers. */
+export type TTransferTargetPlatform = "web" | "mobile" | "web_local_dev" | "extension";
 
 export type TMobileBridgePreparedActionKind =
   | {
