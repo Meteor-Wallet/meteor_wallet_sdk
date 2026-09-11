@@ -9,6 +9,12 @@ import { gzipSync } from "node:zlib";
  *
  * Raising a budget is a deliberate act: change the number here, in the same commit as the change
  * that needs it, and say why in the commit message. Do not raise it to make a red build green.
+ *
+ * The approved Connect/Transfer redesign added an embedded continuation GIF, header SVG, and
+ * warning SVG (79a9bf8, 89e627e), keeping the UI independent of an asset host. Together they add
+ * 76,017 raw bytes and about 51,532 gzip bytes to each JS entry. Allow 80,000 raw / 55,000 gzip
+ * bytes above the original JS budgets for that artwork. The remaining code still fits the
+ * original limits; the declaration budget is unchanged.
  */
 const BUDGETS: ReadonlyArray<{
   file: string;
@@ -20,14 +26,14 @@ const BUDGETS: ReadonlyArray<{
 }> = [
   {
     file: "dist/index.js",
-    maxBytes: 520_000,
-    maxGzipBytes: 170_000,
+    maxBytes: 600_000,
+    maxGzipBytes: 225_000,
     why: "the ESM entry every bundler consumes",
   },
   {
     file: "dist/index.cjs",
-    maxBytes: 530_000,
-    maxGzipBytes: 175_000,
+    maxBytes: 610_000,
+    maxGzipBytes: 230_000,
     why: "the CommonJS entry, same code through a different emit",
   },
   {
