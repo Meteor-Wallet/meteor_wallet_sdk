@@ -75,10 +75,10 @@ export class MeteorActionUiOverlay extends LitElement {
       }
 
       :host {
-        top: 0;
-        left: 0;
-        width: 100vw;
-        height: 100vh;
+        top: var(--meteor-viewport-top, 0px);
+        left: var(--meteor-viewport-left, 0px);
+        width: var(--meteor-viewport-width, 100vw);
+        height: var(--meteor-viewport-height, 100dvh);
         display: flex;
         align-items: center;
         justify-content: center;
@@ -98,11 +98,8 @@ export class MeteorActionUiOverlay extends LitElement {
       }
 
       .modal-backdrop {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100vw;
-        height: 100vh;
+        position: absolute;
+        inset: 0;
         background-color: rgba(0, 0, 0, 0.4);
         backdrop-filter: blur(20px);
       }
@@ -117,8 +114,8 @@ export class MeteorActionUiOverlay extends LitElement {
 
       .modal-container {
         z-index: 2;
-        height: min(556px, calc(100dvh - 2rem));
-        width: min(415px, calc(100vw - 2rem));
+        height: min(556px, calc(var(--meteor-viewport-height, 100dvh) - 2rem));
+        width: min(415px, calc(var(--meteor-viewport-width, 100vw) - 2rem));
         border-radius: 1.2em;
         border: 1px solid #2b2d38;
         overflow: hidden;
@@ -129,15 +126,15 @@ export class MeteorActionUiOverlay extends LitElement {
         box-sizing: border-box;
         width: auto;
         height: auto;
-        min-width: min(480px, calc(100vw - 1rem));
-        min-height: min(670px, calc(100dvh - 1rem));
-        max-width: calc(100vw - 1rem);
-        max-height: calc(100dvh - 1rem);
+        min-width: min(480px, calc(var(--meteor-viewport-width, 100vw) - 1rem));
+        min-height: min(670px, calc(var(--meteor-viewport-height, 100dvh) - 1rem));
+        max-width: calc(var(--meteor-viewport-width, 100vw) - 1rem);
+        max-height: calc(var(--meteor-viewport-height, 100dvh) - 1rem);
       }
 
       :host([connect-design][mobile-device]) .modal-container {
-        min-width: min(500px, calc(100vw - 1rem));
-        min-height: min(380px, calc(100dvh - 1rem));
+        min-width: min(500px, calc(var(--meteor-viewport-width, 100vw) - 1rem));
+        min-height: min(380px, calc(var(--meteor-viewport-height, 100dvh) - 1rem));
       }
 
       :host(:not([closing])) .modal-container {
@@ -177,8 +174,22 @@ export class MeteorActionUiOverlay extends LitElement {
     }, 250); // Match the fadeOut animation duration
   }
 
+  private observedViewport?: VisualViewport;
+  private syncViewport = () => {
+    const viewport = window.visualViewport;
+    this.style.setProperty("--meteor-viewport-width", `${viewport?.width ?? window.innerWidth}px`);
+    this.style.setProperty("--meteor-viewport-height", `${viewport?.height ?? window.innerHeight}px`);
+    this.style.setProperty("--meteor-viewport-top", `${viewport?.offsetTop ?? 0}px`);
+    this.style.setProperty("--meteor-viewport-left", `${viewport?.offsetLeft ?? 0}px`);
+  };
+
   connectedCallback() {
     super.connectedCallback();
+    this.syncViewport();
+    this.observedViewport = window.visualViewport ?? undefined;
+    this.observedViewport?.addEventListener("resize", this.syncViewport);
+    this.observedViewport?.addEventListener("scroll", this.syncViewport);
+    window.addEventListener("resize", this.syncViewport);
     // Ensure cleanup recognizes this as the popup overlay container
     this.id = METEOR_ACTION_UI_POPUP_PARENT_ID;
     // Register click on the host so backdrop clicks are captured
@@ -186,6 +197,10 @@ export class MeteorActionUiOverlay extends LitElement {
   }
 
   disconnectedCallback(): void {
+    this.observedViewport?.removeEventListener("resize", this.syncViewport);
+    this.observedViewport?.removeEventListener("scroll", this.syncViewport);
+    window.removeEventListener("resize", this.syncViewport);
+    this.observedViewport = undefined;
     // Clean up the listener to avoid leaks
     this.removeEventListener("click", this._handleOverlayClick);
     super.disconnectedCallback();

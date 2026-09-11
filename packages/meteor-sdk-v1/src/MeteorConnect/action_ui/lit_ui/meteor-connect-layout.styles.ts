@@ -25,13 +25,13 @@ export const meteorConnectLayoutStyles = [
 
       :host-context(meteor-action-ui-overlay) .modal {
         height: auto;
-        min-height: min(668px, calc(100dvh - 1rem - 2px));
-        max-height: calc(100dvh - 1rem - 2px);
+        min-height: min(668px, calc(var(--meteor-viewport-height, 100dvh) - 1rem - 2px));
+        max-height: calc(var(--meteor-viewport-height, 100dvh) - 1rem - 2px);
       }
 
       :host([mobile-device]) .option-buttons-row { grid-template-columns: minmax(0, 1fr); }
       :host([mobile-device]) .platform-button.dev { grid-row: auto; }
-      :host([mobile-device]) .modal { min-height: min(378px, calc(100dvh - 1rem - 2px)); }
+      :host([mobile-device]) .modal { min-height: min(378px, calc(var(--meteor-viewport-height, 100dvh) - 1rem - 2px)); }
       /* Add your styles here */
       .modal {
         font-family: 'Gilroy', Inter, sans-serif;
