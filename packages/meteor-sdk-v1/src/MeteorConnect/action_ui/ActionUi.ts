@@ -26,7 +26,9 @@ const isTransferActionId = (id: string): boolean =>
 // This is mostly for Safari on iOS which requires user interaction to open new tabs/windows,
 // but we can use it as a general flag for whether we should attempt to open windows immediately or
 // show a prompt for the user to click before opening windows, since many browsers are moving towards stricter popup blocking.
-function usingBrowserThatRequiresUserAction() {
+export function usingBrowserThatRequiresUserAction() {
+  // A live tap/click can open the known wallet without an extra confirmation screen.
+  if (navigator.userActivation?.isActive === true) return false;
   // Check for mobile browsers
   const userAgent = navigator.userAgent.toLowerCase();
 
@@ -78,9 +80,7 @@ export class ActionUi {
       // Store the original known target before we potentially override it
       this.knownExecutionTargetBeforeUiCheck = knownExecutionTarget;
 
-      // it is better we just force user to click again
-      // most browser nowadays block any non-user interaction initiated window/tab opening
-      // so if the dapp request multiple action in a row, it is better to just ask user to click again instead of trying to open multiple window/tab and get blocked by browser
+      // Mobile/Safari need another tap only when the current request has no live user gesture.
 
       if (usingBrowserThatRequiresUserAction()) {
         knownExecutionTarget = undefined;

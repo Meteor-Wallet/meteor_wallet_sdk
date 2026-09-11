@@ -42,7 +42,7 @@ const browser = await chromium.launch({ executablePath });
 try {
   for (const scenario of scenarios) {
     const page = await browser.newPage({
-      viewport: { width: 800, height: 700 },
+      viewport: scenario.mobileUa ? { width: 390, height: 844 } : { width: 800, height: 700 },
       deviceScaleFactor: 2,
       ...(scenario.mobileUa ? { userAgent: MOBILE_USER_AGENT, isMobile: true } : {}),
     });

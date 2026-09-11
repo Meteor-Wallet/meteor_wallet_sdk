@@ -7,6 +7,7 @@ import { EErr_Bridge_Session } from "@meteorwallet/connect-shared";
 import { css, html, LitElement } from "lit";
 import { property, query, state } from "lit/decorators.js";
 import { keyed } from "lit/directives/keyed.js";
+import "./meteor-wallet-continuation";
 import QRCodeStyling from "qr-code-styling";
 import type {
   IMobileBridgeSnapshot,
@@ -59,6 +60,8 @@ const QR_MIN_BOX_PX = 132;
 export class MeteorMobileBridgePanel extends LitElement {
   @property({ attribute: false }) session?: MobileBridgeSession;
   @property({ type: Boolean, reflect: true }) contextual = false;
+  @property({ type: Boolean, reflect: true }) connectDesign = false;
+  @property({ type: Boolean, reflect: true }) continuation = false;
   @property({ attribute: false }) openInApp?: () => void | Promise<void>;
   @property({ attribute: false }) refreshCode?: () => Promise<void>;
   @property({ attribute: false }) resetIdentity?: () => Promise<void>;
@@ -131,19 +134,19 @@ export class MeteorMobileBridgePanel extends LitElement {
     .panel::after { content: ""; position: absolute; width: 200px; height: 200px; right: -90px; bottom: -120px; z-index: -1; border-radius: 50%; background: radial-gradient(circle, rgba(69,193,255,.07), transparent 70%); pointer-events: none; }
     :host([contextual]) .panel { padding: .9rem; }
     .heading { display: flex; flex-direction: column; gap: .26rem; align-items: center; }
-    .title { font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08rem; color: var(--mc-kicker); }
-    .status { margin: 0; font-size: .82rem; line-height: 1.15rem; color: var(--mc-body); }
-    .muted { color: var(--mc-muted); font-size: .73rem; line-height: .95rem; }
-    .error { color: rgb(var(--mc-red)); font-size: .76rem; line-height: 1rem; }
-    .fineprint { margin: 0; color: var(--mc-muted); font-size: .66rem; line-height: .9rem; word-break: break-word; opacity: .85; }
+    .title { font-size: calc(.72rem - var(--mc-font-size-reduction, 0px)); font-weight: 700; text-transform: uppercase; letter-spacing: .08rem; color: var(--mc-kicker); }
+    .status { margin: 0; font-size: calc(.82rem - var(--mc-font-size-reduction, 0px)); line-height: var(--mc-line-height, 1.15rem); color: var(--mc-body); }
+    .muted { color: var(--mc-muted); font-size: calc(.73rem - var(--mc-font-size-reduction, 0px)); line-height: var(--mc-line-height, .95rem); }
+    .error { color: rgb(var(--mc-red)); font-size: calc(.76rem - var(--mc-font-size-reduction, 0px)); line-height: var(--mc-line-height, 1rem); }
+    .fineprint { margin: 0; color: var(--mc-muted); font-size: calc(.66rem - var(--mc-font-size-reduction, 0px)); line-height: var(--mc-line-height, .9rem); word-break: break-word; opacity: .85; }
 
     /* ---------- Buttons (mirrors meteor-action-button) ---------- */
-    button { display: inline-flex; align-items: center; justify-content: center; gap: .4rem; min-height: 2.55rem; border: 0; border-radius: .65rem; padding: .68rem .95rem; box-sizing: border-box; font-family: inherit; font-size: .84rem; font-weight: 700; letter-spacing: .035rem; line-height: 1em; white-space: nowrap; cursor: pointer; color: white; background: linear-gradient(135deg, rgba(var(--mc-primary-a), .8) 0%, rgba(var(--mc-primary-b), .7) 100%); filter: drop-shadow(0 3px 10px rgba(0, 0, 0, .2)); transition: transform 120ms ease, background 120ms ease; }
+    button { display: inline-flex; align-items: center; justify-content: center; gap: .4rem; min-height: 2.55rem; border: 0; border-radius: .65rem; padding: .68rem .95rem; box-sizing: border-box; font-family: inherit; font-size: calc(.84rem - var(--mc-font-size-reduction, 0px)); font-weight: 700; letter-spacing: .035rem; line-height: var(--mc-line-height, 1em); white-space: nowrap; cursor: pointer; color: white; background: linear-gradient(135deg, rgba(var(--mc-primary-a), .8) 0%, rgba(var(--mc-primary-b), .7) 100%); filter: drop-shadow(0 3px 10px rgba(0, 0, 0, .2)); transition: transform 120ms ease, background 120ms ease; }
     button:hover:not(:disabled) { background: linear-gradient(135deg, rgba(var(--mc-primary-a), 1) 0%, rgba(var(--mc-primary-b), .85) 100%); transform: translateY(-1px); }
     button:active:not(:disabled) { transform: translateY(0); }
     button.secondary { background: linear-gradient(135deg, rgba(var(--mc-secondary-a), .8) 0%, rgba(var(--mc-secondary-b), .7) 100%); }
     button.secondary:hover:not(:disabled) { background: linear-gradient(135deg, rgba(var(--mc-secondary-a), 1) 0%, rgba(var(--mc-secondary-b), 1) 100%); }
-    button.ghost { min-height: 1.9rem; padding: .38rem .68rem; font-size: .72rem; background: rgba(255,255,255,.08); filter: none; }
+    button.ghost { min-height: 1.9rem; padding: .38rem .68rem; font-size: calc(.72rem - var(--mc-font-size-reduction, 0px)); background: rgba(255,255,255,.08); filter: none; }
     button.ghost:hover:not(:disabled) { background: rgba(255,255,255,.13); }
     button.icon-toggle { min-width: 2.55rem; padding: .5rem; }
     button.icon-toggle svg { width: 1.15rem; height: 1.15rem; }
@@ -155,7 +158,7 @@ export class MeteorMobileBridgePanel extends LitElement {
     @keyframes spin { to { transform: rotate(360deg); } }
 
     /* ---------- Status pills ---------- */
-    .pill { display: inline-flex; align-items: center; gap: .42rem; padding: .38rem .68rem; border-radius: 999px; font-size: .7rem; line-height: 1; border: 1px solid var(--mc-hairline); color: var(--mc-muted); background: rgba(255,255,255,.05); }
+    .pill { display: inline-flex; align-items: center; gap: .42rem; padding: .38rem .68rem; border-radius: 999px; font-size: calc(.7rem - var(--mc-font-size-reduction, 0px)); line-height: var(--mc-line-height, 1); border: 1px solid var(--mc-hairline); color: var(--mc-muted); background: rgba(255,255,255,.05); }
     .pill.good { border-color: rgba(var(--mc-green), .22); color: rgb(174,229,207); background: rgba(58,172,129,.09); }
     .pill.warn { border-color: rgba(var(--mc-amber), .25); color: rgb(var(--mc-amber)); background: rgba(255,187,105,.08); }
     .pill.bad { border-color: rgba(var(--mc-red), .25); color: rgb(var(--mc-red)); background: rgba(255,120,120,.08); }
@@ -177,13 +180,38 @@ export class MeteorMobileBridgePanel extends LitElement {
     /* Every stage sets its own --qr-size against the room it actually has; drawQr() measures this
        box, so CSS is the only place the drawn size is decided. */
     .qr { width: var(--qr-size, 168px); height: var(--qr-size, 168px); display: grid; place-items: center; padding: 0; box-sizing: border-box; border-radius: 10px; background: white; overflow: hidden; }
-    .countdown { display: inline-flex; align-items: center; gap: .4rem; font-size: .71rem; color: var(--mc-muted); font-variant-numeric: tabular-nums; }
+    .countdown { display: inline-flex; align-items: center; gap: .4rem; font-size: calc(.71rem - var(--mc-font-size-reduction, 0px)); color: var(--mc-muted); font-variant-numeric: tabular-nums; }
     .countdown.urgent { color: rgb(var(--mc-amber)); }
     .live-footer { display: flex; flex-direction: column; align-items: center; gap: .45rem; width: 100%; }
     .link-offline { display: flex; flex-direction: column; align-items: center; gap: .4rem; }
     .close-control { display: flex; flex-direction: column; align-items: center; gap: .35rem; text-align: center; }
     .countdown-ring { width: .58rem; height: .58rem; border-radius: 50%; border: 2px solid currentColor; border-top-color: transparent; opacity: .75; animation: spin 2.4s linear infinite; }
 
+    :host([connectdesign]) section.panel { background: #12121D; border: 0; box-shadow: none; padding: .5rem 0 .75rem; }
+    :host([connectdesign]) .heading .title { display: none; }
+    :host([connectdesign]) .heading .status, .connect-loading p { font-family: 'Gilroy', sans-serif; font-weight: 400; font-style: normal; font-size: calc(20px - var(--mc-font-size-reduction, 0px)); line-height: var(--mc-line-height, 50px); letter-spacing: 0px; vertical-align: bottom; }
+    :host([connectdesign]) .heading .status { color: #fff; margin: 0 0 .5rem; }
+    :host([connectdesign]) .request-access { --qr-size: 216px; flex-direction: column; gap: .65rem; }
+    :host([connectdesign]) .request-controls { flex: none; gap: .5rem; }
+    :host([connectdesign]) .qr-frame { background: white; padding: 5px; box-shadow: none; }
+    :host([connectdesign]) .countdown { font-size: calc(.95rem - var(--mc-font-size-reduction, 0px)); color: #999; }
+    :host([connectdesign]) .countdown.urgent { color: rgb(var(--mc-amber)); }
+    :host([connectdesign]) .request-controls button { background: linear-gradient(110deg, #4210ec, #602cff); border-radius: .4rem; font-size: calc(.95rem - var(--mc-font-size-reduction, 0px)); }
+    :host([connectdesign]) .panel::before, :host([connectdesign]) .panel::after { display: none; }
+    @media (max-height: 760px) {
+      :host([connectdesign]) .request-access { --qr-size: 180px; gap: .5rem; }
+      :host([connectdesign]) .request-controls { gap: .5rem; }
+      :host([connectdesign]) .heading .status { margin-bottom: .25rem; }
+      :host([connectdesign]) .loading-code { height: 180px; }
+    }
+    .connect-loading { display: flex; flex-direction: column; align-items: center; background: #12121D; border-radius: .4rem; padding: 1rem; color: white; }
+    .connect-loading p { margin: 0; }
+    .loading-code { height: 216px; display: grid; place-items: center; }
+    .loading-code .spinner { width: 2.7rem; height: 2.7rem; border-width: 5px; }
+    .loading-copy { color: #999; font-family: 'Gilroy', sans-serif; font-weight: 400; font-style: normal; font-size: calc(16px - var(--mc-font-size-reduction, 0px)); line-height: var(--mc-line-height, 18px); letter-spacing: 0px; text-align: center; vertical-align: bottom; }
+
+    .continuation-qr { --qr-size: 216px; }
+    @media (max-height: 760px) { .continuation-qr { --qr-size: 180px; } }
     /* ---------- Stage cards (push / review / pin / status) ---------- */
     .stage-panel { height: 292px; justify-content: center; }
     .stage-panel.auto { height: auto; min-height: 292px; padding: 1rem .9rem; }
@@ -192,9 +220,9 @@ export class MeteorMobileBridgePanel extends LitElement {
     .stage.compact { min-height: 0; flex-direction: column; gap: .6rem; text-align: center; padding: .35rem 0; }
     .push-layout { width: 100%; display: grid; grid-template-columns: minmax(0,1fr) 176px; align-items: center; gap: .7rem; }
     .stage-primary { min-width: 0; min-height: 220px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .55rem; text-align: center; }
-    .stage-kicker { color: var(--mc-kicker); font-size: .72rem; font-weight: 700; letter-spacing: .08rem; text-transform: uppercase; }
-    .stage-title { min-height: 2.44rem; max-width: 10.2rem; margin: 0; display: flex; align-items: center; justify-content: center; color: var(--mc-ink); font-size: 1.03rem; line-height: 1.22rem; font-weight: 750; text-wrap: balance; }
-    .stage-subtitle { min-height: 2rem; max-width: 10.2rem; margin: 0; display: flex; align-items: center; color: var(--mc-muted); font-size: .74rem; line-height: 1rem; text-wrap: balance; }
+    .stage-kicker { color: var(--mc-kicker); font-size: calc(.72rem - var(--mc-font-size-reduction, 0px)); font-weight: 700; letter-spacing: .08rem; text-transform: uppercase; }
+    .stage-title { min-height: 2.44rem; max-width: 10.2rem; margin: 0; display: flex; align-items: center; justify-content: center; color: var(--mc-ink); font-size: calc(1.03rem - var(--mc-font-size-reduction, 0px)); line-height: var(--mc-line-height, 1.22rem); font-weight: 750; text-wrap: balance; }
+    .stage-subtitle { min-height: 2rem; max-width: 10.2rem; margin: 0; display: flex; align-items: center; color: var(--mc-muted); font-size: calc(.74rem - var(--mc-font-size-reduction, 0px)); line-height: var(--mc-line-height, 1rem); text-wrap: balance; }
     .stage-icon { position: relative; width: 66px; height: 66px; display: grid; place-items: center; border-radius: 21px; color: white; background: linear-gradient(145deg, rgba(112,88,248,.95), rgba(63,44,165,.9)); box-shadow: 0 12px 34px rgba(62,38,184,.35), inset 0 1px rgba(255,255,255,.2); }
     .stage-icon svg { width: 31px; height: 31px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
     .stage-icon.small { width: 48px; height: 48px; border-radius: 15px; }
@@ -203,11 +231,11 @@ export class MeteorMobileBridgePanel extends LitElement {
     .stage-icon.sending::after { animation-delay: .65s; }
     .stage-icon.sent, .stage-icon.good { background: linear-gradient(145deg, #40bc86, #227a61); box-shadow: 0 12px 34px rgba(32,157,109,.27), inset 0 1px rgba(255,255,255,.2); }
     .stage-icon.unavailable, .stage-icon.neutral { background: linear-gradient(145deg, #8a718f, #51425e); }
-    .status-line { min-height: 1rem; display: flex; align-items: center; justify-content: center; gap: .4rem; color: var(--mc-body); font-size: .7rem; }
+    .status-line { min-height: 1rem; display: flex; align-items: center; justify-content: center; gap: .4rem; color: var(--mc-body); font-size: calc(.7rem - var(--mc-font-size-reduction, 0px)); }
     .fallback-slot { --qr-size: 176px; width: 176px; min-height: 220px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .38rem; }
-    .fallback-label { min-height: .85rem; color: var(--mc-kicker); font-size: .66rem; font-weight: 700; letter-spacing: .06rem; text-transform: uppercase; }
-    .fallback-slot .error { font-size: .66rem; line-height: .9rem; text-wrap: balance; }
-    .qr-placeholder { width: calc(var(--qr-size, 168px) + 4px); height: calc(var(--qr-size, 168px) + 4px); display: grid; place-items: center; box-sizing: border-box; border: 1px solid var(--mc-hairline); border-radius: 11px; overflow: hidden; color: var(--mc-muted); font-size: .68rem; background: linear-gradient(110deg, rgba(255,255,255,.035) 20%, rgba(255,255,255,.08) 38%, rgba(255,255,255,.035) 56%); background-size: 220% 100%; animation: qr-shimmer 1.8s linear infinite; }
+    .fallback-label { min-height: .85rem; color: var(--mc-kicker); font-size: calc(.66rem - var(--mc-font-size-reduction, 0px)); font-weight: 700; letter-spacing: .06rem; text-transform: uppercase; }
+    .fallback-slot .error { font-size: calc(.66rem - var(--mc-font-size-reduction, 0px)); line-height: var(--mc-line-height, .9rem); text-wrap: balance; }
+    .qr-placeholder { width: calc(var(--qr-size, 168px) + 4px); height: calc(var(--qr-size, 168px) + 4px); display: grid; place-items: center; box-sizing: border-box; border: 1px solid var(--mc-hairline); border-radius: 11px; overflow: hidden; color: var(--mc-muted); font-size: calc(.68rem - var(--mc-font-size-reduction, 0px)); background: linear-gradient(110deg, rgba(255,255,255,.035) 20%, rgba(255,255,255,.08) 38%, rgba(255,255,255,.035) 56%); background-size: 220% 100%; animation: qr-shimmer 1.8s linear infinite; }
 
     /* ---------- Review stage ---------- */
     .review-stage { flex-direction: column; gap: .65rem; text-align: center; }
@@ -231,19 +259,19 @@ export class MeteorMobileBridgePanel extends LitElement {
     .phone-pin-dots span:nth-child(2) { animation-delay: .18s; }
     .phone-pin-dots span:nth-child(3) { animation-delay: .36s; }
     .phone-pin-dots span:nth-child(4) { animation-delay: .54s; }
-    .review-title { max-width: 18rem; margin: 0; color: var(--mc-ink); font-size: 1.18rem; line-height: 1.35rem; font-weight: 760; text-wrap: balance; }
-    .review-subtitle { max-width: 17rem; margin: 0; color: var(--mc-muted); font-size: .78rem; line-height: 1.05rem; }
+    .review-title { max-width: 18rem; margin: 0; color: var(--mc-ink); font-size: calc(1.18rem - var(--mc-font-size-reduction, 0px)); line-height: var(--mc-line-height, 1.35rem); font-weight: 760; text-wrap: balance; }
+    .review-subtitle { max-width: 17rem; margin: 0; color: var(--mc-muted); font-size: calc(.78rem - var(--mc-font-size-reduction, 0px)); line-height: var(--mc-line-height, 1.05rem); }
 
     /* ---------- PIN stage ---------- */
     .pin-stage { flex-direction: column; gap: .55rem; text-align: center; min-height: 0; }
     .pin-row { position: relative; display: flex; gap: .55rem; justify-content: center; padding: .2rem 0; }
     .pin-row.shake { animation: pin-shake .45s cubic-bezier(.36,.07,.19,.97) both; }
-    .pin-cell { width: 50px; height: 58px; display: grid; place-items: center; font-size: 1.45rem; font-weight: 800; color: var(--mc-ink); border-radius: .8rem; border: 1px solid var(--mc-hairline); background: linear-gradient(160deg, rgba(255,255,255,.05), rgba(255,255,255,.015)); box-shadow: inset 0 1px rgba(255,255,255,.04), 0 4px 14px rgba(0,0,0,.25); transition: border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease; }
+    .pin-cell { width: 50px; height: 58px; display: grid; place-items: center; font-size: calc(1.45rem - var(--mc-font-size-reduction, 0px)); font-weight: 800; color: var(--mc-ink); border-radius: .8rem; border: 1px solid var(--mc-hairline); background: linear-gradient(160deg, rgba(255,255,255,.05), rgba(255,255,255,.015)); box-shadow: inset 0 1px rgba(255,255,255,.04), 0 4px 14px rgba(0,0,0,.25); transition: border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease; }
     .pin-cell.filled { border-color: rgba(139,122,255,.7); transform: translateY(-1px); }
     .pin-cell.active { border-color: rgba(160,140,255,.95); box-shadow: inset 0 1px rgba(255,255,255,.06), 0 0 0 3px rgba(112,86,237,.22), 0 4px 16px rgba(52,30,150,.35); }
     .pin-row.error .pin-cell { border-color: rgba(var(--mc-red), .65); }
     .pin-caret { width: 2px; height: 1.3rem; border-radius: 2px; background: #b9a8ff; animation: caret-blink 1.1s steps(2, start) infinite; }
-    .pin-hidden-input { position: absolute; inset: 0; width: 100%; height: 100%; box-sizing: border-box; opacity: 0; border: 0; padding: 0; margin: 0; background: transparent; color: transparent; caret-color: transparent; font-size: 16px; text-align: center; outline: none; cursor: pointer; }
+    .pin-hidden-input { position: absolute; inset: 0; width: 100%; height: 100%; box-sizing: border-box; opacity: 0; border: 0; padding: 0; margin: 0; background: transparent; color: transparent; caret-color: transparent; font-size: calc(16px - var(--mc-font-size-reduction, 0px)); text-align: center; outline: none; cursor: pointer; }
     .pin-actions { display: flex; flex-direction: column; align-items: center; gap: .45rem; width: 100%; }
     .pin-verify { min-width: 232px; }
     /* The PIN stage carries the most content of any stage — with the Open/QR escapes added below
@@ -284,7 +312,7 @@ export class MeteorMobileBridgePanel extends LitElement {
       .stage-primary { min-height: 160px; gap: .35rem; }
       .stage-primary .stage-subtitle { display: none; }
       .fallback-slot { min-height: 205px; }
-      .pin-cell { width: 44px; height: 52px; font-size: 1.3rem; }
+      .pin-cell { width: 44px; height: 52px; font-size: calc(1.3rem - var(--mc-font-size-reduction, 0px)); }
       .pin-verify { min-width: 206px; }
     }
     @media (prefers-reduced-motion: reduce) {
@@ -464,6 +492,14 @@ export class MeteorMobileBridgePanel extends LitElement {
     this.requestPinSubmission();
   }
 
+  private get hideQrOnMobile(): boolean {
+    return this.connectDesign && isMobile();
+  }
+
+  private get canOpenWalletOnDevice(): boolean {
+    return this.walletPlatform !== "mobile" || isMobile();
+  }
+
   private async openMobileApp(): Promise<void> {
     try {
       await this.openInApp?.();
@@ -472,8 +508,8 @@ export class MeteorMobileBridgePanel extends LitElement {
       this.interactionError =
         this.walletPlatform === "extension"
           ? "Could not open Meteor Extension. Check that it is enabled and up to date, then try again."
-          : `${this.walletLabel} could not be opened automatically. Scan the QR code instead.`;
-      this.showQr = true;
+          : this.hideQrOnMobile ? `${this.walletLabel} could not be opened. Please try again.` : `${this.walletLabel} could not be opened automatically. Scan the QR code instead.`;
+      this.showQr = !this.hideQrOnMobile;
     }
   }
 
@@ -631,6 +667,7 @@ export class MeteorMobileBridgePanel extends LitElement {
    * destructive operation (discarding a signed result the wallet already produced) asks first.
    */
   private renderCloseControl(snapshot: IMobileBridgeSnapshot) {
+    if (this.connectDesign) return "";
     const options = this.closeOptions(snapshot);
     if (options == null) return "";
     const copy = CLOSE_OPERATION_COPY[options.operation];
@@ -675,7 +712,7 @@ export class MeteorMobileBridgePanel extends LitElement {
    * `wallet_action` with nothing on screen — so no stage may present waiting as the only option.
    */
   private renderFallbackSlot(snapshot: IMobileBridgeSnapshot | undefined, secondsLeft?: number) {
-    if (this.walletPlatform === "extension") {
+    if (this.walletPlatform === "extension" || this.hideQrOnMobile) {
       return html`<div class="stage-fallback">
         <button class="ghost" ?disabled=${snapshot?.deepLink == null} @click=${() => this.openMobileApp()}>Open ${this.walletLabel}</button>
         ${this.interactionError ? html`<span class="error">${this.interactionError}</span>` : ""}
@@ -698,7 +735,7 @@ export class MeteorMobileBridgePanel extends LitElement {
       }
       ${
         ready
-          ? html`<button class="ghost" @click=${() => this.openMobileApp()}>Open ${this.walletLabel}</button>`
+          ? this.canOpenWalletOnDevice ? html`<button class="ghost" @click=${() => this.openMobileApp()}>Open ${this.walletLabel}</button>` : ""
           : html`<span class="status-line">${secondsLeft == null ? "" : `Expires in ${this.formatCountdown(secondsLeft)}`}</span>`
       }
       ${this.interactionError ? html`<span class="error">${this.interactionError}</span>` : ""}
@@ -775,7 +812,9 @@ export class MeteorMobileBridgePanel extends LitElement {
               <div class=${`review-phone compact${this.walletPlatform !== "mobile" ? " web" : ""}`}><span class="review-check"></span></div>
             </div>
             <h2 class="stage-title">Review and approve this request in ${this.walletLabel}</h2>
-            <p class="stage-subtitle">Nothing showing up? Open ${this.walletLabel} again${this.walletPlatform === "extension" ? "." : " or scan the code."}</p>
+            <p class="stage-subtitle">${this.canOpenWalletOnDevice
+              ? `Nothing showing up? Open ${this.walletLabel} again${this.walletPlatform === "extension" || this.hideQrOnMobile ? "." : " or scan the code."}`
+              : "Nothing showing up? Scan the code with your mobile device."}</p>
             <div class="pill good" role="status">
               <span class="pill-dot"></span>
               <span>Waiting for your approval</span>
@@ -872,12 +911,12 @@ export class MeteorMobileBridgePanel extends LitElement {
    */
   private renderPinFallback(snapshot: IMobileBridgeSnapshot) {
     if (snapshot.deepLink == null) return "";
-    if (this.walletPlatform === "extension") return this.renderFallbackSlot(snapshot);
+    if (this.walletPlatform === "extension" || this.hideQrOnMobile) return this.renderFallbackSlot(snapshot);
     return html`<div class="stage-fallback">
       <div class="stage-fallback-row">
-        <button type="button" class="ghost" @click=${() => this.openMobileApp()}>
+        ${this.canOpenWalletOnDevice ? html`<button type="button" class="ghost" @click=${() => this.openMobileApp()}>
           Open ${this.walletLabel}
-        </button>
+        </button>` : ""}
         <button
           type="button"
           class="ghost"
@@ -920,7 +959,7 @@ export class MeteorMobileBridgePanel extends LitElement {
                 }
               </div>`
         }
-        <h2 class="review-title" style="font-size:1.02rem; line-height:1.2rem;">${title}</h2>
+        <h2 class="review-title" style="font-size: calc(1.02rem - var(--mc-font-size-reduction, 0px)); line-height: var(--mc-line-height, 1.2rem);">${title}</h2>
         ${subtitle ? html`<p class="review-subtitle">${subtitle}</p>` : ""}
         ${fineprint ? html`<p class="fineprint">${fineprint}</p>` : ""}
       </div>`,
@@ -948,8 +987,30 @@ export class MeteorMobileBridgePanel extends LitElement {
     </div>`;
   }
 
+  private renderContinuation(snapshot?: IMobileBridgeSnapshot, secondsLeft?: number) {
+    const preparing = snapshot?.deepLink == null || ["initializing", "creating_bridge", "busy_other_tab"].includes(snapshot.phase);
+    const scanMobile = this.walletPlatform === "mobile" && !isMobile();
+    return html`<meteor-wallet-continuation
+      .walletLabel=${this.walletLabel} .walletPlatform=${this.walletPlatform}
+      .preparing=${preparing} .scanMobile=${scanMobile}
+      .onOpen=${scanMobile ? undefined : () => this.openMobileApp()}>
+      ${scanMobile && !preparing ? html`<div slot="visual" class="qr-frame continuation-qr"><div id="mobile-bridge-qr" class="qr" role="img" aria-label="Scan with ${this.walletLabel}"></div></div>` : ""}
+      <span slot="countdown">${this.renderCountdown(secondsLeft, "Session expires in")}</span>
+      ${snapshot ? this.renderLinkStatus(snapshot) : ""}
+      ${this.interactionError ? html`<p role="alert">${this.interactionError}</p>` : ""}
+    </meteor-wallet-continuation>`;
+  }
+
   render() {
     const snapshot = this.snapshot;
+    if (this.continuation && snapshot == null) return this.renderContinuation();
+    if (this.connectDesign && !this.hideQrOnMobile && !this.contextual && (snapshot == null || ["initializing", "creating_bridge", "busy_other_tab"].includes(snapshot.phase))) {
+      return html`<section class="connect-loading" aria-live="polite" aria-busy="true">
+        <p>Scan with your mobile device</p>
+        <div class="loading-code"><span class="spinner" aria-hidden="true"></span></div>
+        <span class="loading-copy">Generating secure QR code …</span>
+      </section>`;
+    }
     if (snapshot == null) {
       return this.contextual
         ? html`<section class="panel stage-panel" aria-live="polite" aria-label="${this.walletLabel}">${this.renderPushStage(undefined, "sending")}</section>`
@@ -982,7 +1043,7 @@ export class MeteorMobileBridgePanel extends LitElement {
     const liveFooter = this.renderLiveFooter(snapshot);
     const stagePanelClass = `panel stage-panel${liveFooter === "" && this.interactionError == null ? "" : " auto"}`;
     const showRequestAccess = snapshot.deepLink != null && snapshot.phase === "waiting_for_wallet";
-    const showRequestQr = showRequestAccess && this.showQr && this.walletPlatform !== "extension";
+    const showRequestQr = showRequestAccess && !this.hideQrOnMobile && this.showQr && this.walletPlatform !== "extension";
     const inPushPresentation =
       this.contextual &&
       snapshot.push !== "not_attempted" &&
@@ -996,6 +1057,10 @@ export class MeteorMobileBridgePanel extends LitElement {
       return html`<section class="panel stage-panel slim" aria-live="polite" aria-label="${this.walletLabel}">
         ${this.renderIdentityReset()}
       </section>`;
+    }
+
+    if (this.continuation && ["initializing", "creating_bridge", "busy_other_tab", "waiting_for_wallet", "wallet_action"].includes(snapshot.phase)) {
+      return this.renderContinuation(snapshot, secondsLeft);
     }
 
     if (inPushPresentation) {
@@ -1071,7 +1136,7 @@ export class MeteorMobileBridgePanel extends LitElement {
       <section class="panel" aria-live="polite" aria-label="${this.walletLabel}">
         <div class="heading">
           <span class="title">${this.walletLabel}</span>
-          <p class="status">${this.statusText(snapshot)}</p>
+          <p class="status">${this.connectDesign && showRequestAccess ? (this.hideQrOnMobile ? "Continue in Meteor Mobile" : "Scan with your mobile device") : this.statusText(snapshot)}</p>
         </div>
         ${this.renderLinkStatus(snapshot)}
         ${showRequestAccess && snapshot.push === "delivered" ? html`<span class="pill good"><span class="pill-dot"></span><span>${this.walletPlatform === "extension" ? "Notification sent — open the extension to continue" : "Notification sent — QR remains available"}</span></span>` : ""}
@@ -1083,9 +1148,9 @@ export class MeteorMobileBridgePanel extends LitElement {
             ${showRequestQr ? html`<div class="qr-frame"><div id="mobile-bridge-qr" class="qr" role="img" aria-label="Scan with ${this.walletLabel}"></div></div>` : ""}
             <div class="request-controls">
               <div class="actions">
-                <button @click=${() => this.openMobileApp()}>Open ${this.walletLabel}</button>
+                ${this.canOpenWalletOnDevice ? html`<button @click=${() => this.openMobileApp()}>Open ${this.walletLabel}</button>` : ""}
                 ${
-                  mobile && this.walletPlatform !== "extension"
+                  mobile && !this.hideQrOnMobile && this.walletPlatform !== "extension"
                     ? html`<button class="secondary icon-toggle" aria-label=${this.showQr ? "Hide QR code" : "Show QR code"}
                         aria-pressed=${this.showQr ? "true" : "false"}
                         @click=${() => (this.showQr = !this.showQr)}>${svg_qr_glyph}</button>`
@@ -1096,7 +1161,7 @@ export class MeteorMobileBridgePanel extends LitElement {
               ${
                 hardStopBinding
                   ? html`<span class="muted">This request has reached its maximum lifetime — a new code cannot extend it.</span>`
-                  : secondsLeft != null && secondsLeft <= 60
+                  : !this.connectDesign && secondsLeft != null && secondsLeft <= 60
                     ? html`<button class="ghost" @click=${() => void this.refreshMobileCode()}>Refresh code</button>`
                     : ""
               }

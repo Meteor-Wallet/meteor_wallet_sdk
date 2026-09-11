@@ -1,3 +1,4 @@
+import { isMobile } from "../utils/isMobile";
 import { provide } from "@lit/context";
 import { css, html, LitElement } from "lit";
 import { property } from "lit/decorators.js"; // You MUST import this explicitly
@@ -124,6 +125,21 @@ export class MeteorActionUiOverlay extends LitElement {
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
       }
 
+      :host([connect-design]) .modal-container {
+        box-sizing: border-box;
+        width: auto;
+        height: auto;
+        min-width: min(480px, calc(100vw - 1rem));
+        min-height: min(670px, calc(100dvh - 1rem));
+        max-width: calc(100vw - 1rem);
+        max-height: calc(100dvh - 1rem);
+      }
+
+      :host([connect-design][mobile-device]) .modal-container {
+        min-width: min(500px, calc(100vw - 1rem));
+        min-height: min(380px, calc(100dvh - 1rem));
+      }
+
       :host(:not([closing])) .modal-container {
         animation: scaleInUp 400ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
       }
@@ -192,7 +208,11 @@ export class MeteorActionUiOverlay extends LitElement {
       <div>
         <div class="modal-backdrop"></div>
         <div class="modal-container" role="dialog" aria-modal="true" aria-label="Meteor Connect" @click=${(e: Event) => e.stopPropagation()}>
-          <slot></slot>
+          <slot @slotchange=${(event: Event) => {
+            const slot = event.target as HTMLSlotElement;
+            this.toggleAttribute("mobile-device", isMobile());
+            this.toggleAttribute("connect-design", slot.assignedElements().some(element => ["meteor-action-ui-container", "meteor-transfer-accounts-container"].includes(element.localName)));
+          }}></slot>
         </div>
       </div>
     `;

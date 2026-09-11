@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { ActionUi } from "./ActionUi";
+import { ActionUi, usingBrowserThatRequiresUserAction } from "./ActionUi";
 
 describe("ActionUi lifecycle", () => {
   it("releases the active action before asynchronous session disposal finishes", async () => {
@@ -31,4 +31,23 @@ describe("ActionUi lifecycle", () => {
     expect(removed).toBeFalse();
     expect((ui as any).renderedAction).toBe(currentAction);
   });
+});
+
+
+describe("known-platform automatic opening", () => {
+  for (const userAgent of ["iPhone Safari", "Android Chrome", "Macintosh Safari"]) {
+    it(`uses an active gesture in ${userAgent} and requests a tap otherwise`, () => {
+      const original = Object.getOwnPropertyDescriptor(globalThis, "navigator");
+      try {
+        const userActivation = { isActive: true };
+        Object.defineProperty(globalThis, "navigator", { configurable: true, value: { userAgent, userActivation } });
+        expect(usingBrowserThatRequiresUserAction()).toBeFalse();
+        userActivation.isActive = false;
+        expect(usingBrowserThatRequiresUserAction()).toBeTrue();
+      } finally {
+        if (original) Object.defineProperty(globalThis, "navigator", original);
+        else Reflect.deleteProperty(globalThis, "navigator");
+      }
+    });
+  }
 });

@@ -41,6 +41,12 @@ const HARD_STOP = () => Date.now() + 25 * 60_000;
 /** @type {Array<Record<string, any>>} */
 export const SCENARIOS = [
   {
+    name: "connect-loading",
+    description: "Connect QR generation loading state",
+    targets: ALL_TARGETS,
+    snapshot: { phase: "creating_bridge", push: "not_attempted", pinAttemptsUsed: 0, linkPhase: "joining", linkRedialAttempt: 0 },
+  },
+  {
     name: "main",
     description: "Wallet picker + Meteor Mobile panel with QR (most common state)",
     targets: ALL_TARGETS,
@@ -399,6 +405,8 @@ function makeTransferScenarios() {
         screen: "choose",
       },
     ),
+    base("transfer-choose-phone", "Transfer: mobile chooser", "waiting_for_wallet", { screen: "choose" }, { mobileUa: true }),
+    base("transfer-loading-phone", "Transfer: preparing mobile connection", "creating_bridge", { screen: "choose" }, { mobileUa: true, snapshot: { phase: "creating_bridge", push: "not_attempted", pinAttemptsUsed: 0, linkPhase: "joining", linkRedialAttempt: 0 } }),
     base(
       "transfer-get-meteor",
       "Transfer: Get Meteor Wallet sub-page (extension excluded)",

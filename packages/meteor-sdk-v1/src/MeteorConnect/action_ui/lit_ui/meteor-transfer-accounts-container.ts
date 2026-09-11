@@ -15,7 +15,9 @@ import { ActionUiController } from "./ActionUiController";
 import { customElement } from "./custom-element";
 import "./get-meteor-screen";
 import { svg_icons_text } from "./graphical/svg_icons/svg_icons_text";
-import { svg_meteor_logo_text } from "./graphical/svg_meteor_logo_text";
+import { meteorHeaderLogo } from "./graphical/meteor-header-logo";
+import { meteorConnectLayoutStyles } from "./meteor-connect-layout.styles";
+import { isMobile } from "../utils/isMobile";
 import "./meteor-action-button";
 import "./meteor-mobile-bridge-panel";
 import type { ITransferKeyRevealSource } from "./meteor-transfer-key-card";
@@ -119,7 +121,7 @@ export class MeteorTransferAccountsContainer extends LitElement {
   /** The eager Meteor Mobile bridge preparation behind the chooser's inline QR panel. */
   private inlineMobilePrepare?: Promise<void>;
 
-  static styles = css`
+  static styles = [css`
     :host {
       --meteor-dark-gray-lightest: 34, 34, 41;
       --meteor-dark-gray-standard: 27, 27, 38;
@@ -201,10 +203,11 @@ export class MeteorTransferAccountsContainer extends LitElement {
     :host-context(meteor-action-ui-overlay[closing]) .meteor-connect-title-box { animation: contentFadeOut 200ms ease-in forwards; }
 
     @media (prefers-reduced-motion: reduce) { .terminal-stage, .content, get-meteor-screen, .meteor-connect-title-box { animation: none !important; } }
-  `;
+  `, meteorConnectLayoutStyles];
 
   connectedCallback(): void {
     super.connectedCallback();
+    this.toggleAttribute("mobile-device", isMobile());
     this.actionController = new ActionUiController(this, this.action, this.closeAction);
     // Terminal screens: observe the action's settlement so a signed result / expiry renders a
     // closing state during ActionUi's farewell grace instead of vanishing instantly.
@@ -233,6 +236,7 @@ export class MeteorTransferAccountsContainer extends LitElement {
         })
         .catch((error: unknown) => {
           this.logger.err("Failed to prepare the inline Meteor Mobile bridge", error);
+          this.startError = "Could not prepare the connection. Please close and reopen this window.";
         });
     }
     this.action.waitForExecutionOutput().then(
@@ -377,13 +381,13 @@ export class MeteorTransferAccountsContainer extends LitElement {
       this.logger.log("Could not auto-open the wallet window", error);
       if (this.targetPlatform === "extension") {
         this.startError =
-          "Could not open Meteor Extension. Check that the extension is enabled and up to date, then try again.";
+          "Could not open Chrome Extension. Check that the extension is enabled and up to date, then try again.";
       }
     }
   }
 
   private get walletLabel(): string {
-    if (this.targetPlatform === "extension") return "Meteor Extension";
+    if (this.targetPlatform === "extension") return "Chrome Extension";
     if (this.targetPlatform === "mobile") return "Meteor Mobile";
     if (this.targetPlatform === "web_local_dev") return "Meteor Web (Local Dev)";
     return "Meteor Web";
@@ -422,72 +426,53 @@ export class MeteorTransferAccountsContainer extends LitElement {
     this.closeAction?.();
   }
 
+  private async selectPreparedMobile() {
+    if (this.snapshot?.deepLink == null) return;
+    this.targetPlatform = "mobile";
+    this.screen = "connect";
+    try {
+      await this.action.meteorConnect.mobileBridgeClient.openCurrentSessionInApp();
+      this.startError = undefined;
+    } catch {
+      this.startError = "Could not open Meteor Mobile. Please try again.";
+    }
+  }
+
   private renderChoosePlatform() {
+    const mobile = isMobile();
+    const preparing = this.snapshot?.deepLink == null && this.startError == null && !["failed", "cancelled", "completed"].includes(this.snapshot?.phase ?? "");
     return html`
-      <div class="background-graphics-box">
-        <img src="https://storage.googleapis.com/meteor-apps-v2/graphics/meteor_connect_ui/star.gif" alt="Meteor Background Stars" class="star-gif" />
-      </div>
       <div class="options" aria-label="Wallet platform choices">
-        <span class="section-kicker">Choose your platform</span>
+        <span class="section-action-title">Choose how you’d like to connect</span>
         <div class="option-buttons-row">
-          ${
-            this.isNewKeyTransfer && isExtensionNewKeyTransferAvailable()
-              ? html`
-          <meteor-action-button
-            variant="option"
-            label="Meteor Extension"
-            .icon=${svg_icons_text.icon_extension_puzzle}
-            @meteor-button-click=${() => this.startTransfer("extension")}
-          ></meteor-action-button>`
-              : nothing
-          }
-          <meteor-action-button
-            variant="option"
-            label="Meteor Web"
-            .icon=${svg_icons_text.icon_web_globe}
-            @meteor-button-click=${() => this.startTransfer("web", { openWebWindow: true })}
-          ></meteor-action-button>
-          ${
-            this.localDevWebAvailable
-              ? html`
-          <meteor-action-button
-            variant="option"
-            label="Meteor Web (Local Dev)"
-            .icon=${svg_icons_text.icon_web_globe}
-            @meteor-button-click=${() => this.startTransfer("web_local_dev", { openWebWindow: true })}
-          ></meteor-action-button>`
-              : nothing
-          }
+          ${mobile ? html`<button class="platform-button primary" ?disabled=${preparing || this.snapshot?.deepLink == null} aria-busy=${preparing ? "true" : "false"} @click=${() => void this.selectPreparedMobile()}>
+            ${preparing ? html`<span class="mobile-request-spinner" role="status" aria-label="Creating mobile request"></span>` : html`<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 2h10a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1Zm5 16a1 1 0 1 0 0 2 1 1 0 0 0 0-2Z"/></svg>`}
+            <span>${preparing ? "Preparing connection" : "Meteor Mobile"}</span>
+          </button>` : nothing}
+          <button class=${`platform-button${mobile ? "" : " primary"}`} @click=${() => this.startTransfer("web", { openWebWindow: true })}>
+            ${unsafeSVG(svg_icons_text.icon_web_globe)}<span>Meteor Web</span>
+          </button>
+          ${!mobile ? html`<button class="platform-button"
+            ?disabled=${!this.isNewKeyTransfer || !isExtensionNewKeyTransferAvailable()}
+            @click=${() => this.startTransfer("extension")}>
+            ${unsafeSVG(svg_icons_text.icon_chrome)}<span>Chrome Extension</span>
+          </button>` : nothing}
+          ${this.localDevWebAvailable ? html`<button class="platform-button dev" @click=${() => this.startTransfer("web_local_dev", { openWebWindow: true })}>
+            ${unsafeSVG(svg_icons_text.icon_web_globe)}<span>Dev Web (Localhost)</span>
+          </button>` : nothing}
         </div>
       </div>
-      <meteor-mobile-bridge-panel
-        .session=${this.mobileSession}
-        walletLabel="Meteor Mobile"
-        walletPlatform="mobile"
-        .contextual=${false}
-        .openInApp=${() => this.action.meteorConnect.mobileBridgeClient.openCurrentSessionInApp()}
-        .refreshCode=${async () => {
-          this.bindSession(await this.actionController.refreshMobileBridge());
-        }}
-        .resetIdentity=${async () => {
-          this.bindSession(await this.actionController.resetMobileIdentityAndRePair());
-        }}
-      ></meteor-mobile-bridge-panel>
+      ${this.startError ? html`<p class="start-error" role="alert">${this.startError}</p>` : nothing}
+      ${!mobile ? html`
+        <div class="mobile-divider"><span></span><div>or connect with <strong>mobile</strong></div><span></span></div>
+        <meteor-mobile-bridge-panel connectDesign
+          .session=${this.mobileSession} walletLabel="Meteor Mobile" walletPlatform="mobile" .contextual=${false}
+          .openInApp=${() => this.action.meteorConnect.mobileBridgeClient.openCurrentSessionInApp()}
+          .resetIdentity=${async () => { this.bindSession(await this.actionController.resetMobileIdentityAndRePair()); }}
+        ></meteor-mobile-bridge-panel>` : nothing}
       <div class="no-wallet-bottom-section">
-        <div class="divider">
-          <span class="divider-line"></span>
-          <span class="section-kicker">Don't have a wallet?</span>
-          <span class="divider-line"></span>
-        </div>
-        <div class="options">
-          <meteor-action-button
-            variant="primary"
-            label="Get Meteor Wallet"
-            @meteor-button-click=${() => {
-              this.showGetMeteor = true;
-            }}
-          ></meteor-action-button>
-        </div>
+        <span>Don’t have a wallet?</span>
+        <button class="get-wallet-link" @click=${() => { this.showGetMeteor = true; }}>Get Meteor Wallet <span aria-hidden="true">↗</span></button>
       </div>
     `;
   }
@@ -528,8 +513,8 @@ export class MeteorTransferAccountsContainer extends LitElement {
       `;
     }
     return html`
-      <meteor-mobile-bridge-panel
-        .session=${this.mobileSession}
+      <meteor-mobile-bridge-panel connectDesign continuation
+        .session=${this.startPending ? undefined : this.mobileSession}
         .walletLabel=${this.walletLabel}
         .walletPlatform=${this.targetPlatform === "extension" ? "extension" : this.targetPlatform === "mobile" ? "mobile" : "web"}
         .contextual=${true}
@@ -582,21 +567,20 @@ export class MeteorTransferAccountsContainer extends LitElement {
               <span class="subsection-title">Get Meteor Wallet</span>
             </div>`
                 : html`
-            <div class="meteor-logo">${unsafeSVG(svg_meteor_logo_text)}</div>
+            <div class="meteor-logo"><img src=${meteorHeaderLogo} alt="" /></div>
             <div class="title-text-box">
-              <span class="title">Meteor</span>
-              <span class="subtitle">Transfer</span>
+              <span class="title">Meteor Transfer</span>
             </div>`
             }
           </div>
-          <button type="button" class="close-circle" aria-label="Close Meteor Connect" @click=${() => this.handleActionClose()}>
+          <button type="button" class="close-circle" aria-label="Close Meteor Transfer" @click=${() => this.handleActionClose()}>
             ${unsafeSVG(svg_icons_text.icon_close_x)}
           </button>
         </div>
         ${
           showingGetMeteor
             ? html`<get-meteor-screen .supportedPlatforms=${this.isNewKeyTransfer ? [...TRANSFER_SUPPORTED_PLATFORMS, "v1_ext"] : TRANSFER_SUPPORTED_PLATFORMS}></get-meteor-screen>`
-            : html`<div class=${`content${terminal != null || this.screen === "connect" ? " contextual" : ""}`}>
+            : html`<div class=${`meteor-connect-content${terminal != null || this.screen === "connect" ? " contextual" : ""}`}>
           ${
             terminal != null
               ? this.renderTerminal(terminal)
