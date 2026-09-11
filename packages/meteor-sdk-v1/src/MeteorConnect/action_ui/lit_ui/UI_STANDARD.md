@@ -73,3 +73,5 @@ Connect and Transfer share `get-meteor-screen.ts`: an orbital smiling-meteor ill
 On the desktop Transfer chooser, always display Chrome Extension with `svg_icons_text.icon_chrome` in the second slot. Disable it using the shared disabled button style when the transfer type or extension capability does not support it. Keep it absent on mobile.
 
 For a mobile-wallet continuation, desktop browsers show the session QR in the centered visual slot and hide Open Meteor Mobile; mobile devices show the primary Open Meteor Mobile button without a QR. The session countdown stays visible in both. Web/extension wallet continuations retain their own Open control.
+
+QR loading and ready states must use the same panel, heading, frame, controls and status-row layout. `meteor-qr-layout.ts` exports the 216px/180px code sizes and 5px frame padding (226px/190px framed sizes). Reserve that complete frame footprint before generating the SVG; keep the status row at least 18px high to avoid shifting when loading text becomes the countdown.

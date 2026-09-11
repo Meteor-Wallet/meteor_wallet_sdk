@@ -8,6 +8,7 @@ import { css, html, LitElement } from "lit";
 import { property, query, state } from "lit/decorators.js";
 import { keyed } from "lit/directives/keyed.js";
 import "./meteor-wallet-continuation";
+import { METEOR_QR_SIZE, METEOR_QR_COMPACT_SIZE, METEOR_QR_FRAME_PADDING } from "./meteor-qr-layout";
 import QRCodeStyling from "qr-code-styling";
 import type {
   IMobileBridgeSnapshot,
@@ -40,6 +41,8 @@ const CLOSE_OPERATION_COPY: Record<
   wallet_abandon_action_and_close: { label: "Close" },
   request_close_after_result_ack: { label: "Close" },
 };
+
+const scanHeading = html`Scan with your mobile device <svg class="scan-phone" viewBox="0 0 16 24" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M3 0h10a2 2 0 0 1 2 2v20a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V2a2 2 0 0 1 2-2Zm0 3v16h10V3H3Zm3-2v1h4V1H6Zm2 19a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3Z"/></svg>`;
 
 const svg_qr_glyph = html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3.5" width="6.4" height="6.4" rx="1.4"/><rect x="14.1" y="3.5" width="6.4" height="6.4" rx="1.4"/><rect x="3.5" y="14.1" width="6.4" height="6.4" rx="1.4"/><path d="M14.1 14.1h2.6v2.6h-2.6zM17.9 17.9h2.6v2.6h-2.6z"/></svg>`;
 
@@ -191,27 +194,33 @@ export class MeteorMobileBridgePanel extends LitElement {
     :host([connectdesign]) .heading .title { display: none; }
     :host([connectdesign]) .heading .status, .connect-loading p { font-family: 'Gilroy', sans-serif; font-weight: 400; font-style: normal; font-size: calc(20px - var(--mc-font-size-reduction, 0px)); line-height: var(--mc-line-height, 50px); letter-spacing: 0px; vertical-align: bottom; }
     :host([connectdesign]) .heading .status { color: #fff; margin: 0 0 .5rem; }
-    :host([connectdesign]) .request-access { --qr-size: 216px; flex-direction: column; gap: .65rem; }
+    :host([connectdesign]) .request-access { --qr-size: ${METEOR_QR_SIZE}px; flex-direction: column; gap: .65rem; }
     :host([connectdesign]) .request-controls { flex: none; gap: .5rem; }
-    :host([connectdesign]) .qr-frame { background: white; padding: 5px; box-shadow: none; }
+    :host([connectdesign]) .qr-frame { background: white; padding: ${METEOR_QR_FRAME_PADDING}px; box-shadow: none; }
     :host([connectdesign]) .countdown { font-size: calc(.95rem - var(--mc-font-size-reduction, 0px)); color: #999; }
     :host([connectdesign]) .countdown.urgent { color: rgb(var(--mc-amber)); }
     :host([connectdesign]) .request-controls button { background: linear-gradient(110deg, #4210ec, #602cff); border-radius: .4rem; font-size: calc(.95rem - var(--mc-font-size-reduction, 0px)); }
     :host([connectdesign]) .panel::before, :host([connectdesign]) .panel::after { display: none; }
     @media (max-height: 760px) {
-      :host([connectdesign]) .request-access { --qr-size: 180px; gap: .5rem; }
+      :host([connectdesign]) .request-access { --qr-size: ${METEOR_QR_COMPACT_SIZE}px; gap: .5rem; }
       :host([connectdesign]) .request-controls { gap: .5rem; }
       :host([connectdesign]) .heading .status { margin-bottom: .25rem; }
       :host([connectdesign]) .loading-code { height: 180px; }
     }
     .connect-loading { display: flex; flex-direction: column; align-items: center; background: #12121D; border-radius: .4rem; padding: 1rem; color: white; }
     .connect-loading p { margin: 0; }
+    :host([connectdesign]) .qr-status,
+    :host([connectdesign]) .request-controls > .countdown { min-height: 18px; display: inline-flex; align-items: center; }
+    :host([connectdesign]) .loading-frame,
+    :host([connectdesign]) .loading-placeholder { background: transparent; }
+    .loading-placeholder .spinner { width: 2.7rem; height: 2.7rem; border-width: 5px; }
+    .scan-phone { display: inline-block; width: .7em; height: 1.1em; margin-left: .3em; vertical-align: -.15em; }
     .loading-code { height: 216px; display: grid; place-items: center; }
     .loading-code .spinner { width: 2.7rem; height: 2.7rem; border-width: 5px; }
     .loading-copy { color: #999; font-family: 'Gilroy', sans-serif; font-weight: 400; font-style: normal; font-size: calc(16px - var(--mc-font-size-reduction, 0px)); line-height: var(--mc-line-height, 18px); letter-spacing: 0px; text-align: center; vertical-align: bottom; }
 
-    .continuation-qr { --qr-size: 216px; }
-    @media (max-height: 760px) { .continuation-qr { --qr-size: 180px; } }
+    .continuation-qr { --qr-size: ${METEOR_QR_SIZE}px; }
+    @media (max-height: 760px) { .continuation-qr { --qr-size: ${METEOR_QR_COMPACT_SIZE}px; } }
     /* ---------- Stage cards (push / review / pin / status) ---------- */
     .stage-panel { height: 292px; justify-content: center; }
     .stage-panel.auto { height: auto; min-height: 292px; padding: 1rem .9rem; }
@@ -1005,10 +1014,12 @@ export class MeteorMobileBridgePanel extends LitElement {
     const snapshot = this.snapshot;
     if (this.continuation && snapshot == null) return this.renderContinuation();
     if (this.connectDesign && !this.hideQrOnMobile && !this.contextual && (snapshot == null || ["initializing", "creating_bridge", "busy_other_tab"].includes(snapshot.phase))) {
-      return html`<section class="connect-loading" aria-live="polite" aria-busy="true">
-        <p>Scan with your mobile device</p>
-        <div class="loading-code"><span class="spinner" aria-hidden="true"></span></div>
-        <span class="loading-copy">Generating secure QR code …</span>
+      return html`<section class="panel qr-loading" aria-live="polite" aria-busy="true">
+        <div class="heading"><p class="status">${scanHeading}</p></div>
+        <div class="request-access">
+          <div class="qr-frame loading-frame"><div class="qr loading-placeholder"><span class="spinner" aria-hidden="true"></span></div></div>
+          <div class="request-controls"><div class="actions"></div><span class="loading-copy qr-status">Generating secure QR code …</span></div>
+        </div>
       </section>`;
     }
     if (snapshot == null) {
@@ -1136,7 +1147,7 @@ export class MeteorMobileBridgePanel extends LitElement {
       <section class="panel" aria-live="polite" aria-label="${this.walletLabel}">
         <div class="heading">
           <span class="title">${this.walletLabel}</span>
-          <p class="status">${this.connectDesign && showRequestAccess ? (this.hideQrOnMobile ? "Continue in Meteor Mobile" : "Scan with your mobile device") : this.statusText(snapshot)}</p>
+          <p class="status">${this.connectDesign && showRequestAccess ? (this.hideQrOnMobile ? "Continue in Meteor Mobile" : scanHeading) : this.statusText(snapshot)}</p>
         </div>
         ${this.renderLinkStatus(snapshot)}
         ${showRequestAccess && snapshot.push === "delivered" ? html`<span class="pill good"><span class="pill-dot"></span><span>${this.walletPlatform === "extension" ? "Notification sent — open the extension to continue" : "Notification sent — QR remains available"}</span></span>` : ""}
