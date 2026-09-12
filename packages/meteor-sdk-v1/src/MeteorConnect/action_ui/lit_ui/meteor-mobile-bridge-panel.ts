@@ -620,7 +620,7 @@ export class MeteorMobileBridgePanel extends LitElement {
           ? `Scan or open ${this.walletLabel} to continue.`
           : `Open ${this.walletLabel} to continue.`;
       case "wallet_confirmation":
-        return `Review the partner details and confirm the link in ${this.walletLabel}.`;
+        return `Review the app details and confirm the link in ${this.walletLabel}.`;
       case "wallet_verification":
         return `Enter the 4-digit PIN shown on ${this.walletLabel}.`;
       case "wallet_action":

@@ -37,6 +37,7 @@ const PLATFORM_LABELS: Record<TNewKeyTransferTargetPlatform, string> = {
   web_local_dev: "Meteor Web (Local Dev)",
   web: "Meteor Web",
   mobile: "Meteor Mobile",
+  extension: "Meteor Extension",
 };
 
 /** Absent until the popup's chooser has been answered (the start turn records the choice). */
