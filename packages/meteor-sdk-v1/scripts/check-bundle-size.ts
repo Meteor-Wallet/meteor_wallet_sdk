@@ -26,14 +26,15 @@ const BUDGETS: ReadonlyArray<{
 }> = [
   {
     file: "dist/index.js",
-    maxBytes: 600_000,
-    maxGzipBytes: 225_000,
+    // Regular, Semibold and Extrabold join Medium/Bold to cover all UI typography.
+    maxBytes: 710_000,
+    maxGzipBytes: 307_000,
     why: "the ESM entry every bundler consumes",
   },
   {
     file: "dist/index.cjs",
-    maxBytes: 610_000,
-    maxGzipBytes: 230_000,
+    maxBytes: 720_000,
+    maxGzipBytes: 312_000,
     why: "the CommonJS entry, same code through a different emit",
   },
   {
