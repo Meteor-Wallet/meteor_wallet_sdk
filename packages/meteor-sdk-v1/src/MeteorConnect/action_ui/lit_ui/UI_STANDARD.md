@@ -78,4 +78,4 @@ QR loading and ready states must use the same panel, heading, frame, controls an
 
 ## Failure card
 
-Use the supplied `graphical/meteor-warning.ts` warning SVG above left-aligned copy, on `#12121D`. Raw error details appear under “Error Message” in a selectable, wrapping `#181823` inset. Generic unclassified failures use “Something Went Wrong”; preserve actionable update and cancellation headings and their explanations. Wallet context remains in the accessible label. Success and identity-reset flows retain their dedicated states.
+Use the supplied `graphical/meteor-warning.ts` warning SVG above centered heading and description, on `#12121D`. Raw error details appear left-aligned in a selectable, wrapping `#181823` inset without an “Error Message” label. Generic unclassified failures use “Something Went Wrong”; preserve actionable update and cancellation headings and their explanations. Wallet context remains in the accessible label. Success and identity-reset flows retain their dedicated states.

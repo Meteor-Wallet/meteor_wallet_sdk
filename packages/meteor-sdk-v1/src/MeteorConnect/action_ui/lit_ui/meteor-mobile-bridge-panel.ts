@@ -224,13 +224,12 @@ export class MeteorMobileBridgePanel extends LitElement {
     @media (max-height: 760px) { .continuation-qr { --qr-size: ${METEOR_QR_COMPACT_SIZE}px; } }
     :host section.panel.error-panel { padding: 0; background: #12121D; border: 0; border-radius: .4rem; box-shadow: none; }
     .error-panel::before, .error-panel::after { display: none; }
-    .error-card { width: 100%; box-sizing: border-box; padding: 1.5rem; text-align: left; color: #fff; }
+    .error-card { width: 100%; box-sizing: border-box; padding: 1.5rem; text-align: center; color: #fff; }
     .warning-asset { display: block; width: 96px; height: auto; margin: .5rem auto 1.5rem; }
     .error-card h2 { margin: 0 0 .4rem; font-size: 18px; font-weight: 600; line-height: normal; }
     .error-description { margin: 0; color: #999; font-size: 14px; font-weight: 400; line-height: normal; overflow-wrap: anywhere; }
     .error-message { margin-top: 1.25rem; }
-    .error-message > span { color: #999; font-size: 12px; font-weight: 400; }
-    .error-message p { margin: .4rem 0 0; padding: .85rem 1rem; border-radius: .25rem; background: #181823; color: #fff; font-size: 14px; font-weight: 400; line-height: normal; white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
+    .error-message p { margin: 0; text-align: left; padding: .85rem 1rem; border-radius: .25rem; background: #181823; color: #fff; font-size: 14px; font-weight: 400; line-height: normal; white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
     /* ---------- Stage cards (push / review / pin / status) ---------- */
     .stage-panel { height: 292px; justify-content: center; }
     .stage-panel.auto { height: auto; min-height: 292px; padding: 1rem .9rem; }
@@ -972,7 +971,7 @@ export class MeteorMobileBridgePanel extends LitElement {
         <img class="warning-asset" src=${meteorWarning} alt="" />
         <h2>${heading}</h2>
         ${subtitle ? html`<p class="error-description">${subtitle}</p>` : ""}
-        ${fineprint ? html`<div class="error-message"><span>Error Message</span><p>${fineprint}</p></div>` : ""}
+        ${fineprint ? html`<div class="error-message"><p>${fineprint}</p></div>` : ""}
       </div>`);
     }
     return keyed(
