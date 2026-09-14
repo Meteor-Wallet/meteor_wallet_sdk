@@ -403,7 +403,7 @@ export class MeteorTransferAccountsContainer extends LitElement {
       // review / key card stages).
       if (
         this.screen === "choose_platform" &&
-        ["wallet_verification", "wallet_action", "result_ready", "external_work"].includes(
+        ["wallet_confirmation", "wallet_verification", "wallet_action", "result_ready", "external_work"].includes(
           snapshot.phase,
         )
       ) {

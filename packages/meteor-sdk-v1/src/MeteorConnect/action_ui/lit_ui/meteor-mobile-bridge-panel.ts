@@ -1023,7 +1023,7 @@ export class MeteorMobileBridgePanel extends LitElement {
     return html`<meteor-wallet-continuation
       .walletLabel=${this.walletLabel} .walletPlatform=${this.walletPlatform}
       .preparing=${preparing} .scanMobile=${scanMobile}
-      .instruction=${snapshot?.phase === "wallet_confirmation" ? this.statusText(snapshot) : undefined}
+      .instruction=${snapshot?.phase === "wallet_confirmation" && this.walletPlatform !== "mobile" ? this.statusText(snapshot) : undefined}
       .onOpen=${scanMobile ? undefined : () => this.openMobileApp()}>
       ${scanMobile && !preparing ? html`<div slot="visual" class="qr-frame continuation-qr"><div id="mobile-bridge-qr" class="qr" role="img" aria-label="Scan with ${this.walletLabel}"></div></div>` : ""}
       <span slot="countdown">${this.renderCountdown(secondsLeft, "Session expires in")}</span>
@@ -1108,6 +1108,8 @@ export class MeteorMobileBridgePanel extends LitElement {
     }
 
     if (snapshot.phase === "wallet_confirmation") {
+      // Keep the mobile session accessible while the wallet handles first-time approval.
+      if (this.walletPlatform === "mobile") return this.renderContinuation(snapshot, secondsLeft);
       return html`<section class=${stagePanelClass} aria-live="polite" aria-label="${this.walletLabel}">
         ${this.renderStatusStage("partner-confirmation", "spinner", "neutral", `Confirm link in ${this.walletLabel}`, this.statusText(snapshot))}
         ${this.renderCountdown(secondsLeft, "Session expires in")}

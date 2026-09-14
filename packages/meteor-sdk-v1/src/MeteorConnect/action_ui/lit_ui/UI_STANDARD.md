@@ -74,6 +74,8 @@ On the desktop Transfer chooser, always display Chrome Extension with `svg_icons
 
 For a mobile-wallet continuation, desktop browsers show the session QR in the centered visual slot and hide Open Meteor Mobile; mobile devices show the primary Open Meteor Mobile button without a QR. The session countdown stays visible in both. Web/extension wallet continuations retain their own Open control.
 
+First-time mobile linking (`wallet_confirmation`) navigates Connect and Transfer out of the platform chooser into the dedicated mobile continuation screen, including the standard scan/open instructions. Hide platform choices and the chooser footer on this screen; do not merely replace the inline panel or show a separate “Confirm link” panel. Wallet-side approval and subsequent PIN verification remain unchanged.
+
 QR loading and ready states must use the same panel, heading, frame, controls and status-row layout. `meteor-qr-layout.ts` exports the 216px/180px code sizes and 5px frame padding (226px/190px framed sizes). Reserve that complete frame footprint before generating the SVG; keep the status row at least 18px high to avoid shifting when loading text becomes the countdown.
 
 ## Failure card

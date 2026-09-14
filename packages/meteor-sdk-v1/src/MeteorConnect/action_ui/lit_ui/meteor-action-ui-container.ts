@@ -33,7 +33,7 @@ export class MeteorActionUiContainer extends LitElement {
     this.observedMobileSession = this.mobileSession;
     this.unsubscribeMobilePreparation = this.mobileSession?.subscribe(snapshot => {
       this.mobilePreparing = snapshot.deepLink == null && !["failed", "cancelled", "completed"].includes(snapshot.phase);
-      if (isMobile() && ["wallet_confirmation", "wallet_verification", "wallet_action", "result_ready", "external_work", "failed"].includes(snapshot.phase)) this.mobileSelected = true;
+      if (["wallet_confirmation", "wallet_verification", "wallet_action", "result_ready", "external_work"].includes(snapshot.phase) || (isMobile() && snapshot.phase === "failed")) this.mobileSelected = true;
     });
   }
 
@@ -135,7 +135,7 @@ export class MeteorActionUiContainer extends LitElement {
       this.executionState.isExecuting &&
       this.executionState.targetedPlatform === "v2_bridge_mobile";
     const lockedExecutionTarget =
-      contextualExecutionTarget ?? (mobileExecuting ? "v2_bridge_mobile" : undefined);
+      contextualExecutionTarget ?? (mobileExecuting || this.mobileSelected ? "v2_bridge_mobile" : undefined);
     const availablePlatformTargets = getVisibleActionTargets(
       allPlatformTargets,
       lockedExecutionTarget,
