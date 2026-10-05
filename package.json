@@ -4,7 +4,7 @@
   "scripts": {
     "dev": "nice-commander up",
     "dev:full": "nice-commander up full",
-    "dev:local": "nice-commander up local",
+    "dev:local": "nice-commander up local-env",
     "dev:status": "nice-commander status",
     "dev:ui": "nice-commander ui",
     "dev:down": "nice-commander down --all",

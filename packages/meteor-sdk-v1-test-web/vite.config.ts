@@ -1,3 +1,4 @@
+import * as fs from "node:fs";
 import * as path from "node:path";
 import { reactRouter } from "@react-router/dev/vite";
 import tailwindcss from "@tailwindcss/vite";
@@ -17,6 +18,24 @@ const localIp = Object.values(networkInterfaces)
   .flat()
   .find((i) => i?.family === "IPv4" && !i.internal)?.address;
 
+// Optional local @hot-labs/near-connect checkout (relative to the repo root, e.g. ../near-connect).
+// Its src/ is plain TS with type-only imports, so Vite serves it directly — edits hot-reload,
+// no build step. Unset = the npm package. Set via `nice-commander env sdk-test-web`.
+const nearConnectLocalSrc = (() => {
+  const configured = process.env.NEAR_CONNECT_LOCAL_PATH?.trim();
+  if (!configured) return undefined;
+
+  const src = path.resolve(__dirname, "../..", configured, "src");
+  if (!fs.existsSync(path.join(src, "index.ts"))) {
+    throw new Error(
+      `NEAR_CONNECT_LOCAL_PATH="${configured}" has no src/index.ts at ${src} — expected a checkout of https://github.com/hot-dao/near-selector`,
+    );
+  }
+
+  console.log(`Using LOCAL @hot-labs/near-connect source: ${src}`);
+  return src;
+})();
+
 export default defineConfig(({ isSsrBuild }) => ({
   server: {
     host: true,
@@ -29,7 +48,7 @@ export default defineConfig(({ isSsrBuild }) => ({
     },
     fs: {
       // Allow Vite to serve files from the monorepo root
-      allow: [".."],
+      allow: [".."].concat(nearConnectLocalSrc ?? []),
     },
     watch: {
       // Ensure the watcher is actually looking at the physical files
@@ -72,9 +91,16 @@ export default defineConfig(({ isSsrBuild }) => ({
     }),
   ].filter(Boolean),
   resolve: {
-    alias: {
-      "@meteorwallet/sdk": path.resolve(__dirname, "../meteor-sdk-v1/src"),
-    },
+    alias: [
+      { find: "@meteorwallet/sdk", replacement: path.resolve(__dirname, "../meteor-sdk-v1/src") },
+      ...(nearConnectLocalSrc
+        ? [
+            // Deep imports of the published layout (`/build/types`) map onto the same src tree.
+            { find: /^@hot-labs\/near-connect\/build\//, replacement: `${nearConnectLocalSrc}/` },
+            { find: /^@hot-labs\/near-connect$/, replacement: `${nearConnectLocalSrc}/index.ts` },
+          ]
+        : []),
+    ],
     // Keep module identity stable when linked from workspace
     preserveSymlinks: true,
   },

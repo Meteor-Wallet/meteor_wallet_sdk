@@ -4,11 +4,20 @@ import { defineCommanderConfig } from "@nice-code/commander/config";
  * Dev-environment declaration for the Meteor Wallet SDK repo (`bunx nice-commander up`).
  *
  * Daily flow:
- *   bunx nice-commander up            # default selection: the `dev` group (test web app + test backend)
+ *   bunx nice-commander up            # default selection: `local-env` (the full local SDK test environment)
+ *   bunx nice-commander up dev        # lighter suite: test web app + test backend only
  *   bunx nice-commander up full       # everything, incl. near-connect, the popup preview, and build watch
+ *   bunx nice-commander up sdk-preview  # popup-UI iteration loop on its own
  *   bunx nice-commander run checks    # one-shot CI panel: types / key confinement / sdk tests
  *   bunx nice-commander ui            # live grid + merged logs in the browser
  *   bunx nice-commander down --all
+ *
+ * Local NEAR Connect (`@hot-labs/near-connect`) in the demo — point the sticky knob at a checkout
+ * of https://github.com/hot-dao/near-selector (relative paths resolve from this repo's root), then
+ * restart the demo. Its `src/` is served straight through Vite, so edits hot-reload; no build step:
+ *   bunx nice-commander env sdk-test-web --set NEAR_CONNECT_LOCAL_PATH=../near-connect
+ *   bunx nice-commander restart sdk-test-web
+ *   bunx nice-commander env sdk-test-web --unset NEAR_CONNECT_LOCAL_PATH   # back to the npm package
  */
 export default defineCommanderConfig({
   name: "meteor-wallet-sdk",
@@ -28,6 +37,11 @@ export default defineCommanderConfig({
           name: "LOCAL_IP",
           description:
             "LAN IP used in the near-connect dev manifest / HMR host (defaults to auto-detected)",
+        },
+        {
+          name: "NEAR_CONNECT_LOCAL_PATH",
+          description:
+            "Local @hot-labs/near-connect checkout whose src/ the demo uses instead of the npm package (relative to repo root, e.g. ../near-connect; unset = npm)",
         },
       ],
     },
@@ -50,7 +64,7 @@ export default defineCommanderConfig({
     },
     {
       // Standalone near-connect dev harness (vite serve of src/dev). ⚠ Same port as
-      // meteor-web-wallet — mutually exclusive; the `local` group uses the build watch instead.
+      // meteor-web-wallet — mutually exclusive; `local-env` uses the build watch instead.
       id: "near-connect",
       run: ["bun", "run", "dev"],
       cwd: "./packages/meteor-near-connect",
@@ -99,7 +113,7 @@ export default defineCommanderConfig({
       // ⚠ Same port as near-connect; the two are mutually exclusive.
       // ⚠ First boot on a machine: mkcert's CA install prompts for sudo, which a daemon child
       // cannot answer — run `bunx nice-commander run meteor-web-wallet` once in a real terminal
-      // (single-id run inherits stdio), then daemon starts (`up transfer-full`) work.
+      // (single-id run inherits stdio), then daemon starts (`up local-env`) work.
       id: "meteor-web-wallet",
       run: ["bun", "run", "web:dev"],
       cwd: "../meteor_wallet/web/packages/meteor-frontend",
@@ -117,19 +131,35 @@ export default defineCommanderConfig({
     },
 
     {
-      // One-click "boot the whole SDK test environment" entry — for the web UI, where start
-      // acts on a single process: dependsOn is transitive, so starting THIS starts every
-      // service below (in order, each awaited until ready) and then succeeds as a ✓ chip.
-      // CLI equivalent: `nice-commander up local` (or bare `up` — it's the default selection).
+      // The full local test environment (successor to the windows_dev_env_sdk terminal scripts):
+      // demo app, local mc bridge backend, the REAL localhost Meteor Web wallet (:3001 — serves as
+      // both the v1_web_localhost target and the transfer/bridge receiver), and the near-connect
+      // script pipeline. Excludes backend-test (:8787) and the near-connect dev harness (:3001) —
+      // both ports are owned by their counterparts here.
+      //
+      // One-click entry for the web UI, where start acts on a single process: dependsOn is
+      // transitive, so starting THIS starts every service below (in order, each awaited until
+      // ready) and then succeeds as a ✓ chip. CLI: `nice-commander up local-env` (or bare `up` —
+      // it's the default selection).
       id: "local-env",
       kind: "task",
-      run: ["bun", "-e", "console.log('SDK local test environment is up: demo :5173, mc backend :8787, Meteor Web wallet :3001, near-connect script pipeline')"],
-      dependsOn: ["sdk-test-web", "mc-backend", "meteor-web-wallet", "near-connect-build", "script-sync"],
+      run: [
+        "bun",
+        "-e",
+        "console.log('SDK local test environment is up: demo :5173, mc backend :8787, Meteor Web wallet :3001, near-connect script pipeline')",
+      ],
+      dependsOn: [
+        "sdk-test-web",
+        "mc-backend",
+        "meteor-web-wallet",
+        "near-connect-build",
+        "script-sync",
+      ],
       timeoutMs: 60_000,
       tags: { role: "env" },
     },
 
-    // ── One-shot checks (the `checks` group renders as a CI panel) ──
+    // ── One-shot checks (the `checks` suite renders as a CI panel) ──
     {
       id: "types-sdk",
       kind: "task",
@@ -155,34 +185,27 @@ export default defineCommanderConfig({
       tags: { role: "check" },
     },
   ],
-  groups: {
-    /** Daily dev: the demo web app plus the worker its test pages call. */
-    dev: { include: ["sdk-test-web", "backend-test"] },
-    /** Everything that runs, for cross-package sessions. */
+  suites: {
+    dev: {
+      description: "Daily dev: the demo web app plus the worker its test pages call",
+      include: ["sdk-test-web", "backend-test"],
+    },
     full: {
+      description: "Everything that runs, for cross-package sessions",
       include: ["dev", "near-connect", "sdk-preview", "sdk-build-watch"],
       staggerMs: 400,
     },
-    /** Popup-UI iteration loop on its own. */
-    preview: { include: ["sdk-preview"] },
-    /** Account-transfer testing: demo app + the sibling repo's mc backend (NOT backend-test — same port). */
-    transfer: { include: ["sdk-test-web", "mc-backend"] },
-    /**
-     * The full local test environment (successor to the windows_dev_env_sdk terminal scripts):
-     * demo app, local mc bridge backend, the REAL localhost Meteor Web wallet (:3001 — serves as
-     * both the v1_web_localhost target and the transfer/bridge receiver), and the near-connect
-     * script pipeline. Excludes backend-test (:8787) and the near-connect dev harness (:3001) —
-     * both ports are owned by their `local` counterparts here.
-     */
-    local: {
-      // Selecting just the env task pulls in every service via dependsOn (transitive, awaited).
-      include: ["local-env"],
-      staggerMs: 400,
+    transfer: {
+      description:
+        "Account-transfer testing: demo app + the sibling repo's mc backend (NOT backend-test — same port)",
+      include: ["sdk-test-web", "mc-backend"],
     },
-    /** CI-style panel: ✓/✗ per check. */
-    checks: { where: { role: "check" } },
+    checks: {
+      description: "CI-style panel: ✓/✗ per check",
+      where: { role: "check" },
+    },
   },
-  // Bare `up` boots the complete SDK test environment (group `local`); the lighter `dev`
-  // group (demo + backend-test only) remains selectable explicitly.
-  defaultSelection: "local",
+  // Bare `up` boots the complete SDK test environment (`local-env` pulls in every service via
+  // dependsOn); the lighter `dev` suite (demo + backend-test only) remains selectable explicitly.
+  defaultSelection: "local-env",
 });
