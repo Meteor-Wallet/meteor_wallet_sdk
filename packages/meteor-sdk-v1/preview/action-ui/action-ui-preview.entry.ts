@@ -42,6 +42,8 @@ interface ScenarioConfig {
   snapshot: IMobileBridgeSnapshot;
   element?: string;
   transfer?: ScenarioTransferConfig;
+  /** Show the dev-only mobile wallet switch, with this environment selected. */
+  devMobileWallet?: "development" | "production";
 }
 
 const scenarios = SCENARIOS as ScenarioConfig[];
@@ -123,6 +125,8 @@ function makeMockAction(scenario: ScenarioConfig): ExecutableAction<any> {
         openPendingWalletWindow: () => null,
         // Previews always show the dev-gated "Meteor Web (Local Dev)" transfer option.
         isTransferLocalDevWebAvailable: async () => true,
+        // The dev-only mobile wallet switch only appears in scenarios that ask for it.
+        getDevMobileWalletEnvironment: async () => scenario.devMobileWallet,
       },
     },
     getAllExecutionTargetConfigs: () => targets.map((executionTarget) => ({ executionTarget })),
@@ -136,6 +140,7 @@ function makeMockAction(scenario: ScenarioConfig): ExecutableAction<any> {
     prepareMobileBridge: async () => session,
     refreshMobileBridge: async () => session,
     resetMobileIdentityAndRePair: async () => session,
+    switchDevMobileWalletEnvironment: async () => session,
     execute: async (_target: TMeteorConnectionExecutionTarget) => {},
     // Never settles in previews — terminal screens are driven via previewTerminalState.
     waitForExecutionOutput: () => new Promise(() => {}),

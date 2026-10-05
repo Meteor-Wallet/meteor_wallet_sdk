@@ -78,6 +78,39 @@ export const SCENARIOS = [
     },
   },
   {
+    name: "main-dev-mobile-switch",
+    description: "Main, plus the dev-only Dev / Production mobile wallet switch below the QR",
+    targets: ALL_TARGETS,
+    devMobileWallet: "development",
+    snapshot: {
+      phase: "waiting_for_wallet",
+      push: "not_attempted",
+      deepLink: DEEP_LINK,
+      idleExpiresAt: EXPIRES_SOON(),
+      absoluteExpiresAt: HARD_STOP(),
+      pinAttemptsUsed: 0,
+      linkPhase: "live",
+      linkRedialAttempt: 0,
+    },
+  },
+  {
+    name: "mobile-main-dev-mobile-switch",
+    description: "Mobile stacked layout with the dev-only mobile wallet switch",
+    targets: ALL_TARGETS,
+    mobileUa: true,
+    devMobileWallet: "production",
+    snapshot: {
+      phase: "waiting_for_wallet",
+      push: "not_attempted",
+      deepLink: DEEP_LINK,
+      idleExpiresAt: EXPIRES_SOON(),
+      absoluteExpiresAt: HARD_STOP(),
+      pinAttemptsUsed: 0,
+      linkPhase: "live",
+      linkRedialAttempt: 0,
+    },
+  },
+  {
     // The mobile panel hides the QR behind a toggle, so nothing else captures the stacked layout
     // WITH the code open — the one state where the code pays full height for its size.
     name: "mobile-main-qr",

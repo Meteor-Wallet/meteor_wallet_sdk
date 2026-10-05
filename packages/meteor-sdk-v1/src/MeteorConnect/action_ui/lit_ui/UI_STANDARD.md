@@ -51,6 +51,7 @@ The user reduced all sizes by a total of 4px. The shared bridge panel receives `
 
 - Desktop: platform buttons side by side; conditional Dev Web (Localhost) on a full-width second row. Mobile QR/loading card below, no Open Meteor Mobile button on desktop.
 - Mobile: stacked Meteor Mobile primary and Meteor Web secondary buttons; no extension or QR/toggle. Preserve the existing dev-option visibility rule.
+- Dev-only mobile wallet switch: under the same gate as Dev Web (Localhost) (development build or force-dev flag), and only when the host is on a deployed bridge backend, Connect shows a compact “Mobile wallet (dev only)” Dev / Production segmented control below the mobile QR on desktop (below the buttons on mobile). Switching re-prepares the mobile request against that environment's backend and mobile wallet build, so the QR opens it. Hidden once the platform is locked or Meteor Mobile is selected, and disabled while the request prepares.
 - Create the mobile request eagerly. Until its link is ready, keep the mobile icon and “Meteor Mobile” visible in the disabled button; show a small spinner inside the button at its trailing edge with an accessible preparing-connection label. Do not add a loading row above the button or replace its label.
 - Clicking Meteor Mobile directly calls the same `openCurrentSessionInApp` path as Open Meteor Mobile; do not toggle the QR/connection panel on click. Session advancement can reveal required pairing/approval states.
 - Get Meteor Wallet keeps internal installation navigation despite the arrow decoration.

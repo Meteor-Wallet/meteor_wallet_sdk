@@ -1,4 +1,5 @@
 import { consume } from "@lit/context";
+import type { TMeteorConnectBackendEnvironment } from "@meteorwallet/connect";
 import { html, LitElement } from "lit";
 import { property, state } from "lit/decorators.js"; // You MUST import this explicitly
 import { unsafeSVG } from "lit/directives/unsafe-svg.js";
@@ -39,6 +40,39 @@ export class MeteorActionUiContainer extends LitElement {
 
   @state() private mobileSelected = false;
   @state() private mobileOpenError = "";
+  /** Set only while the dev-only mobile wallet switch is offered (dev gate, deployed backend). */
+  @state() private devMobileWalletEnvironment?: TMeteorConnectBackendEnvironment;
+  @state() private devMobileWalletSwitching = false;
+
+  private async switchDevMobileWallet(environment: TMeteorConnectBackendEnvironment) {
+    if (environment === this.devMobileWalletEnvironment || this.devMobileWalletSwitching) return;
+    this.devMobileWalletSwitching = true;
+    this.mobilePreparing = true;
+    this.mobileOpenError = "";
+    try {
+      this.mobileSession = await this.actionController.switchDevMobileWalletEnvironment(environment);
+      this.devMobileWalletEnvironment = environment;
+    } catch (error) {
+      this.logger.err("Switching the dev mobile wallet failed", error);
+      this.mobilePreparing = false;
+      this.mobileOpenError = "Could not switch the mobile wallet. Please close and reopen this window.";
+    } finally {
+      this.devMobileWalletSwitching = false;
+    }
+  }
+
+  private renderDevMobileWalletSwitch() {
+    const options: [TMeteorConnectBackendEnvironment, string][] = [
+      ["development", "Dev"],
+      ["production", "Production"],
+    ];
+    return html`<div class="dev-mobile-wallet-switch" role="group" aria-label="Mobile wallet build (local dev only)">
+      <span>Mobile wallet (dev only)</span>
+      <div class="dev-mobile-wallet-options">
+        ${options.map(([environment, label]) => html`<button type="button" aria-pressed=${this.devMobileWalletEnvironment === environment ? "true" : "false"} ?disabled=${this.devMobileWalletSwitching || this.mobilePreparing} @click=${() => void this.switchDevMobileWallet(environment)}>${label}</button>`)}
+      </div>
+    </div>`;
+  }
 
   private async selectMobile() {
     if (this.mobilePreparing || this.mobileSession?.getSnapshot().deepLink == null) return;
@@ -107,6 +141,12 @@ export class MeteorActionUiContainer extends LitElement {
       this.mobileSelected = isMobile();
       this.mobileOpenError = "Could not prepare the mobile request. Please close and reopen this window.";
     });
+    void this.action.meteorConnect.mobileBridgeClient
+      .getDevMobileWalletEnvironment()
+      .then((environment) => {
+        if (this.isConnected) this.devMobileWalletEnvironment = environment;
+      })
+      .catch(() => {});
   }
 
   disconnectedCallback(): void {
@@ -146,6 +186,8 @@ export class MeteorActionUiContainer extends LitElement {
     const extensionWalletAvailable = !mobileDevice && availablePlatformTargets.includes("v1_ext");
     const webWalletAvailable = availablePlatformTargets.includes("v1_web");
     const mobileWalletAvailable = availablePlatformTargets.includes("v2_bridge_mobile");
+    const showDevMobileWalletSwitch =
+      this.devMobileWalletEnvironment != null && mobileWalletAvailable && !isPlatformLocked && !this.mobileSelected;
     const showingContinueKnownTarget = this.pendingKnownExecutionTarget != null;
     const continueExecutionTarget = this.pendingKnownExecutionTarget ?? "v1_web";
 
@@ -222,6 +264,7 @@ export class MeteorActionUiContainer extends LitElement {
             `
                 : ""
             }
+            ${showDevMobileWalletSwitch ? this.renderDevMobileWalletSwitch() : ""}
             ${
               !isPlatformLocked
                 ? html`<div class="no-wallet-bottom-section">

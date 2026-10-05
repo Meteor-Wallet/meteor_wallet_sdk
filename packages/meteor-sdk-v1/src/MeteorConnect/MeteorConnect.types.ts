@@ -1,3 +1,4 @@
+import type { TMeteorConnectBackendEnvironment } from "@meteorwallet/connect";
 import type { EMeteorAppId } from "@meteorwallet/connect-shared";
 import type { KeyStore } from "@near-js/keystores";
 import type { ILocalStorageInterface } from "../ported_common/utils/storage/storage.types";
@@ -118,6 +119,12 @@ export interface IMeteorConnectTypedStorage {
   selectedNetworkAccounts: TMCSelectedAccountForNetwork;
   webDevLocalhostBaseUrl: string;
   dev_000_met: number;
+  /**
+   * Dev-only mobile wallet switch from the Connect popup: which Meteor Connect environment (bridge
+   * backend + mobile wallet build) the mobile bridge targets. Ignored outside the dev gate — see
+   * `MeteorConnectMobileBridgeClient.getDevMobileWalletEnvironment`.
+   */
+  devMobileWalletEnvironment: TMeteorConnectBackendEnvironment;
   /**
    * Opt-in staged transfer accounts (plaintext-at-rest — see
    * IMeteorConnectTransferAccountsConfig.persistStagedAccounts). Lives under the `met_data_`

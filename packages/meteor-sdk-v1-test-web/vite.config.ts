@@ -3,7 +3,7 @@ import * as path from "node:path";
 import { reactRouter } from "@react-router/dev/vite";
 import tailwindcss from "@tailwindcss/vite";
 import os from "os";
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
 import devtoolsJson from "vite-plugin-devtools-json";
 import { nodePolyfills } from "vite-plugin-node-polyfills";
 import { hmrPlugin } from "vite-plugin-web-components-hmr";
@@ -36,6 +36,14 @@ const nearConnectLocalSrc = (() => {
   return src;
 })();
 
+// The locally built meteor-near-connect executor (`build-dev-watch` in packages/meteor-near-connect,
+// commander's `near-connect-build`), served at /meteor-near-connect.js for the dev manifest straight
+// from the build output — every rebuild is live on the next page load, with no copy into public/.
+const meteorNearConnectExecutor = path.resolve(
+  __dirname,
+  "../../near-connect/meteor-near-connect.js",
+);
+
 export default defineConfig(({ isSsrBuild }) => ({
   server: {
     host: true,
@@ -64,6 +72,35 @@ export default defineConfig(({ isSsrBuild }) => ({
         // Vite is watching the correct physical file.
       },
     },
+    {
+      name: "meteor-near-connect-executor",
+      apply: "serve",
+      configureServer(server) {
+        if (!fs.existsSync(meteorNearConnectExecutor)) {
+          server.config.logger.warn(
+            `meteor-near-connect executor not built yet (${meteorNearConnectExecutor}) — start it with \`bunx nice-commander up near-connect-build\``,
+          );
+        }
+
+        server.middlewares.use("/meteor-near-connect.js", (_req, res) => {
+          // Runs ahead of Vite's own CORS handling, and the dev manifest points at LOCAL_IP — so a
+          // page opened on localhost fetches this cross-origin.
+          res.setHeader("Access-Control-Allow-Origin", "*");
+          res.setHeader("Cache-Control", "no-store");
+
+          if (!fs.existsSync(meteorNearConnectExecutor)) {
+            res.statusCode = 404;
+            res.end(
+              `// meteor-near-connect executor not built yet — start it with \`bunx nice-commander up near-connect-build\``,
+            );
+            return;
+          }
+
+          res.setHeader("Content-Type", "text/javascript");
+          fs.createReadStream(meteorNearConnectExecutor).pipe(res);
+        });
+      },
+    } satisfies Plugin,
     tailwindcss(),
     // HMR for custom elements authored in the SDK (lit components)
     hmrPlugin({

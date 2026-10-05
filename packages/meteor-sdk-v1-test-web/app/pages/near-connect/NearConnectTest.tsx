@@ -47,12 +47,24 @@ export const NearConnectTest = () => {
   );
 
   const [connector] = useState<NearConnector>(() => {
+    const useLiveExecutor = process.env.NODE_ENV === "production";
+    const manifest = devManifest(useLiveExecutor);
+
     const connector = new NearConnector({
-      manifest: devManifest(process.env.NODE_ENV === "production"),
+      manifest,
       providers: { mainnet: ["https://relmn.aurora.dev"] },
       network,
       logger,
     });
+
+    if (!useLiveExecutor) {
+      // near-connect runs the executor it cached in IndexedDB and only refreshes that cache in the
+      // background, so a rebuilt local executor would apply one page load late — drop the cached
+      // copy. (Rejects during SSR, where there is no IndexedDB.)
+      for (const wallet of manifest.wallets) {
+        connector.db.removeItem(`${wallet.id}:${wallet.version}`).catch(() => {});
+      }
+    }
 
     connector.on("wallet:signIn", async (t) => {
       if (t.source === "signIn") {

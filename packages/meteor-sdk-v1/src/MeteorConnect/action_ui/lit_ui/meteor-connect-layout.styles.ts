@@ -424,6 +424,13 @@ export const meteorConnectLayoutStyles = [
       .mobile-divider strong { color: #fff; font-weight: inherit; }
       .no-wallet-bottom-section { flex-direction: row; flex-wrap: wrap; justify-content: center; align-items: center; gap: .65rem; margin: auto -1rem 0; padding: 1rem; background: #12121e; color: #999; font-size: calc(1.15rem - 4px); }
       .get-wallet-link { border: 0; background: none; padding: 0; font: inherit; color: #8060ff; cursor: pointer; }
+      /* Dev-only mobile wallet switch (same visibility gate as Dev Web (Localhost)). */
+      .dev-mobile-wallet-switch { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: .6rem; color: #999; font-family: 'Gilroy', sans-serif; font-size: calc(.95rem - 4px); line-height: normal; letter-spacing: 0; }
+      .dev-mobile-wallet-options { display: inline-flex; gap: 2px; padding: 2px; background: #21213f; border-radius: .4rem; }
+      .dev-mobile-wallet-options button { padding: .3rem .75rem; border: 0; border-radius: calc(.4rem - 2px); background: transparent; color: #aaa6bf; font: inherit; font-weight: 600; cursor: pointer; }
+      .dev-mobile-wallet-options button[aria-pressed="true"] { background: linear-gradient(110deg, #4210ec, #602cff); color: #fff; }
+      .dev-mobile-wallet-options button:hover:not(:disabled) { filter: brightness(1.15); }
+      .dev-mobile-wallet-options button:disabled { cursor: not-allowed; opacity: .6; }
       @media (max-height: 760px) {
         .meteor-connect-title-box { min-height: 4rem; padding: .65rem 1.2rem; }
         .meteor-connect-content { padding-top: 1rem; gap: .8rem; }

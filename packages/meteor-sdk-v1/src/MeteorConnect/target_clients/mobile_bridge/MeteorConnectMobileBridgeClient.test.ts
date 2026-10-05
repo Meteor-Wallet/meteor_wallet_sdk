@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+import { METEOR_CONNECT_BACKENDS } from "@meteorwallet/connect";
 import { EBridgeLinkType, EMeteorAppId } from "@meteorwallet/connect-shared";
 import type { MeteorConnect } from "../../MeteorConnect";
 import { MeteorConnectMobileBridgeClient } from "./MeteorConnectMobileBridgeClient";
@@ -97,7 +98,12 @@ describe("MeteorConnectMobileBridgeClient open-in-app allowlist", () => {
       };
       await harness.client.openCurrentSessionInApp();
       expect(requests).toEqual([
-        { actionType: "open_meteor_connect", inputs: { link: `${WEB_LINK}#partnerSecret=abc&backendUrl=https%3A%2F%2Fmeteor-connect-backend-development.meteorwallet.workers.dev` } },
+        {
+          actionType: "open_meteor_connect",
+          inputs: {
+            link: `${WEB_LINK}#partnerSecret=abc&backendUrl=https%3A%2F%2Fmeteor-connect-backend-development.meteorwallet.workers.dev`,
+          },
+        },
       ]);
       expect(harness.windowOpened).toEqual([]);
       expect(harness.opened).toEqual([]);
@@ -196,9 +202,9 @@ describe("extension new-key transfer handoff", () => {
         meteorCom: { directAction: async () => ({ opened: true }), features: ["open_page"] },
       };
       expect(isExtensionNewKeyTransferAvailable()).toBe(false);
-      await expect(openExtensionNewKeyTransfer("unused", "https://mc.meteorwallet.app")).rejects.toThrow(
-        "extension_update_required",
-      );
+      await expect(
+        openExtensionNewKeyTransfer("unused", "https://mc.meteorwallet.app"),
+      ).rejects.toThrow("extension_update_required");
       const calls: unknown[] = [];
       (window as any).meteorCom = {
         features: ["new_key_transfer"],
@@ -209,8 +215,15 @@ describe("extension new-key transfer handoff", () => {
       };
       expect(isExtensionNewKeyTransferAvailable()).toBe(true);
       const link = "https://wallet.meteorwallet.app/b?f=s2&l=lease#s=secret";
-      await expect(openExtensionNewKeyTransfer(link, "https://mc.meteorwallet.app")).rejects.toThrow("extension_popup_failed");
-      expect(calls).toEqual([{ actionType: "open_meteor_connect", inputs: { link: `${link}&backendUrl=https%3A%2F%2Fmc.meteorwallet.app` } }]);
+      await expect(
+        openExtensionNewKeyTransfer(link, "https://mc.meteorwallet.app"),
+      ).rejects.toThrow("extension_popup_failed");
+      expect(calls).toEqual([
+        {
+          actionType: "open_meteor_connect",
+          inputs: { link: `${link}&backendUrl=https%3A%2F%2Fmc.meteorwallet.app` },
+        },
+      ]);
     } finally {
       if (previous == null) delete (globalThis as any).window;
       else (globalThis as any).window = previous;
@@ -265,5 +278,106 @@ describe("extension legacy NEAR compatibility", () => {
         }),
       ).rejects.toThrow("extension_transfer_action_unsupported");
     }
+  });
+});
+
+/**
+ * The dev-only mobile wallet switch. Backend and mobile wallet build always move together (each
+ * wallet build claims only from its own environment's backend), and the switch is never offered
+ * outside the dev gate or on a local/custom backend.
+ */
+describe("dev mobile wallet switch", () => {
+  const createClient = (
+    input: {
+      backendUrl?: string;
+      meteorAppId?: EMeteorAppId.meteor_wallet_mobile | EMeteorAppId.meteor_wallet_mobile_dev;
+      forceDev?: boolean;
+      stored?: unknown;
+    } = {},
+  ) => {
+    const values = new Map<string, unknown>();
+    if (input.forceDev) values.set("dev_000_met", 1);
+    if (input.stored !== undefined) values.set("devMobileWalletEnvironment", input.stored);
+    const storage = {
+      getJson: async (key: string) => values.get(key),
+      getJsonOrDef: async (key: string, fallback: unknown) => values.get(key) ?? fallback,
+      setJson: async (key: string, value: unknown) => {
+        values.set(key, value);
+      },
+    };
+    const client = new MeteorConnectMobileBridgeClient({ storage } as unknown as MeteorConnect);
+    (client as unknown as { config?: unknown }).config = {
+      enabled: true,
+      backendUrl: input.backendUrl ?? METEOR_CONNECT_BACKENDS.production,
+      meteorAppId: input.meteorAppId ?? EMeteorAppId.meteor_wallet_mobile,
+    };
+    const resolveTarget = () => (client as any).resolveBridgeTarget();
+    return { client, values, resolveTarget };
+  };
+
+  it("is not offered outside the dev gate, and a stored choice is ignored there", async () => {
+    const { client, resolveTarget } = createClient({ stored: "development" });
+    expect(await client.getDevMobileWalletEnvironment()).toBeUndefined();
+    expect(await resolveTarget()).toEqual({
+      backendUrl: METEOR_CONNECT_BACKENDS.production,
+      meteorAppId: EMeteorAppId.meteor_wallet_mobile,
+    });
+    await expect(client.setDevMobileWalletEnvironment("development")).rejects.toThrow(
+      "mobile_bridge_dev_switch_unavailable",
+    );
+  });
+
+  it("is never offered on a local or custom backend, so it cannot replace one", async () => {
+    const { client, resolveTarget } = createClient({
+      forceDev: true,
+      backendUrl: "http://localhost:8787",
+      meteorAppId: EMeteorAppId.meteor_wallet_mobile_dev,
+      stored: "production",
+    });
+    expect(await client.getDevMobileWalletEnvironment()).toBeUndefined();
+    expect(await resolveTarget()).toEqual({
+      backendUrl: "http://localhost:8787",
+      meteorAppId: EMeteorAppId.meteor_wallet_mobile_dev,
+    });
+  });
+
+  it("moves the backend and mobile wallet together, persists the choice and drops the bridge", async () => {
+    const { client, values, resolveTarget } = createClient({ forceDev: true });
+    expect(await client.getDevMobileWalletEnvironment()).toBe("production");
+
+    const bridgeState = client as unknown as {
+      bridgeTarget?: unknown;
+      initializePromise?: unknown;
+    };
+    bridgeState.bridgeTarget = await resolveTarget();
+    bridgeState.initializePromise = Promise.resolve();
+    await client.setDevMobileWalletEnvironment("development");
+
+    expect(values.get("devMobileWalletEnvironment")).toBe("development");
+    expect(bridgeState.bridgeTarget).toBeUndefined();
+    expect(bridgeState.initializePromise).toBeUndefined();
+    const target = await resolveTarget();
+    expect(target).toEqual({
+      backendUrl: METEOR_CONNECT_BACKENDS.development,
+      meteorAppId: EMeteorAppId.meteor_wallet_mobile_dev,
+    });
+    expect(await client.getDevMobileWalletEnvironment()).toBe("development");
+
+    // Once re-initialized, NEAR sessions link to the switched wallet build.
+    bridgeState.bridgeTarget = target;
+    expect((client as any).targetMeteorAppIdsFor({ kind: { domain: "act_impl_near" } })).toEqual([
+      EMeteorAppId.meteor_wallet_mobile_dev,
+    ]);
+  });
+
+  it("refuses to switch once the current session is committed", async () => {
+    const { client, values } = createClient({ forceDev: true });
+    (client as unknown as { currentSession?: unknown }).currentSession = {
+      isCommitted: () => true,
+    };
+    await expect(client.setDevMobileWalletEnvironment("development")).rejects.toThrow(
+      "mobile_bridge_switch_after_commit",
+    );
+    expect(values.has("devMobileWalletEnvironment")).toBe(false);
   });
 });

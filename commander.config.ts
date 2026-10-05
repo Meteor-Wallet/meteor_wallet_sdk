@@ -32,6 +32,10 @@ export default defineCommanderConfig({
       endpoints: [{ name: "http", protocol: "http", port: 5173, ownership: "exclusive" }],
       ready: { kind: "endpoint", endpoint: "http" },
       tags: { role: "frontend" },
+      // The demo's dev manifest loads the locally built meteor-near-connect executor (served by
+      // its vite config from <root>/near-connect/), so every selection that starts the demo also
+      // starts the build watch and waits for its first build.
+      dependsOn: ["near-connect-build"],
       envVars: [
         {
           name: "LOCAL_IP",
@@ -73,18 +77,13 @@ export default defineCommanderConfig({
       tags: { role: "frontend" },
     },
     {
-      // The near-connect script pipeline, as the old windows_dev_env_sdk scripts ran it:
-      // build-dev-watch emits <root>/near-connect/meteor-near-connect.js on every change…
+      // The meteor-near-connect executor: build-dev-watch emits
+      // <root>/near-connect/meteor-near-connect.js on every change (incl. meteor-sdk-v1/src), and
+      // sdk-test-web serves that file at /meteor-near-connect.js. Ready once the first build lands.
       id: "near-connect-build",
       run: ["bun", "run", "build-dev-watch"],
       cwd: "./packages/meteor-near-connect",
-      tags: { role: "build" },
-    },
-    {
-      // …and this chokidar watcher copies it into sdk-test-web/public for the demo to serve.
-      id: "script-sync",
-      run: ["bun", "run", "watch-meteor-script"],
-      cwd: "./packages/meteor-sdk-v1-test-web",
+      ready: { kind: "logMatch", match: /built in \d+/, timeoutMs: 120_000 },
       tags: { role: "build" },
     },
     {
@@ -134,7 +133,7 @@ export default defineCommanderConfig({
       // The full local test environment (successor to the windows_dev_env_sdk terminal scripts):
       // demo app, local mc bridge backend, the REAL localhost Meteor Web wallet (:3001 — serves as
       // both the v1_web_localhost target and the transfer/bridge receiver), and the near-connect
-      // script pipeline. Excludes backend-test (:8787) and the near-connect dev harness (:3001) —
+      // executor build watch. Excludes backend-test (:8787) and the near-connect dev harness (:3001) —
       // both ports are owned by their counterparts here.
       //
       // One-click entry for the web UI, where start acts on a single process: dependsOn is
@@ -146,15 +145,9 @@ export default defineCommanderConfig({
       run: [
         "bun",
         "-e",
-        "console.log('SDK local test environment is up: demo :5173, mc backend :8787, Meteor Web wallet :3001, near-connect script pipeline')",
+        "console.log('SDK local test environment is up: demo :5173 (+ near-connect executor build watch), mc backend :8787, Meteor Web wallet :3001')",
       ],
-      dependsOn: [
-        "sdk-test-web",
-        "mc-backend",
-        "meteor-web-wallet",
-        "near-connect-build",
-        "script-sync",
-      ],
+      dependsOn: ["sdk-test-web", "mc-backend", "meteor-web-wallet", "near-connect-build"],
       timeoutMs: 60_000,
       tags: { role: "env" },
     },

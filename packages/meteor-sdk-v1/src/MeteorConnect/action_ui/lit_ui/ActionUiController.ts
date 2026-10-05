@@ -30,6 +30,12 @@ export class ActionUiController implements ReactiveController {
     return this.action.resetMobileIdentityAndRePair();
   }
 
+  async switchDevMobileWalletEnvironment(
+    environment: Parameters<ExecutableAction<any>["switchDevMobileWalletEnvironment"]>[0],
+  ) {
+    return this.action.switchDevMobileWalletEnvironment(environment);
+  }
+
   hostConnected() {
     // Logic for when the popup opens
   }

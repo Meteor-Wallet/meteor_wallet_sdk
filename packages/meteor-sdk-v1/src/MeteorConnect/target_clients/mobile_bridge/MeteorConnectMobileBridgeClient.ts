@@ -1,6 +1,8 @@
 import {
+  METEOR_CONNECT_BACKENDS,
   PartnerSessionClient,
   SessionLocalGuardError,
+  type TMeteorConnectBackendEnvironment,
   type TPartnerPairedWallet,
 } from "@meteorwallet/connect";
 import {
@@ -37,6 +39,7 @@ import {
 import {
   createMobileBridgeStorage,
   type IMobileBridgeStorageContext,
+  normalizeBridgeBackendUrl,
   normalizePartnerMetadata,
 } from "./mobileBridgeStorage";
 import {
@@ -71,6 +74,22 @@ const ALLOWED_NATIVE_APP_SCHEMES: ReadonlySet<string> = new Set([
 ]);
 
 /**
+ * The mobile wallet build that claims from each deployed environment's backend, for the dev-only
+ * mobile wallet switch. Backend and app id always move together: the wallet app derives both from
+ * ONE environment (meteor-v2-apps `meteorConnectBridgeClient.ts`), so a session created on one
+ * backend but linked to the other build's scheme can never be claimed.
+ */
+const DEV_SWITCH_MOBILE_APP_IDS = {
+  production: EMeteorAppId.meteor_wallet_mobile,
+  development: EMeteorAppId.meteor_wallet_mobile_dev,
+} as const satisfies Record<TMeteorConnectBackendEnvironment, EMeteorAppId>;
+
+interface IMobileBridgeTarget {
+  backendUrl: string;
+  meteorAppId: EMeteorAppId.meteor_wallet_mobile | EMeteorAppId.meteor_wallet_mobile_dev;
+}
+
+/**
  * The same centered wallet-popup geometry the V1 web actions use (MeteorPostMessenger), so the
  * Meteor Web wallet opened over the bridge looks identical to one opened for a regular action.
  * Centering reads `window.top`, which a cross-origin frame cannot — there the browser places the
@@ -102,6 +121,11 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
     Pick<IMeteorConnectMobileBridgeConfig, "enabled" | "backendUrl" | "meteorAppId">
   > &
     IMeteorConnectMobileBridgeConfig;
+  /**
+   * The backend + mobile wallet this bridge actually runs against, resolved on initialization: the
+   * host's config, or the dev switch's pair (`setDevMobileWalletEnvironment`).
+   */
+  private bridgeTarget?: IMobileBridgeTarget;
   private storage?: IMobileBridgeStorageContext;
   private sessionClient?: PartnerSessionClient;
   private initializePromise?: Promise<void>;
@@ -153,7 +177,8 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
       if (storageImplementation == null || storageIdentity == null) {
         throw new Error("mobile_bridge_storage_not_configured");
       }
-      this.storage = createMobileBridgeStorage(storageImplementation, this.config!.backendUrl);
+      this.bridgeTarget = await this.resolveBridgeTarget();
+      this.storage = createMobileBridgeStorage(storageImplementation, this.bridgeTarget.backendUrl);
       const activeClients = activeClientsByStorage.get(storageIdentity) ?? new Map();
       activeClientsByStorage.set(storageIdentity, activeClients);
       this.coordinatorKey = `${this.storage.environmentId}:${this.storage.backendUrl}`;
@@ -216,6 +241,86 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
       throw error;
     });
     return this.initializePromise;
+  }
+
+  /** The mobile wallet this bridge links to — the dev switch's choice once initialized. */
+  private get targetMeteorAppId(): IMobileBridgeTarget["meteorAppId"] {
+    return this.bridgeTarget?.meteorAppId ?? this.config!.meteorAppId;
+  }
+
+  private async resolveBridgeTarget(): Promise<IMobileBridgeTarget> {
+    const environment = await this.getDevMobileWalletEnvironmentOverride();
+    if (environment == null) {
+      return { backendUrl: this.config!.backendUrl, meteorAppId: this.config!.meteorAppId };
+    }
+    return {
+      backendUrl: METEOR_CONNECT_BACKENDS[environment],
+      meteorAppId: DEV_SWITCH_MOBILE_APP_IDS[environment],
+    };
+  }
+
+  /**
+   * The development gate shared with the V1 client's "Dev Web (Localhost)" target: a development
+   * build, or the persisted force-dev flag.
+   */
+  private async isDevGateOpen(): Promise<boolean> {
+    const forceDev = (await this.meteorConnect.storage.getJsonOrDef("dev_000_met", 0)) === 1;
+    return forceDev || process.env.NODE_ENV === "development";
+  }
+
+  /**
+   * The deployed environment whose backend the host configured, if any. The dev switch is only
+   * offered on a deployed backend, so it can never silently replace a local or custom one (e.g. the
+   * demo's `?backend=local`).
+   */
+  private configuredDeployedEnvironment(): TMeteorConnectBackendEnvironment | undefined {
+    if (this.config == null) return undefined;
+    const configured = normalizeBridgeBackendUrl(this.config.backendUrl);
+    return (Object.keys(METEOR_CONNECT_BACKENDS) as TMeteorConnectBackendEnvironment[]).find(
+      (environment) => normalizeBridgeBackendUrl(METEOR_CONNECT_BACKENDS[environment]) === configured,
+    );
+  }
+
+  private async isDevMobileWalletSwitchAvailable(): Promise<boolean> {
+    return (
+      this.config?.enabled === true &&
+      this.configuredDeployedEnvironment() != null &&
+      (await this.isDevGateOpen())
+    );
+  }
+
+  private async getDevMobileWalletEnvironmentOverride(): Promise<
+    TMeteorConnectBackendEnvironment | undefined
+  > {
+    if (!(await this.isDevMobileWalletSwitchAvailable())) return undefined;
+    const stored = await this.meteorConnect.storage.getJson("devMobileWalletEnvironment");
+    return stored === "production" || stored === "development" ? stored : undefined;
+  }
+
+  /**
+   * Dev-only mobile wallet switch, offered beside the Connect popup's mobile QR like the V1
+   * "Dev Web (Localhost)" target: which environment's mobile wallet build the bridge links to.
+   * `undefined` when the switch is not offered — outside the dev gate, with the bridge disabled,
+   * or on a local/custom backend.
+   */
+  async getDevMobileWalletEnvironment(): Promise<TMeteorConnectBackendEnvironment | undefined> {
+    if (!(await this.isDevMobileWalletSwitchAvailable())) return undefined;
+    const target = this.bridgeTarget ?? (await this.resolveBridgeTarget());
+    return target.meteorAppId === EMeteorAppId.meteor_wallet_mobile ? "production" : "development";
+  }
+
+  /**
+   * Persist the dev switch's environment and tear down the current, uncommitted bridge: the
+   * session client, its storage scope and its coordinator slot all belong to one backend. The next
+   * `prepareRequest` re-initializes against the chosen backend + mobile wallet pair.
+   */
+  async setDevMobileWalletEnvironment(environment: TMeteorConnectBackendEnvironment): Promise<void> {
+    if (!(await this.isDevMobileWalletSwitchAvailable())) {
+      throw new Error("mobile_bridge_dev_switch_unavailable");
+    }
+    if (this.currentSession?.isCommitted()) throw new Error("mobile_bridge_switch_after_commit");
+    await this.meteorConnect.storage.setJson("devMobileWalletEnvironment", environment);
+    await this.teardownBridge();
   }
 
   /**
@@ -314,18 +419,18 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
     transferTargetPlatform?: TTransferTargetPlatform,
     targetWalletConnection?: IMeteorConnection_V2_BridgeMobile,
   ): EMeteorAppId[] {
-    if (prepared.kind.domain !== "meteor_wallet_core") return [this.config!.meteorAppId];
+    if (prepared.kind.domain !== "meteor_wallet_core") return [this.targetMeteorAppId];
     if (targetWalletConnection != null) return [targetWalletConnection.meteorAppId];
     // The installed V1 extension uses the production web wallet identity.
     if (transferTargetPlatform === "extension") return [EMeteorAppId.meteor_wallet_web];
-    if (transferTargetPlatform === "mobile") return [this.config!.meteorAppId];
+    if (transferTargetPlatform === "mobile") return [this.targetMeteorAppId];
     if (transferTargetPlatform === "web_local_dev") {
       // A locally served meteor-frontend always identifies as the dev web identity.
       return [EMeteorAppId.meteor_wallet_web_dev];
     }
     const configured = this.config?.transferAccounts?.meteorAppIds;
     if (configured != null && configured.length > 0) return [...configured];
-    return this.config!.meteorAppId === EMeteorAppId.meteor_wallet_mobile_dev
+    return this.targetMeteorAppId === EMeteorAppId.meteor_wallet_mobile_dev
       ? [EMeteorAppId.meteor_wallet_web_dev]
       : [EMeteorAppId.meteor_wallet_web];
   }
@@ -335,8 +440,7 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
    * "Dev Web (Localhost)" target: a development build, or the persisted force-dev flag.
    */
   async isTransferLocalDevWebAvailable(): Promise<boolean> {
-    const forceDev = (await this.meteorConnect.storage.getJsonOrDef("dev_000_met", 0)) === 1;
-    return forceDev || process.env.NODE_ENV === "development";
+    return this.isDevGateOpen();
   }
 
   /** The origin a "web_local_dev" transfer link is rebased onto (shared with the V1 dev target). */
@@ -352,7 +456,7 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
       executionTarget: "v2_bridge_mobile",
       schemaVersion: 1,
       bridgeEnvironmentId: this.storage?.environmentId ?? "pending",
-      meteorAppId: this.config!.meteorAppId,
+      meteorAppId: this.targetMeteorAppId,
       partnerClientId: this.partnerClientId() ?? "pending",
       walletVerifyPublicKey: "pending",
     };
@@ -653,7 +757,7 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
         }
         if (this.currentTransferTargetPlatform === "extension") {
           pendingWindow?.close();
-          extensionOpen = openExtensionNewKeyTransfer(link, this.config!.backendUrl);
+          extensionOpen = openExtensionNewKeyTransfer(link, this.bridgeTarget?.backendUrl ?? this.config!.backendUrl);
           return;
         }
         if (pendingWindow != null) {
@@ -718,6 +822,13 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
   }
 
   async dispose(): Promise<void> {
+    await this.teardownBridge();
+    this.storageImplementation = undefined;
+    this.storageIdentity = undefined;
+  }
+
+  /** Drop the live bridge but keep `configure()`'s state, so the next request re-initializes. */
+  private async teardownBridge(): Promise<void> {
     this.currentToken = undefined;
     await this.currentSession?.dispose();
     await this.sessionDisposalPromise?.catch(() => {});
@@ -728,7 +839,6 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
     this.releaseCoordinatorOwnership();
     this.leaseProvider = undefined;
     this.fencingGeneration = undefined;
-    this.storageImplementation = undefined;
-    this.storageIdentity = undefined;
+    this.bridgeTarget = undefined;
   }
 }

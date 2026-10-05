@@ -1,3 +1,4 @@
+import type { TMeteorConnectBackendEnvironment } from "@meteorwallet/connect";
 import { ActionUi } from "../action_ui/ActionUi";
 import type { IRenderActionUi_Input } from "../action_ui/action_ui.types";
 import { MeteorLogger } from "../logging/MeteorLogger";
@@ -217,6 +218,24 @@ export class ExecutableAction<R extends TMCActionRequestUnion<TMCActionRegistry>
   async resetMobileIdentityAndRePair(): Promise<MobileBridgeSession> {
     if (this.execute_promise != null) throw new Error("mobile_bridge_reset_after_commit");
     await this.meteorConnect.mobileBridgeClient.resetPartnerIdentity();
+    return this.prepareReplacementMobileBridge();
+  }
+
+  /**
+   * Dev-only mobile wallet switch: retarget the bridge at the other environment's backend + mobile
+   * wallet build and prepare a replacement session, so the QR opens that build instead.
+   */
+  async switchDevMobileWalletEnvironment(
+    environment: TMeteorConnectBackendEnvironment,
+  ): Promise<MobileBridgeSession> {
+    if (this.execute_promise != null) throw new Error("mobile_bridge_switch_after_commit");
+    // Settle the eager preparation first, so it cannot land on the bridge being torn down.
+    await this.prepareMobilePromise?.catch(() => {});
+    await this.meteorConnect.mobileBridgeClient.setDevMobileWalletEnvironment(environment);
+    return this.prepareReplacementMobileBridge();
+  }
+
+  private async prepareReplacementMobileBridge(): Promise<MobileBridgeSession> {
     const session = await this.meteorConnect.mobileBridgeClient.prepareRequest(
       this.getExpandedRequest(),
       this.#sensitiveTransferSource,
