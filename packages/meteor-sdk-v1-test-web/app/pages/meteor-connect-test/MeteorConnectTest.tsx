@@ -1,10 +1,5 @@
 import type { IMeteorConnectAccount } from "@meteorwallet/sdk";
-import {
-  EMeteorAppId,
-  METEOR_CONNECT_BACKENDS,
-  MeteorConnect,
-  webpage_local_storage,
-} from "@meteorwallet/sdk";
+import { METEOR_CONNECT_BACKENDS, MeteorConnect, webpage_local_storage } from "@meteorwallet/sdk";
 import { actionCreators } from "@near-js/transactions";
 import { parseNearAmount } from "@near-js/utils";
 import { QueryClient, QueryClientProvider, useMutation, useQuery } from "@tanstack/react-query";
@@ -13,6 +8,7 @@ import {
   AddMessageComponent,
   type IAddMessageParams,
 } from "~/components/wallet_actions/AddMessageComponent.tsx";
+import { DEPLOYMENT } from "~/core/deployment";
 import {
   createSimpleNonce,
   GUESTBOOK_CONTRACT_ID,
@@ -31,22 +27,20 @@ const LOCAL_BACKEND_URL = "http://localhost:8787";
  * (`mobile_bridge_config_mismatch` on change), so switching backends is a full navigation, not a
  * live toggle.
  *
- *   (default)             the DEVELOPMENT backend — what this harness is for
+ *   (default)             this deployment kind's backend (`DEPLOYMENT.bridgeBackend`)
  *   ?backend=local        the mc_backend worker (`wrangler dev`, :8787) from ../meteor-connect-bridge
+ *   ?backend=development  the development backend
  *   ?backend=production   the production backend
  *   ?backend=<url>        anything else, verbatim
  *
- * The default is development, not production, for two reasons. It is the backend this harness is
- * meant to exercise — production carries real user sessions and nothing here should reach it by
- * merely loading the page. And production `mc.meteorwallet.app` hard-blocks these requests at the
- * Cloudflare edge anyway (WAF "you have been blocked", even on OPTIONS preflights, which surfaces
- * in the browser as a CORS failure — zone security config, not worker code), so the old default
- * could not complete a bridge at all.
+ * An override changes only the backend: the mobile app id stays the deployment kind's, so pairing
+ * a production mobile wallet through the development backend (or the reverse) is on the tester.
  */
 const resolveBackendUrl = (): string => {
-  if (typeof window === "undefined") return METEOR_CONNECT_BACKENDS.development;
+  const deploymentDefault = METEOR_CONNECT_BACKENDS[DEPLOYMENT.bridgeBackend];
+  if (typeof window === "undefined") return deploymentDefault;
   const requested = new URLSearchParams(window.location.search).get("backend");
-  if (requested == null) return METEOR_CONNECT_BACKENDS.development;
+  if (requested == null) return deploymentDefault;
   if (requested === "local") return LOCAL_BACKEND_URL;
   if (requested === "production") return METEOR_CONNECT_BACKENDS.production;
   if (requested === "development") return METEOR_CONNECT_BACKENDS.development;
@@ -54,8 +48,8 @@ const resolveBackendUrl = (): string => {
 };
 
 const MOBILE_BRIDGE_BACKEND_URL = resolveBackendUrl();
-const MOBILE_BRIDGE_APP_ID = EMeteorAppId.meteor_wallet_mobile_dev;
-const MOBILE_BRIDGE_DEEP_LINK = "meteorwalletdev://bridge_request";
+const MOBILE_BRIDGE_APP_ID = DEPLOYMENT.mobileAppId;
+const MOBILE_BRIDGE_DEEP_LINK = DEPLOYMENT.mobileDeepLink;
 
 const meteorConnectClient =
   (import.meta.hot?.data.meteorConnectClient as MeteorConnect | undefined) ?? new MeteorConnect();
@@ -349,7 +343,8 @@ const MobileBridgeTestInfo = ({ account }: { account?: IMeteorConnectAccount }) 
       }
     >
       <h2 className={"font-semibold text-sky-950 dark:text-sky-100"}>
-        Meteor Mobile development bridge is enabled
+        Meteor Mobile {DEPLOYMENT.kind === "production" ? "production" : "development"} bridge is
+        enabled
       </h2>
       <p>
         Opening a sign-in request should immediately show the <strong>Meteor Mobile</strong> panel,
@@ -376,6 +371,16 @@ const MobileBridgeTestInfo = ({ account }: { account?: IMeteorConnectAccount }) 
             {MOBILE_BRIDGE_BACKEND_URL}
           </code>
         </dd>
+        <dt className={"font-medium text-slate-700 dark:text-slate-300"}>Web wallet</dt>
+        <dd>
+          <code
+            className={
+              "break-all rounded bg-white px-1 py-0.5 text-slate-900 dark:bg-slate-800 dark:text-sky-100"
+            }
+          >
+            {DEPLOYMENT.webWalletUrl}
+          </code>
+        </dd>
         <dt className={"font-medium text-slate-700 dark:text-slate-300"}>Current account route</dt>
         <dd>
           <code
@@ -400,7 +405,8 @@ const MobileBridgeTestInfo = ({ account }: { account?: IMeteorConnectAccount }) 
         </p>
       ) : (
         <p className={"mt-2"}>
-          Use any sign-in button below to test first-time QR pairing and the development app scheme.
+          Use any sign-in button below to test first-time QR pairing and the{" "}
+          {DEPLOYMENT.kind === "production" ? "production" : "development"} app scheme.
         </p>
       )}
     </section>

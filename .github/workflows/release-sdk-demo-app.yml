@@ -1,9 +1,17 @@
 name: Deploy SDK Demo App
 
+# Two deployment kinds (see packages/meteor-sdk-v1-test-web/app/core/deployment.ts), each its own
+# Cloudflare Pages project whose production branch is the release branch below. Wrangler infers the
+# branch from the checkout, so every push is that project's production deployment:
+#   release/sdk-demo-app      → production kind (production bridge backend + production wallets)
+#                               → meteorwallet-sdk-demo      → https://sdk-demo.meteorwallet.app
+#   release/sdk-demo-app-dev  → dev kind (development bridge backend + dev wallets)
+#                               → meteorwallet-sdk-demo-dev  → https://sdk-demo-dev.meteorwallet.app
 on:
   push:
     branches:
       - release/sdk-demo-app
+      - release/sdk-demo-app-dev
 
 jobs:
   build-and-deploy:
@@ -13,6 +21,9 @@ jobs:
       deployments: write
     concurrency:
       group: ${{ github.workflow }}-${{ github.ref }}
+    env:
+      DEPLOYMENT_KIND: ${{ github.ref_name == 'release/sdk-demo-app' && 'production' || 'dev' }}
+      PAGES_PROJECT: ${{ github.ref_name == 'release/sdk-demo-app' && 'meteorwallet-sdk-demo' || 'meteorwallet-sdk-demo-dev' }}
 
     steps:
       - name: Checkout code
@@ -31,14 +42,14 @@ jobs:
       - name: Install dependencies
         run: bun install
 
-      - name: Build the web version
+      - name: Build the web version (${{ env.DEPLOYMENT_KIND }})
         working-directory: packages/meteor-sdk-v1-test-web
-        run: bun run build
+        run: bun run build:${{ env.DEPLOYMENT_KIND }}
 
-      - name: Publish
+      - name: Publish (${{ env.DEPLOYMENT_KIND }})
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy packages/meteor-sdk-v1-test-web/build/client --project-name=meteorwallet-sdk-demo
+          command: pages deploy packages/meteor-sdk-v1-test-web/build/client --project-name=${{ env.PAGES_PROJECT }}
           gitHubToken: ${{ secrets.GITHUB_TOKEN }}

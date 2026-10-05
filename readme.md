@@ -53,7 +53,8 @@ packages\meteor-sdk-v1-test-web
 
 Run `bun dev` in this package to test out the Meteor SDK, including NEAR Connect functionality.
 
-Also hosted here: https://sdk-demo.meteorwallet.app/
+Also hosted here: https://sdk-demo.meteorwallet.app/ (production wallets and bridge backend), and
+https://sdk-demo-dev.meteorwallet.app/ (dev wallets and bridge backend).
 
 # Developing with NEAR Connect
 

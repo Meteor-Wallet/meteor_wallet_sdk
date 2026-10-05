@@ -2,6 +2,7 @@ import type { MeteorConnect, TStagedTransferAccountSummary } from "@meteorwallet
 import { METEOR_CONNECT_BACKENDS, parseTransferSecretInput } from "@meteorwallet/sdk";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { DEPLOYMENT } from "~/core/deployment";
 import { Button } from "~/ui/Button";
 import { buildFakeTransferAccountBatch } from "./fakeTransferAccounts";
 
@@ -28,10 +29,10 @@ export const StagedAccountsPanel = ({
 }) => {
   const usingLocalBackend = backendUrl.includes("localhost") || backendUrl.includes("127.0.0.1");
   const usingProductionBackend = backendUrl === METEOR_CONNECT_BACKENDS.production;
-  // `development` is the default, so it is the absence of the param rather than a value.
+  // The deployment kind's backend is the default, so it is the absence of the param, not a value.
   const switchBackend = (target: "local" | "development" | "production") => {
     const url = new URL(window.location.href);
-    if (target === "development") url.searchParams.delete("backend");
+    if (target === DEPLOYMENT.bridgeBackend) url.searchParams.delete("backend");
     else url.searchParams.set("backend", target);
     window.location.href = url.toString();
   };
@@ -116,15 +117,16 @@ export const StagedAccountsPanel = ({
         </p>
       ) : usingProductionBackend ? (
         <p className={"text-sm text-amber-700"}>
-          ⚠ Using the PRODUCTION backend — real user sessions live here. If bridge creation fails
-          with a CORS error, the request is being stopped at the Cloudflare edge (WAF block on{" "}
-          <code>mc.meteorwallet.app</code> — preflights can never pass a challenge), not by the
-          worker. {switchLink("development", "Switch back to development")} ·{" "}
-          {switchLink("local", "local")}
+          ⚠ Using the PRODUCTION backend
+          {DEPLOYMENT.bridgeBackend === "production" ? " (this deployment's default)" : ""} — real
+          user sessions live here. A CORS error on bridge creation has meant the Cloudflare edge
+          (WAF on <code>mc.meteorwallet.app</code>) blocked the preflight, not the worker.{" "}
+          {switchLink("development", "Switch to development")} · {switchLink("local", "local")}
         </p>
       ) : (
         <p className={"text-sm text-green-700"}>
-          Using the development backend at <code>{backendUrl}</code> — the default for this harness.{" "}
+          Using the development backend at <code>{backendUrl}</code>
+          {DEPLOYMENT.bridgeBackend === "development" ? " — this deployment's default" : ""}.{" "}
           {switchLink("local", "Switch to local")} · {switchLink("production", "production")}
         </p>
       )}

@@ -12,7 +12,8 @@ import {
 
 import type { Route } from "./+types/root";
 import "./app.css";
-import { MeteorLogger } from "@meteorwallet/sdk";
+import { MeteorLogger, setEnvConfig } from "@meteorwallet/sdk";
+import { DEPLOYMENT } from "~/core/deployment";
 import { Button } from "~/ui/Button";
 
 const envVars = {
@@ -27,6 +28,14 @@ console.log(envVars["NODE_ENV"]);
 if (process.env.NODE_ENV === "development") {
   console.log("Setting MeteorLogger global logging level to debug for development environment");
   MeteorLogger.setGlobalLoggingLevel("debug");
+}
+
+// V1 web wallet popups follow the deployment kind, unless the SDK's own localStorage override is set.
+if (
+  typeof window === "undefined" ||
+  window.localStorage.getItem("DEV__METEOR_WALLET_BASE_URL") == null
+) {
+  setEnvConfig({ wallet_base_url: DEPLOYMENT.webWalletUrl });
 }
 
 export const links: Route.LinksFunction = () => [
@@ -91,6 +100,16 @@ export default function App() {
         >
           Meteor Connect
         </Button>
+        <span
+          className={`ml-auto self-center rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wide ${
+            DEPLOYMENT.kind === "production"
+              ? "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-200"
+              : "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200"
+          }`}
+          title={`Bridge backend: ${DEPLOYMENT.bridgeBackend} · Web wallet: ${DEPLOYMENT.webWalletUrl} · Mobile: ${DEPLOYMENT.mobileAppId}`}
+        >
+          {DEPLOYMENT.kind} deployment
+        </span>
       </div>
       <Outlet />
     </div>

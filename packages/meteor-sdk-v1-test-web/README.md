@@ -8,6 +8,26 @@
 > The reference integration is
 > [`packages/meteor-sdk-v1/examples/minimal-consumer/`](../meteor-sdk-v1/examples/minimal-consumer/).
 
+## Deployment kinds
+
+Each build targets one Meteor stack, chosen by `VITE_DEPLOYMENT_KIND` (config in
+[`app/core/deployment.ts`](app/core/deployment.ts)). The current kind is shown as a badge in the top bar.
+
+| | `dev` (default) | `production` |
+| --- | --- | --- |
+| Bridge backend | `METEOR_CONNECT_BACKENDS.development` | `METEOR_CONNECT_BACKENDS.production` |
+| V1 web wallet | `https://wallet-dev.meteorwallet.app` | `https://wallet.meteorwallet.app` |
+| Mobile wallet | `meteor_wallet_mobile_dev` (`meteorwalletdev://`) | `meteor_wallet_mobile` (`meteorwallet://`) |
+| Build | `bun run build:dev` | `bun run build:production` |
+| Deploy branch | `release/sdk-demo-app-dev` | `release/sdk-demo-app` |
+| Cloudflare Pages project | `meteorwallet-sdk-demo-dev` | `meteorwallet-sdk-demo` |
+| URL | <https://sdk-demo-dev.meteorwallet.app> | <https://sdk-demo.meteorwallet.app> |
+
+`bun run dev` is the `dev` kind; run `VITE_DEPLOYMENT_KIND=production bun run dev` to try production
+locally. `?backend=local|development|production|<url>` still overrides the bridge backend per page
+load, and nothing else. The V1 extension is whichever one is installed in the browser, and the SDK
+always sends new-key transfers to the extension under the production web wallet identity.
+
 # Welcome to React Router!
 
 A modern, production-ready template for building full-stack React applications using React Router.
