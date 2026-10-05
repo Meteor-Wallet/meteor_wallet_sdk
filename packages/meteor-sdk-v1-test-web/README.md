@@ -8,6 +8,8 @@
 > The reference integration is
 > [`packages/meteor-sdk-v1/examples/minimal-consumer/`](../meteor-sdk-v1/examples/minimal-consumer/).
 
+...
+
 ## Deployment kinds
 
 Each build targets one Meteor stack, chosen by `VITE_DEPLOYMENT_KIND` (config in
