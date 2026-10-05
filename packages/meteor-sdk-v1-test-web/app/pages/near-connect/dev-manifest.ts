@@ -1,4 +1,6 @@
-export const devManifest = (useLiveExecutor = false) =>
+import { EXECUTOR_SOURCES, type TExecutorSource } from "./executor-source";
+
+export const devManifest = (executorSource: TExecutorSource) =>
   ({
     version: "1.1.0",
     wallets: [
@@ -9,10 +11,8 @@ export const devManifest = (useLiveExecutor = false) =>
         description:
           "The most simple and secure wallet to manage your crypto, access DeFi, and explore Web3",
         website: "https://meteorwallet.app/",
-        version: "1.0.0",
-        executor: useLiveExecutor
-          ? "https://storage.googleapis.com/meteor-apps-v2/near-connect/executor/latest/meteor-near-connect.js"
-          : `http://${process.env.LOCAL_IP || "localhost"}:5173/meteor-near-connect.js`,
+        version: EXECUTOR_SOURCES[executorSource].manifestVersion,
+        executor: EXECUTOR_SOURCES[executorSource].url,
         type: "sandbox",
 
         features: {

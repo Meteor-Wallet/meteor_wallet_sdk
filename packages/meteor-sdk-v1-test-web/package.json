@@ -3,8 +3,9 @@
   "private": true,
   "scripts": {
     "build": "react-router build",
-    "build:dev": "VITE_DEPLOYMENT_KIND=dev react-router build",
-    "build:production": "VITE_DEPLOYMENT_KIND=production react-router build",
+    "build:dev": "VITE_DEPLOYMENT_KIND=dev react-router build && bun run build:executor-candidates",
+    "build:production": "VITE_DEPLOYMENT_KIND=production react-router build && bun run build:executor-candidates",
+    "build:executor-candidates": "NODE_ENV=production bun run --cwd ../meteor-near-connect build --outDir ../meteor-sdk-v1-test-web/build/client/executor/candidate && NODE_ENV=development bun run --cwd ../meteor-near-connect build --outDir ../meteor-sdk-v1-test-web/build/client/executor/candidate-dev",
     "clear-vite-cache": "trash '**/.vite'",
     "clean-cache-files": "glcl -f glob-list-cache.clean",
     "dev": "bun run clean-cache-files && react-router dev --force",

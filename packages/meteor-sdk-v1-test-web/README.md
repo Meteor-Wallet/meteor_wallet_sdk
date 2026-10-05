@@ -30,6 +30,23 @@ locally. `?backend=local|development|production|<url>` still overrides the bridg
 load, and nothing else. The V1 extension is whichever one is installed in the browser, and the SDK
 always sends new-key transfers to the extension under the production web wallet identity.
 
+### Testing a NEAR Connect executor before releasing it
+
+Both deploy builds also build the `meteor-near-connect` executor from the same commit
+(`build:executor-candidates`) and ship it with the demo under `/executor/`. The NEAR Connect page's
+**Executor script** selector (or `?executor=`) picks which script near-connect loads:
+
+| `?executor=` | Script | Available |
+| --- | --- | --- |
+| `published` | The released executor on GCS — what real dApps load | deployed (default) and `bun run dev` |
+| `candidate` | This deploy's production build — exactly what releasing this commit would upload | deployed |
+| `candidate-dev` | This deploy's development build (debug logging, mobile bridge on the development stack) | deployed |
+| `local` | The local `near-connect-build` watch output | `bun run dev` (default) |
+
+So to try an executor change before releasing it: push it to `release/sdk-demo-app-dev` (or
+`release/sdk-demo-app`), open `/near-connect?executor=candidate`, and only then push
+`release/meteor-near-connect` to upload it to GCS.
+
 # Welcome to React Router!
 
 A modern, production-ready template for building full-stack React applications using React Router.

@@ -16,6 +16,8 @@ import {
   GUESTBOOK_CONTRACT_METHODS,
 } from "../meteor-sdk-test/guestbook";
 import { devManifest } from "./dev-manifest";
+import { ExecutorSelector } from "./ExecutorSelector";
+import { resolveExecutorSource } from "./executor-source";
 
 export const NearConnectTest = () => {
   const [network, setNetwork] = useState<"testnet" | "mainnet">("testnet");
@@ -46,9 +48,10 @@ export const NearConnectTest = () => {
     undefined,
   );
 
+  const [executorSource] = useState(resolveExecutorSource);
+
   const [connector] = useState<NearConnector>(() => {
-    const useLiveExecutor = process.env.NODE_ENV === "production";
-    const manifest = devManifest(useLiveExecutor);
+    const manifest = devManifest(executorSource);
 
     const connector = new NearConnector({
       manifest,
@@ -57,10 +60,11 @@ export const NearConnectTest = () => {
       logger,
     });
 
-    if (!useLiveExecutor) {
+    if (executorSource !== "published") {
       // near-connect runs the executor it cached in IndexedDB and only refreshes that cache in the
-      // background, so a rebuilt local executor would apply one page load late — drop the cached
-      // copy. (Rejects during SSR, where there is no IndexedDB.)
+      // background, so a rebuilt local executor or a redeployed candidate would apply one page load
+      // late — drop the cached copy. The published executor keeps the cache real dApps get.
+      // (Rejects during SSR, where there is no IndexedDB.)
       for (const wallet of manifest.wallets) {
         connector.db.removeItem(`${wallet.id}:${wallet.version}`).catch(() => {});
       }
@@ -131,6 +135,7 @@ export const NearConnectTest = () => {
   return (
     <div className={"p-5"}>
       <h1>NEAR Connect Test</h1>
+      <ExecutorSelector executorSource={executorSource} />
       <NetworkSelector
         network={network}
         onSelectNetwork={(network) => {
