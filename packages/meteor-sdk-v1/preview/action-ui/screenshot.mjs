@@ -8,9 +8,15 @@
  *
  * Scenarios whose `mobileUa` flag is set are captured with a mobile user agent.
  *
+ * `--near-connect` instead mounts each scenario the way the NEAR Connect executor does (no
+ * overlay, straight into near-connect's sandbox iframe) at that iframe's real size: 418x557 on a
+ * desktop host, and 390x619 on a phone host (80% of an 844px screen, minus near-connect's footer).
+ * Shots are written as `<name>-near-connect.png`; the overflow guard applies to both modes.
+ *
  * Usage:
  *   bun run preview:action-ui:shots                 # all scenarios
  *   node ./preview/action-ui/screenshot.mjs main,pin # subset
+ *   node ./preview/action-ui/screenshot.mjs main --near-connect
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -22,7 +28,12 @@ const MOBILE_USER_AGENT =
   "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 " +
   "(KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1";
 
-const filter = process.argv[2]?.split(",").map((name) => name.trim());
+const args = process.argv.slice(2);
+const nearConnect = args.includes("--near-connect");
+const filter = args
+  .find((arg) => !arg.startsWith("--"))
+  ?.split(",")
+  .map((name) => name.trim());
 const scenarios = filter ? SCENARIOS.filter((s) => filter.includes(s.name)) : SCENARIOS;
 if (scenarios.length === 0) {
   console.error(`No matching scenarios. Available: ${SCENARIOS.map((s) => s.name).join(", ")}`);
@@ -42,12 +53,20 @@ const browser = await chromium.launch({ executablePath });
 try {
   for (const scenario of scenarios) {
     const page = await browser.newPage({
-      viewport: scenario.mobileUa ? { width: 390, height: 844 } : { width: 800, height: 700 },
+      viewport: nearConnect
+        ? scenario.mobileUa
+          ? { width: 390, height: 619 }
+          : { width: 418, height: 557 }
+        : scenario.mobileUa
+          ? { width: 390, height: 844 }
+          : { width: 800, height: 700 },
       deviceScaleFactor: 2,
       ...(scenario.mobileUa ? { userAgent: MOBILE_USER_AGENT, isMobile: true } : {}),
     });
     page.on("pageerror", (error) => console.log(`[${scenario.name}] page error:`, error.message));
-    await page.goto(`http://localhost:${served.port}/index.html?scenario=${scenario.name}`);
+    await page.goto(
+      `http://localhost:${served.port}/index.html?scenario=${scenario.name}${nearConnect ? "&embed=near-connect" : ""}`,
+    );
     await page.waitForFunction(() => window.__uiReady === true, null, { timeout: 15000 });
     // Let entrance animations settle, the QR draw, and stage transitions run.
     await page.waitForTimeout(scenario.settleMs ?? 900);
@@ -77,8 +96,10 @@ try {
       await page.waitForTimeout(500);
     }
 
-    await page.screenshot({ path: path.join(outDir, `${scenario.name}-full.png`) });
-    const modal = await page.locator(".modal-container").boundingBox();
+    await page.screenshot({
+      path: path.join(outDir, `${scenario.name}-${nearConnect ? "near-connect" : "full"}.png`),
+    });
+    const modal = nearConnect ? null : await page.locator(".modal-container").boundingBox();
     if (modal) {
       await page.screenshot({ path: path.join(outDir, `${scenario.name}-modal.png`), clip: modal });
       console.log(

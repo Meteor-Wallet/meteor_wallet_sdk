@@ -208,6 +208,12 @@ export class MeteorMobileBridgePanel extends LitElement {
       :host([connectdesign]) .heading .status { margin-bottom: .25rem; }
       :host([connectdesign]) .loading-code { height: 180px; }
     }
+    /* Compact tier (NEAR Connect's 557px-tall frame): same QR size, tighter card. */
+    @media (max-height: 640px) {
+      :host([connectdesign]) section.panel { padding: .35rem 0 .5rem; }
+      :host([connectdesign]) .heading .status { margin-bottom: .1rem; }
+      :host([connectdesign]) .request-access { gap: .4rem; }
+    }
     .connect-loading { display: flex; flex-direction: column; align-items: center; background: #12121D; border-radius: .4rem; padding: 1rem; color: white; }
     .connect-loading p { margin: 0; }
     :host([connectdesign]) .qr-status,

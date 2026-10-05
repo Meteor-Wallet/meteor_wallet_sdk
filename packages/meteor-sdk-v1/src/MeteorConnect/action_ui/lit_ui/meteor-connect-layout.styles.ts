@@ -424,9 +424,10 @@ export const meteorConnectLayoutStyles = [
       .mobile-divider strong { color: #fff; font-weight: inherit; }
       .no-wallet-bottom-section { flex-direction: row; flex-wrap: wrap; justify-content: center; align-items: center; gap: .65rem; margin: auto -1rem 0; padding: 1rem; background: #12121e; color: #999; font-size: calc(1.15rem - 4px); }
       .get-wallet-link { border: 0; background: none; padding: 0; font: inherit; color: #8060ff; cursor: pointer; }
-      /* Dev-only mobile wallet switch (same visibility gate as Dev Web (Localhost)). */
+      /* Dev-only mobile wallet switch (same visibility gate as Dev Web (Localhost)). Inline at the end
+         of the "or connect with mobile" divider on desktop; its own labelled row otherwise. */
       .dev-mobile-wallet-switch { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: .6rem; color: #999; font-family: 'Gilroy', sans-serif; font-size: calc(.95rem - 4px); line-height: normal; letter-spacing: 0; }
-      .dev-mobile-wallet-options { display: inline-flex; gap: 2px; padding: 2px; background: #21213f; border-radius: .4rem; }
+      .dev-mobile-wallet-options { flex: none; display: inline-flex; gap: 2px; padding: 2px; background: #21213f; border-radius: .4rem; font-family: 'Gilroy', sans-serif; font-size: calc(.95rem - 4px); line-height: normal; letter-spacing: 0; }
       .dev-mobile-wallet-options button { padding: .3rem .75rem; border: 0; border-radius: calc(.4rem - 2px); background: transparent; color: #aaa6bf; font: inherit; font-weight: 600; cursor: pointer; }
       .dev-mobile-wallet-options button[aria-pressed="true"] { background: linear-gradient(110deg, #4210ec, #602cff); color: #fff; }
       .dev-mobile-wallet-options button:hover:not(:disabled) { filter: brightness(1.15); }
@@ -443,6 +444,21 @@ export const meteorConnectLayoutStyles = [
         .meteor-connect-content { padding: 1rem 1rem 0; gap: .8rem; }
         .option-buttons-row { gap: .5rem; }
         .mobile-divider { gap: .75rem; }
+        /* Two desktop buttons share a narrow row (NEAR Connect's frame is 418px wide): trim the
+           inline padding so "Chrome Extension" stays on one line. */
+        :host(:not([mobile-device])) .platform-button { padding-inline: .5rem; gap: .4rem; }
+      }
+      /* Compact tier for short frames — NEAR Connect's sandbox iframe is 418x557 on a desktop host.
+         The QR keeps its 180px compact size; the chrome around it tightens instead. */
+      @media (max-height: 640px) {
+        .meteor-connect-title-box { min-height: 3.25rem; padding-top: .4rem; padding-bottom: .4rem; }
+        .meteor-logo { width: 2.1rem; height: 2.1rem; }
+        .close-circle { width: 2.4rem; height: 2.4rem; }
+        .meteor-connect-content { padding-top: .75rem; gap: .55rem; }
+        .options { gap: .5rem; }
+        .option-buttons-row { gap: .4rem; }
+        .platform-button { min-height: 2.6rem; padding-top: .4rem; padding-bottom: .4rem; }
+        .no-wallet-bottom-section { padding-top: .6rem; padding-bottom: .6rem; }
       }
     `,
   ];

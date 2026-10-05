@@ -186,8 +186,19 @@ if (scenario.transfer != null) {
   }
 }
 
-overlay.appendChild(container);
-document.body.appendChild(overlay);
+if (params.get("embed") === "near-connect") {
+  // Mounted the way the NEAR Connect executor does it (`target_element`): no overlay, straight
+  // into a full-height root inside near-connect's sandbox iframe, whose viewport is the frame.
+  document.documentElement.style.cssText = "height: 100%; background: #1d1f20;";
+  document.body.style.cssText = "margin: 0; height: 100%;";
+  const root = document.createElement("div");
+  root.style.height = "100%";
+  root.appendChild(container);
+  document.body.appendChild(root);
+} else {
+  overlay.appendChild(container);
+  document.body.appendChild(overlay);
+}
 
 // Readiness signal for the screenshot tooling (transfer scenarios may advance screens first).
 void (async () => {

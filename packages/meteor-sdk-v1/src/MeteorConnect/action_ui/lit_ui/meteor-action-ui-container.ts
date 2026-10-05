@@ -61,17 +61,20 @@ export class MeteorActionUiContainer extends LitElement {
     }
   }
 
-  private renderDevMobileWalletSwitch() {
+  /**
+   * `inline`: the bare Dev / Prod control at the end of the "or connect with mobile" divider, which
+   * already says what it switches. Otherwise its own labelled row.
+   */
+  private renderDevMobileWalletSwitch(inline: boolean) {
     const options: [TMeteorConnectBackendEnvironment, string][] = [
       ["development", "Dev"],
-      ["production", "Production"],
+      ["production", "Prod"],
     ];
-    return html`<div class="dev-mobile-wallet-switch" role="group" aria-label="Mobile wallet build (local dev only)">
-      <span>Mobile wallet (dev only)</span>
-      <div class="dev-mobile-wallet-options">
-        ${options.map(([environment, label]) => html`<button type="button" aria-pressed=${this.devMobileWalletEnvironment === environment ? "true" : "false"} ?disabled=${this.devMobileWalletSwitching || this.mobilePreparing} @click=${() => void this.switchDevMobileWallet(environment)}>${label}</button>`)}
-      </div>
+    const control = html`<div class="dev-mobile-wallet-options" role="group" aria-label="Mobile wallet build (local dev only)" title="Mobile wallet build (local dev only)">
+      ${options.map(([environment, label]) => html`<button type="button" aria-pressed=${this.devMobileWalletEnvironment === environment ? "true" : "false"} ?disabled=${this.devMobileWalletSwitching || this.mobilePreparing} @click=${() => void this.switchDevMobileWallet(environment)}>${label}</button>`)}
     </div>`;
+    if (inline) return control;
+    return html`<div class="dev-mobile-wallet-switch"><span>Mobile wallet (dev only)</span>${control}</div>`;
   }
 
   private async selectMobile() {
@@ -188,6 +191,8 @@ export class MeteorActionUiContainer extends LitElement {
     const mobileWalletAvailable = availablePlatformTargets.includes("v2_bridge_mobile");
     const showDevMobileWalletSwitch =
       this.devMobileWalletEnvironment != null && mobileWalletAvailable && !isPlatformLocked && !this.mobileSelected;
+    const showMobileDivider =
+      !mobileDevice && !isPlatformLocked && (extensionWalletAvailable || webWalletAvailable || includeWebDevLocalhost);
     const showingContinueKnownTarget = this.pendingKnownExecutionTarget != null;
     const continueExecutionTarget = this.pendingKnownExecutionTarget ?? "v1_web";
 
@@ -247,7 +252,7 @@ export class MeteorActionUiContainer extends LitElement {
             ${
               mobileWalletAvailable && (!mobileDevice || this.mobileSelected || isPlatformLocked)
                 ? html`
-              ${!mobileDevice && !isPlatformLocked && (extensionWalletAvailable || webWalletAvailable || includeWebDevLocalhost) ? html`<div class="mobile-divider"><span></span><div>or connect with <strong>mobile</strong></div><span></span></div>` : ""}
+              ${showMobileDivider ? html`<div class="mobile-divider"><span></span><div>or connect with <strong>mobile</strong></div><span></span>${showDevMobileWalletSwitch ? this.renderDevMobileWalletSwitch(true) : ""}</div>` : ""}
               <meteor-mobile-bridge-panel
                 connectDesign
                 .continuation=${isPlatformLocked || this.mobileSelected}
@@ -264,7 +269,7 @@ export class MeteorActionUiContainer extends LitElement {
             `
                 : ""
             }
-            ${showDevMobileWalletSwitch ? this.renderDevMobileWalletSwitch() : ""}
+            ${showDevMobileWalletSwitch && !showMobileDivider ? this.renderDevMobileWalletSwitch(false) : ""}
             ${
               !isPlatformLocked
                 ? html`<div class="no-wallet-bottom-section">

@@ -51,13 +51,21 @@ The user reduced all sizes by a total of 4px. The shared bridge panel receives `
 
 - Desktop: platform buttons side by side; conditional Dev Web (Localhost) on a full-width second row. Mobile QR/loading card below, no Open Meteor Mobile button on desktop.
 - Mobile: stacked Meteor Mobile primary and Meteor Web secondary buttons; no extension or QR/toggle. Preserve the existing dev-option visibility rule.
-- Dev-only mobile wallet switch: under the same gate as Dev Web (Localhost) (development build or force-dev flag), and only when the host is on a deployed bridge backend, Connect shows a compact “Mobile wallet (dev only)” Dev / Production segmented control below the mobile QR on desktop (below the buttons on mobile). Switching re-prepares the mobile request against that environment's backend and mobile wallet build, so the QR opens it. Hidden once the platform is locked or Meteor Mobile is selected, and disabled while the request prepares.
+- Dev-only mobile wallet switch: under the same gate as Dev Web (Localhost) (development build or force-dev flag), and only when the host is on a deployed bridge backend, Connect shows a compact Dev / Prod segmented control at the end of the “or connect with mobile” divider on desktop; on mobile, or wherever that divider is absent, it is its own “Mobile wallet (dev only)” row below the buttons. Switching re-prepares the mobile request against that environment's backend and mobile wallet build, so the QR opens it. Hidden once the platform is locked or Meteor Mobile is selected, and disabled while the request prepares.
 - Create the mobile request eagerly. Until its link is ready, keep the mobile icon and “Meteor Mobile” visible in the disabled button; show a small spinner inside the button at its trailing edge with an accessible preparing-connection label. Do not add a loading row above the button or replace its label.
 - Clicking Meteor Mobile directly calls the same `openCurrentSessionInApp` path as Open Meteor Mobile; do not toggle the QR/connection panel on click. Session advancement can reveal required pairing/approval states.
 - Get Meteor Wallet keeps internal installation navigation despite the arrow decoration.
 - No cancel-request or refresh-code button on these redesigned pages. Retain header close behavior and existing protocol lifecycle/recovery behavior.
 
 Verify desktop and real phone-width previews when changing layout. Use package-local TypeScript checks; run relevant tests from `packages/meteor-sdk-v1` so its decorator configuration is applied.
+
+## Compact frames (NEAR Connect)
+
+Inside NEAR Connect the UI renders without the overlay, straight into near-connect's sandbox iframe, whose viewport is the frame itself: 418x557 on a desktop host (near-connect caps its popup at 420x615 including its own footer and offers wallets no resize API), and full width by 80% of the screen minus that footer on a phone host (390x618 on an 844px phone).
+
+- Below 640px of viewport height a compact tier applies: 3.25rem header with a 2.1rem logo and 2.4rem close button, .75rem content top padding and .55rem section gaps, 2.6rem platform buttons, a tighter mobile panel and footer. The QR keeps its 180px compact size; the chrome around it gives up the room.
+- At 480px wide or less, desktop platform buttons use .5rem inline padding so “Chrome Extension” stays on one line.
+- Verify with `node ./preview/action-ui/screenshot.mjs --near-connect`, which renders every scenario at those frame sizes and reports overflow. Only the QR-revealed PIN stage (`pin-qr`) may scroll, as it does at every size.
 
 ## Transfer after platform selection
 
