@@ -384,6 +384,61 @@ describe("MobileBridgeSession link status projection", () => {
     expect(session.getSnapshot()).toMatchObject({ linkPhase: "offline" });
   });
 
+  it("records a hand-off once the wallet link is opened from this page", async () => {
+    const session = createSession();
+    await session.startPreparation();
+    expect(session.getSnapshot().handedOff).toBeUndefined();
+
+    session.openInApp(() => {});
+
+    expect(session.getSnapshot().handedOff).toBe(true);
+    await session.dispose();
+  });
+
+  it("does not count an opener that threw as a hand-off", async () => {
+    const session = createSession();
+    await session.startPreparation();
+
+    expect(() =>
+      session.openInApp(() => {
+        throw new Error("blocked");
+      }),
+    ).toThrow("blocked");
+
+    expect(session.getSnapshot().handedOff).toBeUndefined();
+    await session.dispose();
+  });
+
+  it("records a hand-off when the page is backgrounded mid-request, never before a link exists", async () => {
+    // A push wake or a manual app switch reaches the wallet without the Open button — leaving the
+    // page is the only trace of it. Bun has no DOM, so this is the minimum `document` it reads.
+    const listeners = new Map<string, () => void>();
+    const fakeDocument = {
+      visibilityState: "visible",
+      addEventListener: (type: string, listener: () => void) => listeners.set(type, listener),
+      removeEventListener: (type: string) => listeners.delete(type),
+    };
+    const previousDocument = (globalThis as { document?: unknown }).document;
+    (globalThis as { document?: unknown }).document = fakeDocument;
+    try {
+      const session = createSession();
+      const background = () => {
+        fakeDocument.visibilityState = "hidden";
+        listeners.get("visibilitychange")?.();
+      };
+
+      background();
+      expect(session.getSnapshot().handedOff).toBeUndefined();
+
+      await session.startPreparation();
+      background();
+      expect(session.getSnapshot().handedOff).toBe(true);
+      await session.dispose();
+    } finally {
+      (globalThis as { document?: unknown }).document = previousDocument;
+    }
+  });
+
   it("fails closed with a reset prompt when the backend rejects this identity's handshake", async () => {
     const double = createClientDouble();
     const session = createSession({ client: double.client });

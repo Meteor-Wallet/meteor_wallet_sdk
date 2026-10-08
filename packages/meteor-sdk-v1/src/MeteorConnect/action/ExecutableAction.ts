@@ -15,7 +15,10 @@ import type {
   TMobileBridgeExternalWorkJournal,
   TTransferTargetPlatform,
 } from "../target_clients/mobile_bridge/MeteorConnectMobileBridgeClient.types";
-import type { MobileBridgeSession } from "../target_clients/mobile_bridge/MobileBridgeSession";
+import type {
+  IMobileBridgeSnapshot,
+  MobileBridgeSession,
+} from "../target_clients/mobile_bridge/MobileBridgeSession";
 import { MCActionRegistryMap, type TMCActionRegistry } from "./mc_action.combined";
 import type {
   IMCActionExecutionState,
@@ -181,12 +184,12 @@ export class ExecutableAction<R extends TMCActionRequestUnion<TMCActionRegistry>
   private watchMobileSession(session: MobileBridgeSession): void {
     this.unsubscribeMobile?.();
     this.unsubscribeMobile = session.subscribe((snapshot) => {
-      // Deliberately an allowlist of the two phases that mean "the wallet now owns the request":
-      // `result_ready` and `external_work` come AFTER it and must never re-trigger execution.
+      if (this.cancelled || this.execute_promise != null) return;
+      // `wallet_verification` / `wallet_action` mean "the wallet now owns the request".
       if (
-        !this.cancelled &&
-        (snapshot.phase === "wallet_verification" || snapshot.phase === "wallet_action") &&
-        this.execute_promise == null
+        snapshot.phase === "wallet_verification" ||
+        snapshot.phase === "wallet_action" ||
+        this.isWalletAnswerToThisRequest(session, snapshot)
       ) {
         void this.execute("v2_bridge_mobile").catch(() => {
           // The action's resolver/rejecter owns delivery to the SDK caller. This prevents the
@@ -194,6 +197,37 @@ export class ExecutableAction<R extends TMCActionRequestUnion<TMCActionRegistry>
         });
       }
     });
+  }
+
+  /**
+   * The wallet answered without this page ever seeing it hold the request. A backgrounded mobile
+   * tab drops its bridge link, so the facts it reconnects to can already be past `wallet_action`
+   * — while the session, which collects the result on its own, settles it regardless. Without
+   * adopting that answer the action never resolves: the popup sits on its finishing state and a
+   * close reports a cancellation for a request the wallet signed.
+   *
+   * Only for THIS action's own turn on the client's current session, which is exactly when
+   * `makeRequest` adopts the session instead of preparing a new request. That excludes the stale
+   * `external_work` snapshot a held session shows the next turn's action before that turn is
+   * staged — executing from it would send a second request to the wallet.
+   */
+  private isWalletAnswerToThisRequest(
+    session: MobileBridgeSession,
+    snapshot: IMobileBridgeSnapshot,
+  ): boolean {
+    const answered =
+      snapshot.phase === "result_ready" ||
+      snapshot.phase === "external_work" ||
+      snapshot.phase === "completed" ||
+      // A signed decline or mismatch: the wallet did answer, and that error is the action's.
+      (snapshot.phase === "failed" && session.getResultReceipt() != null);
+    if (!answered) return false;
+    const turn = session.prepared.sdkRequest;
+    return (
+      turn.id === this.id &&
+      turn.expandedInput === this.expandedInput &&
+      this.meteorConnect.mobileBridgeClient.getCurrentSession() === session
+    );
   }
 
   async refreshMobileBridge(options?: {

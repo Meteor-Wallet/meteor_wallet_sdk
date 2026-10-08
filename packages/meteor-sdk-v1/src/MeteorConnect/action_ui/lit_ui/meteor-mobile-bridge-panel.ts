@@ -14,6 +14,7 @@ import QRCodeStyling from "qr-code-styling";
 import type {
   IMobileBridgeSnapshot,
   MobileBridgeSession,
+  TMobileBridgePhase,
 } from "../../target_clients/mobile_bridge/MobileBridgeSession";
 import { isMobile } from "../utils/isMobile";
 import { customElement } from "./custom-element";
@@ -59,6 +60,16 @@ const QR_QUIET_ZONE_PX = 4;
  * at.
  */
 const QR_MIN_BOX_PX = 132;
+
+/**
+ * Phases a returning tab resumes into while its bridge link re-establishes. PIN entry is absent on
+ * purpose: it is interactive, and its stage already carries its own link status.
+ */
+const RESUMABLE_PHASES: readonly TMobileBridgePhase[] = [
+  "waiting_for_wallet",
+  "wallet_confirmation",
+  "wallet_action",
+];
 
 @customElement("meteor-mobile-bridge-panel")
 export class MeteorMobileBridgePanel extends LitElement {
@@ -1023,6 +1034,40 @@ export class MeteorMobileBridgePanel extends LitElement {
     </div>`;
   }
 
+  /**
+   * States where the stage itself would only be noise, so the shared continuation shows a neutral
+   * busy state instead:
+   * - `finishing`: the wallet answered (`result_ready`) or the turn is done (`completed`). The
+   *   action resolves and the popup closes on its own — there is nothing left to tell the user.
+   * - `resuming`: the request was handed to the wallet and the user came back to a tab whose
+   *   socket dropped in the background. Until the SDK's redial ladder is live again the honest
+   *   state is "checking"; a redial counter and an Open button would only send them back to a
+   *   request they may already have answered.
+   * `offline` (the ladder gave up) is deliberately not covered — it keeps its Reconnect control.
+   */
+  private busyPresentation(snapshot: IMobileBridgeSnapshot): "finishing" | "resuming" | undefined {
+    if (!this.connectDesign) return undefined;
+    if (snapshot.phase === "result_ready" || snapshot.phase === "completed") return "finishing";
+    if (
+      snapshot.handedOff === true &&
+      snapshot.linkPhase === "reconnecting" &&
+      RESUMABLE_PHASES.includes(snapshot.phase)
+    ) {
+      return "resuming";
+    }
+    return undefined;
+  }
+
+  private renderBusy(presentation: "finishing" | "resuming") {
+    return html`<meteor-wallet-continuation
+      .walletLabel=${this.walletLabel} .walletPlatform=${this.walletPlatform}
+      .busy=${
+        presentation === "finishing"
+          ? { title: "Finishing up", message: `Completing your request with ${this.walletLabel}…` }
+          : { title: "Checking request status", message: `Getting the latest from ${this.walletLabel}…` }
+      }></meteor-wallet-continuation>`;
+  }
+
   private renderContinuation(snapshot?: IMobileBridgeSnapshot, secondsLeft?: number) {
     const preparing = snapshot?.deepLink == null || ["initializing", "creating_bridge", "busy_other_tab"].includes(snapshot.phase);
     const scanMobile = this.walletPlatform === "mobile" && !isMobile();
@@ -1097,6 +1142,9 @@ export class MeteorMobileBridgePanel extends LitElement {
         ${this.renderIdentityReset()}
       </section>`;
     }
+
+    const busy = this.busyPresentation(snapshot);
+    if (busy != null) return this.renderBusy(busy);
 
     if (this.continuation && ["initializing", "creating_bridge", "busy_other_tab", "waiting_for_wallet", "wallet_confirmation", "wallet_action"].includes(snapshot.phase)) {
       return this.renderContinuation(snapshot, secondsLeft);

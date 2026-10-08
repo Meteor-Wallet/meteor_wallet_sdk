@@ -18,6 +18,11 @@ export class MeteorWalletContinuation extends LitElement {
   @property() walletPlatform = "web";
   @property() instruction?: string;
   @property({ type: Boolean }) preparing = false;
+  /**
+   * An in-progress state with nothing for the user to do: its copy and a spinner replace the
+   * Open button. `preparing` is the request-creation instance of it.
+   */
+  @property({ attribute: false }) busy?: { title: string; message: string };
   @property({ type: Boolean }) scanMobile = false;
   @property({ attribute: false }) onOpen?: () => void | Promise<void>;
 
@@ -37,14 +42,15 @@ export class MeteorWalletContinuation extends LitElement {
 
   render() {
     const location = this.walletPlatform === "mobile" ? `${this.walletLabel} app` : this.walletPlatform === "extension" ? this.walletLabel : `open ${this.walletLabel} window`;
+    const busy = this.busy ?? (this.preparing ? { title: "Creating secure request", message: `Preparing your connection to ${this.walletLabel}…` } : undefined);
     return html`<section>
       <slot name="visual"><img src=${meteorConnectLogo} alt="" /></slot>
       <div class="copy" aria-live="polite">
-        <h2>${this.preparing ? "Creating secure request" : `Continue in ${this.walletLabel}`}</h2>
-        <p>${this.preparing ? `Preparing your connection to ${this.walletLabel}…` : this.instruction ?? (this.scanMobile ? `Scan with ${this.walletLabel} to continue` : `Complete the action in the ${location}`)}</p>
+        <h2>${busy?.title ?? `Continue in ${this.walletLabel}`}</h2>
+        <p>${busy?.message ?? this.instruction ?? (this.scanMobile ? `Scan with ${this.walletLabel} to continue` : `Complete the action in the ${location}`)}</p>
       </div>
       <slot name="countdown"></slot>
-      ${this.preparing ? html`<span class="spinner" role="status" aria-label="Creating secure request"></span>` : this.onOpen ? html`<button @click=${() => this.onOpen?.()}>Open ${this.walletLabel}</button>` : ""}
+      ${busy ? html`<span class="spinner" role="status" aria-label=${busy.title}></span>` : this.onOpen ? html`<button @click=${() => this.onOpen?.()}>Open ${this.walletLabel}</button>` : ""}
       <slot></slot>
     </section>`;
   }

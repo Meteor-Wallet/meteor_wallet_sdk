@@ -87,6 +87,13 @@ First-time mobile linking (`wallet_confirmation`) navigates Connect and Transfer
 
 QR loading and ready states must use the same panel, heading, frame, controls and status-row layout. `meteor-qr-layout.ts` exports the 216px/180px code sizes and 5px frame padding (226px/190px framed sizes). Reserve that complete frame footprint before generating the SVG; keep the status row at least 18px high to avoid shifting when loading text becomes the countdown.
 
+## Returning from the wallet
+
+The shared continuation also owns a neutral busy state (`busy`: GIF, title, message, spinner; no Open button, countdown or link pill). The bridge panel uses it, in the connect design, for:
+
+- **Finishing** — `result_ready` and `completed`: “Finishing up” / “Completing your request with [wallet]…”. There is no “Completed in [wallet]” screen to dismiss: the action resolves and the popup closes itself. (A tab that reconnects straight into an answered turn still resolves — the action adopts the session's result for its own turn.)
+- **Resuming** — the request was handed to the wallet (its link opened from this page, or the page backgrounded while the request was live) and the bridge link is `reconnecting`: “Checking request status” / “Getting the latest from [wallet]…”, in place of the “Reconnecting securely (attempt n)” pill and Open button, until the link is live again. PIN entry keeps its own stage. Before any hand-off the redial status still shows, and `offline` always keeps its Reconnect control.
+
 ## Failure card
 
 Use the supplied `graphical/meteor-warning.ts` warning SVG above centered heading and description, on `#12121D`. Raw error details appear left-aligned in a selectable, wrapping `#181823` inset without an “Error Message” label. Generic unclassified failures use “Something Went Wrong”; preserve actionable update and cancellation headings and their explanations. Wallet context remains in the accessible label. Success and identity-reset flows retain their dedicated states.

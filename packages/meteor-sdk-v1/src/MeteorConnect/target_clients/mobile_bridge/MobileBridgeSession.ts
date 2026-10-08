@@ -124,6 +124,13 @@ export interface IMobileBridgeSnapshot {
   linkRedialAttempt: number;
   /** How long until that redial fires, when one is scheduled. */
   linkRetryInMs?: number;
+  /**
+   * The request has reached the wallet's side at least once: its link was opened from this page,
+   * or the page went to the background while the request was live (a push wake, or the user
+   * switching to the wallet app). A link drop after that is the backgrounded tab having lost its
+   * socket, so the UI resumes quietly instead of presenting the redial ladder and an Open button.
+   */
+  handedOff?: boolean;
   /** Why the bridge session was permanently released, when it was. */
   terminalReason?: IBridgeSessionTerminalOutcome["reason"];
   pinAttemptsUsed: number;
@@ -486,7 +493,12 @@ export class MobileBridgeSession {
   private watchDocumentVisibility(): void {
     if (typeof document === "undefined") return;
     const onVisibility = () => {
-      if (document.visibilityState !== "visible" || !this.input.isCurrent(this.token)) return;
+      if (!this.input.isCurrent(this.token)) return;
+      if (document.visibilityState === "hidden") {
+        this.markHandedOff();
+        return;
+      }
+      if (document.visibilityState !== "visible") return;
       // `offline` is the SDK's own bounded-retry release and `connectBridgeLink()` its documented
       // revival. While `reconnecting`, the SDK's redial ladder already owns the dial.
       if (this.input.client.linkStatus.phase !== "offline") return;
@@ -494,6 +506,13 @@ export class MobileBridgeSession {
     };
     document.addEventListener("visibilitychange", onVisibility);
     this.visibilityListener = () => document.removeEventListener("visibilitychange", onVisibility);
+  }
+
+  /** Only a live request with a published link can have been handed to the wallet. */
+  private markHandedOff(): void {
+    if (this.snapshot.handedOff === true || this.snapshot.deepLink == null) return;
+    if (SETTLED_PHASES.includes(this.snapshot.phase)) return;
+    this.update({ handedOff: true });
   }
 
   private applySessionFacts(facts: Readonly<TSessionFacts>): void {
@@ -999,6 +1018,7 @@ export class MobileBridgeSession {
   openInApp(open: (fullLink: string) => void): void {
     if (this.snapshot.deepLink == null) throw new Error("mobile_bridge_link_not_ready");
     open(this.snapshot.deepLink);
+    this.markHandedOff();
   }
 
   private async disposeInternal(): Promise<void> {
