@@ -1,4 +1,9 @@
-import type { IMeteorConnectAccount, MeteorConnect } from "@meteorwallet/sdk";
+import type {
+  IMeteorConnectAccount,
+  MeteorConnect,
+  TFunctionCallKeyCoverage,
+} from "@meteorwallet/sdk";
+import { functionCallKeyCoverage } from "@meteorwallet/sdk";
 import { actionCreators } from "@near-js/transactions";
 import { parseNearAmount } from "@near-js/utils";
 import { useState } from "react";
@@ -11,7 +16,7 @@ import {
   summarizeVerifyOwner,
 } from "./results/summaries";
 import { SignDelegateActionTest } from "./SignDelegateActionTest";
-import { ActionButton, Section, TextField, Toggle } from "./ui";
+import { ActionButton, Notice, Section, TextField, Toggle } from "./ui";
 
 const BOATLOAD_OF_GAS = "30000000000000";
 
@@ -37,12 +42,39 @@ export const WalletActionsPanel = ({
   const [withDonation, setWithDonation] = useState(false);
   const [donation, setDonation] = useState("0.001");
   const [twoTransactions, setTwoTransactions] = useState(false);
+  const [useFunctionCallKey, setUseFunctionCallKey] = useState(true);
 
   const signMessage = useLatestActionResult(KEY_SIGN_MESSAGE);
   const verifyOwner = useLatestActionResult(KEY_VERIFY_OWNER);
   const guestbook = useLatestActionResult(KEY_GUESTBOOK);
 
   const donationYocto = withDonation ? parseNearAmount(donation.trim()) : "0";
+  const guestbookCount = twoTransactions ? 2 : 1;
+  const guestbookTransactions =
+    donationYocto == null
+      ? undefined
+      : Array.from({ length: guestbookCount }, (_, index) => ({
+          receiverId: GUESTBOOK_CONTRACT_ID,
+          actions: [
+            actionCreators.functionCall(
+              "addMessage",
+              {
+                text:
+                  guestbookCount > 1
+                    ? `${guestbookText} (${index + 1}/${guestbookCount})`
+                    : guestbookText,
+              },
+              BigInt(BOATLOAD_OF_GAS),
+              BigInt(donationYocto),
+            ),
+          ],
+        }));
+  // The same check the SDK makes before deciding — so the row can say up front which way it goes.
+  const keyCoverage =
+    guestbookTransactions == null
+      ? undefined
+      : functionCallKeyCoverage(account, guestbookTransactions);
+  const signsWithKey = useFunctionCallKey && keyCoverage?.covered === true;
 
   return (
     <Section
@@ -163,45 +195,58 @@ export const WalletActionsPanel = ({
                   checked={twoTransactions}
                   onChange={setTwoTransactions}
                 />
+                <Toggle
+                  label={"Use function-call key"}
+                  checked={useFunctionCallKey}
+                  onChange={setUseFunctionCallKey}
+                />
+              </div>
+              <div className={"sm:col-span-2"}>
+                <SigningPath coverage={keyCoverage} useFunctionCallKey={useFunctionCallKey} />
               </div>
             </>
           }
           actions={
             <ActionButton
               pending={guestbook.pending}
-              pendingLabel={"Waiting for wallet…"}
-              disabled={donationYocto == null}
+              pendingLabel={signsWithKey ? "Sending…" : "Waiting for wallet…"}
+              disabled={guestbookTransactions == null}
               onClick={() => {
-                if (donationYocto == null) return;
-                const count = twoTransactions ? 2 : 1;
-                const transactions = Array.from({ length: count }, (_, index) => ({
-                  receiverId: GUESTBOOK_CONTRACT_ID,
-                  actions: [
-                    actionCreators.functionCall(
-                      "addMessage",
-                      {
-                        text:
-                          count > 1 ? `${guestbookText} (${index + 1}/${count})` : guestbookText,
-                      },
-                      BigInt(BOATLOAD_OF_GAS),
-                      BigInt(donationYocto),
-                    ),
-                  ],
-                }));
+                if (guestbookTransactions == null) return;
+                const transactions = guestbookTransactions;
                 void run({
                   key: KEY_GUESTBOOK,
-                  label: count > 1 ? "Guestbook transactions (2)" : "Guestbook transaction",
+                  label:
+                    guestbookCount > 1 ? "Guestbook transactions (2)" : "Guestbook transaction",
                   actionId: "near::sign_transactions",
                   accountId,
                   network,
                   execute: async () => {
                     const action = await meteorConnect.createAction({
                       id: "near::sign_transactions",
-                      input: { target, transactions },
+                      input: { target, transactions, useFunctionCallKey },
                     });
-                    return action.promptForExecution();
+                    const outcomes = await action.promptForExecution();
+                    return { outcomes, signedWith: action.getExecutionMethod() };
                   },
-                  summarize: (outcomes) => summarizeTransactions(outcomes, network),
+                  summarize: ({ outcomes, signedWith }) => {
+                    const summary = summarizeTransactions(outcomes, network);
+                    return {
+                      ...summary,
+                      fields: [
+                        {
+                          label: "Signed with",
+                          value:
+                            signedWith === "function_call_key"
+                              ? "Function-call key — no wallet prompt"
+                              : "Wallet",
+                          tone: signedWith === "function_call_key" ? "good" : undefined,
+                          copyable: false,
+                        },
+                        ...(summary.fields ?? []),
+                      ],
+                    };
+                  },
                 });
               }}
             >
@@ -213,5 +258,41 @@ export const WalletActionsPanel = ({
         <SignDelegateActionTest account={account} meteorConnect={meteorConnect} />
       </ActionList>
     </Section>
+  );
+};
+
+const COVERAGE_COPY: Record<
+  Extract<TFunctionCallKeyCoverage, { covered: false }>["reason"],
+  string
+> = {
+  deposit_attached:
+    "Opens the wallet: a function-call key cannot attach a deposit, so the donation needs approval.",
+  no_function_call_key:
+    "Opens the wallet: this account has no guestbook key. Sign in with “Sign in to Guestbook” to add one.",
+  wrong_receiver: "Opens the wallet: the account's key is for a different contract.",
+  method_not_allowed: "Opens the wallet: the account's key does not allow this method.",
+  not_a_function_call: "Opens the wallet: only function calls can use the key.",
+  no_transactions: "Nothing to send.",
+};
+
+/** Which way a send will go — local function-call key, or the wallet — before it is made. */
+const SigningPath = ({
+  coverage,
+  useFunctionCallKey,
+}: {
+  coverage?: TFunctionCallKeyCoverage;
+  useFunctionCallKey: boolean;
+}) => {
+  if (coverage == null) return null;
+  if (!coverage.covered) {
+    return <Notice tone={"warn"}>{COVERAGE_COPY[coverage.reason]}</Notice>;
+  }
+  if (!useFunctionCallKey) {
+    return <Notice tone={"warn"}>Opens the wallet: the function-call key is switched off.</Notice>;
+  }
+  return (
+    <Notice tone={"success"}>
+      Signs with the account&apos;s function-call key — no wallet prompt.
+    </Notice>
   );
 };

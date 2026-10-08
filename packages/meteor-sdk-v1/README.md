@@ -195,6 +195,22 @@ const action = await meteorConnect.createAction({
 const outcomes = await action.promptForExecution();
 ```
 
+**Function-call keys skip the wallet.** If the account signed in with a function-call key
+(above) and that key covers every transaction — calls to its contract, allowed methods, **no
+attached deposit** — `promptForExecution()` signs and sends them with the key directly and resolves
+with the outcomes, without opening the wallet. Anything the key cannot do (a deposit, another
+contract, another method) opens the wallet as usual, as does any problem before a transaction is
+sent (the key was deleted, its gas allowance ran out). Once a transaction may have been sent it is
+never re-signed in the wallet: an unknown outcome rejects with `FunctionCallKeyExecutionError`
+(carrying the transaction hash). The example above attaches a deposit, so it always uses the
+wallet.
+
+- `functionCallKeyCoverage(account, transactions)` tells you in advance whether a request will be
+  signed with the key.
+- `action.getExecutionMethod()` reports how a request was carried out: `"function_call_key"` or
+  `"wallet"`.
+- Pass `useFunctionCallKey: false` in the `near::sign_transactions` input to always use the wallet.
+
 ### Sign a message (NEP-413)
 
 ```ts

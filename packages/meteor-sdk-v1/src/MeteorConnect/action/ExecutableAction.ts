@@ -19,6 +19,11 @@ import type {
   IMobileBridgeSnapshot,
   MobileBridgeSession,
 } from "../target_clients/mobile_bridge/MobileBridgeSession";
+import { NEAR_BASE_CONFIG_FOR_NETWORK } from "../../ported_common/near/near_static_data";
+import {
+  executeWithFunctionCallKey,
+  type IFunctionCallKeyTransaction,
+} from "../function_call_key/nearFunctionCallKey";
 import { MCActionRegistryMap, type TMCActionRegistry } from "./mc_action.combined";
 import type {
   IMCActionExecutionState,
@@ -46,6 +51,8 @@ export class ExecutableAction<R extends TMCActionRequestUnion<TMCActionRegistry>
   private cancelPromise?: Promise<void>;
   private cancelled = false;
   private settled = false;
+  /** How the request was carried out: by a wallet, or with the account's function-call key. */
+  private executionMethod?: "wallet" | "function_call_key";
   private unsubscribeMobile?: () => void;
   /**
    * Transfer-only sensitive payload source (§ key confinement). A true ECMAScript private field:
@@ -406,19 +413,71 @@ Available targets: [${this.connectionTargetConfig.allExecutionTargets.map((c) =>
   ): Promise<TMCActionRegistry[R["id"]]["output"]> {
     if (this.cancelled) throw new Error("Action was cancelled");
     if (this.execute_promise == null) {
-      this.execute_promise = this.commitAndExecute(executionTarget)
-        .then((value) => {
-          this.resolveAction(value);
-          return value;
-        })
-        .catch((err) => {
-          this.rejectAction(err);
-          throw err;
-        });
-      this.waitForExecutionOutput_promise = this.execute_promise;
+      this.executionMethod = "wallet";
+      return this.settleExecution(this.commitAndExecute(executionTarget));
     }
 
     return this.execute_promise;
+  }
+
+  /** The one place an execution becomes this action's outcome, however it was carried out. */
+  private settleExecution(
+    execution: Promise<TMCActionRegistry[R["id"]]["output"]>,
+  ): Promise<TMCActionRegistry[R["id"]]["output"]> {
+    this.execute_promise = execution
+      .then((value) => {
+        this.resolveAction(value);
+        return value;
+      })
+      .catch((err) => {
+        this.rejectAction(err);
+        throw err;
+      });
+    this.waitForExecutionOutput_promise = this.execute_promise;
+    return this.execute_promise;
+  }
+
+  /**
+   * `"function_call_key"` when the request was signed and sent locally with the account's
+   * function-call key (no wallet involved), `"wallet"` when a wallet carried it, and `undefined`
+   * before either has started.
+   */
+  getExecutionMethod(): "wallet" | "function_call_key" | undefined {
+    return this.executionMethod;
+  }
+
+  /**
+   * A transaction request the account's function-call key fully covers is signed and sent right
+   * here, with no wallet prompt — the user granted those calls when signing in with the key. A
+   * request it does not cover, or any doubt before something is broadcast, returns `undefined` and
+   * goes to the wallet exactly as before. Once something may have been broadcast, the action
+   * settles with that error instead: the wallet is never asked to sign the same calls again.
+   */
+  private async tryFunctionCallKey(): Promise<TMCActionRegistry[R["id"]]["output"] | undefined> {
+    if (this.id !== "near::sign_transactions" || this.expandedInput?.useFunctionCallKey === false) {
+      return undefined;
+    }
+    const account = this.expandedInput.account as IMeteorConnectAccount | undefined;
+    if (account == null) return undefined;
+    let execution: Awaited<ReturnType<typeof executeWithFunctionCallKey>>;
+    try {
+      execution = await executeWithFunctionCallKey({
+        account,
+        transactions: this.expandedInput.transactions as IFunctionCallKeyTransaction[],
+        keyStore: this.meteorConnect.nearKeyStoreProvider.getKeyStore(),
+        rpcUrl: NEAR_BASE_CONFIG_FOR_NETWORK[account.identifier.network].nodeUrl,
+      });
+    } catch (error) {
+      this.executionMethod = "function_call_key";
+      return this.settleExecution(Promise.reject(error));
+    }
+    if (execution.kind === "use_wallet") {
+      this.logger.log(`Function-call key not used for [${this.id}]: ${execution.reason}`);
+      return undefined;
+    }
+    this.executionMethod = "function_call_key";
+    this.logger.log(`Signed [${this.id}] with the function-call key — no wallet prompt`);
+    return this.settleExecution(Promise.resolve(execution.outcomes as any));
   }
 
   /**
@@ -503,7 +562,9 @@ Available targets: [${this.connectionTargetConfig.allExecutionTargets.map((c) =>
     if (this.executeWithUi_promise == null) {
       this.executeWithUi_promise = this.isLocalOnlySignOut()
         ? this.execute()
-        : this._promptForExecution(input);
+        : this.tryFunctionCallKey().then(
+            (local) => local ?? this._promptForExecution(input),
+          );
     }
 
     return this.executeWithUi_promise;

@@ -40,6 +40,12 @@ export {
 export { setEnvConfig } from "./envConfig";
 export * from "./MeteorConnect/action/ExecutableAction";
 export * from "./MeteorConnect/action/mc_action.combined";
+export {
+  FunctionCallKeyExecutionError,
+  functionCallKeyCoverage,
+  type IFunctionCallKeyTransaction,
+  type TFunctionCallKeyCoverage,
+} from "./MeteorConnect/function_call_key/nearFunctionCallKey";
 export * from "./MeteorConnect/logging/MeteorLogger";
 export * from "./MeteorConnect/MeteorConnect";
 export * from "./MeteorConnect/MeteorConnect.types";

@@ -143,6 +143,13 @@ export type TSimpleNearTransaction = {
 
 export interface IMCA_Near_SignTransactions_Input extends IMCAction_WithExactAccountTarget {
   transactions: TSimpleNearTransaction[];
+  /**
+   * Default `true`: when the account signed in with a function-call key (`addFunctionCallKey`)
+   * that covers every transaction — calls to that contract, allowed methods, no deposit — they are
+   * signed and sent with it directly, without opening the wallet. Anything it does not cover (a
+   * deposit, another contract) still goes to the wallet. Set `false` to always ask the wallet.
+   */
+  useFunctionCallKey?: boolean;
 }
 
 //
