@@ -1,18 +1,17 @@
 import type { MeteorConnect, TStagedTransferAccountSummary } from "@meteorwallet/sdk";
-import { METEOR_CONNECT_BACKENDS, parseTransferSecretInput } from "@meteorwallet/sdk";
+import { parseTransferSecretInput } from "@meteorwallet/sdk";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { DEPLOYMENT } from "~/core/deployment";
-import { Button } from "~/ui/Button";
 import { buildFakeTransferAccountBatch } from "./fakeTransferAccounts";
+import { ActionButton, Notice, SubPanel, TextArea, TextField } from "./ui";
 
 /**
- * Source-account staging for the new-key transfer, plus the harness's backend switcher.
+ * Source-account staging for the new-key transfer.
  *
  * Staging is deliberately separate from the transfer itself: `NewKeyTransferTest` reads the same
  * staged set through `transferAccounts.getStagedWithSecrets()` and sends only the PUBLIC halves.
  * Staged secrets persist in plaintext localStorage (harness opt-in) so runs are repeatable —
- * testnet material only.
+ * testnet material only. (The bridge backend switcher lives in the connection card.)
  *
  * The old existing-secret flow (`transferAccounts.prompt()`) was removed from this harness: it is
  * not the method we ship, and no Meteor mobile wallet advertises `transfer_accounts_v1`, so its
@@ -21,26 +20,10 @@ import { buildFakeTransferAccountBatch } from "./fakeTransferAccounts";
 export const StagedAccountsPanel = ({
   meteorConnect,
   network,
-  backendUrl,
 }: {
   meteorConnect: MeteorConnect;
   network: "testnet" | "mainnet";
-  backendUrl: string;
 }) => {
-  const usingLocalBackend = backendUrl.includes("localhost") || backendUrl.includes("127.0.0.1");
-  const usingProductionBackend = backendUrl === METEOR_CONNECT_BACKENDS.production;
-  // The deployment kind's backend is the default, so it is the absence of the param, not a value.
-  const switchBackend = (target: "local" | "development" | "production") => {
-    const url = new URL(window.location.href);
-    if (target === DEPLOYMENT.bridgeBackend) url.searchParams.delete("backend");
-    else url.searchParams.set("backend", target);
-    window.location.href = url.toString();
-  };
-  const switchLink = (target: "local" | "development" | "production", label: string) => (
-    <button className={"underline cursor-pointer"} onClick={() => switchBackend(target)}>
-      {label}
-    </button>
-  );
   const queryClient = useQueryClient();
   const [accountId, setAccountId] = useState("");
   const [secretInput, setSecretInput] = useState("");
@@ -101,128 +84,122 @@ export const StagedAccountsPanel = ({
   });
 
   return (
-    <div className={"mt-6 p-4 border-2 border-slate-500 rounded-xl flex flex-col gap-3"}>
-      <h2 className={"text-lg font-bold"}>Staged source accounts</h2>
-      <p className={"text-sm text-gray-500"}>
-        Stage account secrets below (testnet material only — staged secrets persist in plaintext
-        localStorage for repeatable test runs), then run the new-key transfer underneath. Network
-        for new stages: <b>{network}</b>
-      </p>
-      {usingLocalBackend ? (
-        <p className={"text-sm text-green-700"}>
-          Using the local mc backend at <code>{backendUrl}</code> — run it with <code>bun dev</code>{" "}
-          in <code>../meteor-connect-bridge/packages/meteor-connect-backend</code>.{" "}
-          {switchLink("development", "Switch to development")} ·{" "}
-          {switchLink("production", "production")}
-        </p>
-      ) : usingProductionBackend ? (
-        <p className={"text-sm text-amber-700"}>
-          ⚠ Using the PRODUCTION backend
-          {DEPLOYMENT.bridgeBackend === "production" ? " (this deployment's default)" : ""} — real
-          user sessions live here. A CORS error on bridge creation has meant the Cloudflare edge
-          (WAF on <code>mc.meteorwallet.app</code>) blocked the preflight, not the worker.{" "}
-          {switchLink("development", "Switch to development")} · {switchLink("local", "local")}
-        </p>
-      ) : (
-        <p className={"text-sm text-green-700"}>
-          Using the development backend at <code>{backendUrl}</code>
-          {DEPLOYMENT.bridgeBackend === "development" ? " — this deployment's default" : ""}.{" "}
-          {switchLink("local", "Switch to local")} · {switchLink("production", "production")}
-        </p>
-      )}
-
-      <div className={"flex flex-col gap-2 max-w-xl"}>
-        <input
-          className={"border-2 rounded-lg py-1.5 px-3"}
-          placeholder={"Account ID (e.g. alice.testnet)"}
+    <SubPanel
+      title={`Staged source accounts (${staged.length})`}
+      description={
+        <>
+          Testnet material only — staged secrets persist in plaintext localStorage for repeatable
+          runs. New stages go to <b>{network}</b>.
+        </>
+      }
+    >
+      <div className={"flex flex-col gap-3"}>
+        <TextField
+          label={"Account ID"}
+          placeholder={"alice.testnet"}
           value={accountId}
-          autoComplete={"off"}
-          onChange={(e) => setAccountId(e.target.value)}
+          onChange={setAccountId}
+          mono
         />
-        <textarea
-          className={"border-2 rounded-lg py-1.5 px-3 font-mono text-sm"}
+        <TextArea
+          label={"Secret"}
           placeholder={'12/24-word mnemonic OR "ed25519:<base58>" private key'}
           value={secretInput}
-          autoComplete={"off"}
-          rows={2}
-          onChange={(e) => setSecretInput(e.target.value)}
+          onChange={setSecretInput}
+          hint={
+            detected != null && (
+              <span
+                className={
+                  detected.type === "invalid"
+                    ? "text-xs text-amber-700 dark:text-amber-400"
+                    : "text-xs text-emerald-700 dark:text-emerald-400"
+                }
+              >
+                {detected.type === "invalid"
+                  ? `Not yet a valid secret (${detected.reason})`
+                  : `Detected: ${detected.type.replace("_", " ")}`}
+              </span>
+            )
+          }
         />
-        {detected != null && (
-          <span
-            className={`text-xs ${detected.type === "invalid" ? "text-amber-600" : "text-green-700"}`}
-          >
-            {detected.type === "invalid"
-              ? `Not yet a valid secret (${detected.reason})`
-              : `Detected: ${detected.type.replace("_", " ")}`}
-          </span>
-        )}
-        {stageError != null && <span className={"text-sm text-red-700"}>{stageError}</span>}
+        {stageError != null && <Notice tone={"danger"}>{stageError}</Notice>}
         {stageMutation.error != null && (
-          <span className={"text-sm text-red-700"}>
-            Stage failed: {String(stageMutation.error)}
-          </span>
+          <Notice tone={"danger"}>Stage failed: {String(stageMutation.error)}</Notice>
         )}
-        <div className={"flex flex-row flex-wrap gap-3 items-center"}>
-          <Button
-            disabled={
-              stageMutation.isPending || accountId.trim() === "" || secretInput.trim() === ""
-            }
+        <div className={"flex flex-col gap-2 sm:flex-row sm:flex-wrap"}>
+          <ActionButton
+            pending={stageMutation.isPending}
+            disabled={accountId.trim() === "" || secretInput.trim() === ""}
             onClick={() => stageMutation.mutate()}
           >
             Stage account secret
-          </Button>
-          <Button
-            disabled={addFakeBatchMutation.isPending}
+          </ActionButton>
+          <ActionButton
+            variant={"secondary"}
+            pending={addFakeBatchMutation.isPending}
+            pendingLabel={"Adding fake accounts…"}
             onClick={() => addFakeBatchMutation.mutate()}
           >
-            {addFakeBatchMutation.isPending ? "Adding fake accounts..." : "Add 5 fake accounts"}
-          </Button>
-          <span className={"text-xs text-gray-500"}>
-            Volume testing: each click stages 5 diverse fake accounts (12/24-word mnemonics, custom
-            derivation path, private keys, implicit-style id, one multi-secret account).
-          </span>
+            Add 5 fake accounts
+          </ActionButton>
         </div>
+        <p className={"text-xs text-slate-500 dark:text-slate-400"}>
+          Volume testing: each fake batch stages 5 diverse accounts (12/24-word mnemonics, custom
+          derivation path, private keys, implicit-style id, one multi-secret account).
+        </p>
       </div>
 
-      <div className={"flex flex-col gap-1"}>
-        <h3 className={"font-bold text-sm"}>Staged accounts ({staged.length})</h3>
+      <div className={"flex flex-col gap-2"}>
         {staged.length === 0 ? (
-          <span className={"text-sm text-gray-500"}>Nothing staged yet.</span>
+          <p className={"text-sm text-slate-500 dark:text-slate-400"}>Nothing staged yet.</p>
         ) : (
-          staged.map((summary: TStagedTransferAccountSummary) => (
-            <div
-              key={`${summary.blockchainId}:${summary.networkId}:${summary.accountId}`}
-              className={"flex flex-row items-center gap-3 text-sm"}
+          <>
+            <ul
+              className={
+                "max-h-72 divide-y divide-slate-200 overflow-auto rounded-xl border border-slate-200 dark:divide-slate-800 dark:border-slate-800"
+              }
             >
-              <span className={"font-mono"}>{summary.accountId}</span>
-              <span className={"text-gray-500"}>
-                {summary.networkId} · {summary.secretTypes.join(", ")}
-              </span>
-              <button
-                className={"text-red-700 underline cursor-pointer"}
+              {staged.map((summary: TStagedTransferAccountSummary) => (
+                <li
+                  key={`${summary.blockchainId}:${summary.networkId}:${summary.accountId}`}
+                  className={"flex items-center gap-3 px-3 py-2 text-sm"}
+                >
+                  <div className={"min-w-0 flex-1"}>
+                    <p className={"truncate font-mono text-xs text-slate-900 dark:text-slate-100"}>
+                      {summary.accountId}
+                    </p>
+                    <p className={"text-xs text-slate-500 dark:text-slate-400"}>
+                      {summary.networkId} · {summary.secretTypes.join(", ")}
+                    </p>
+                  </div>
+                  <ActionButton
+                    size={"sm"}
+                    variant={"ghost"}
+                    onClick={async () => {
+                      await meteorConnect.transferAccounts.removeStaged(summary);
+                      await refreshStaged();
+                    }}
+                  >
+                    Remove
+                  </ActionButton>
+                </li>
+              ))}
+            </ul>
+            <div>
+              <ActionButton
+                size={"sm"}
+                variant={"danger"}
                 onClick={async () => {
-                  await meteorConnect.transferAccounts.removeStaged(summary);
+                  await meteorConnect.transferAccounts.clearStaged();
                   await refreshStaged();
                 }}
               >
-                remove
-              </button>
+                Clear all staged
+              </ActionButton>
             </div>
-          ))
+          </>
         )}
       </div>
-
-      <div className={"flex flex-row flex-wrap gap-3 items-center"}>
-        <Button
-          disabled={staged.length === 0}
-          onClick={async () => {
-            await meteorConnect.transferAccounts.clearStaged();
-            await refreshStaged();
-          }}
-        >
-          Clear staged
-        </Button>
-      </div>
-    </div>
+    </SubPanel>
   );
 };

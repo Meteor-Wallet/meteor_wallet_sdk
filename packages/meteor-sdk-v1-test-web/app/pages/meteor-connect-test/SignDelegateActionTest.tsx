@@ -1,15 +1,22 @@
 import type { IMeteorConnectAccount, MeteorConnect } from "@meteorwallet/sdk";
-import { KeyType, PublicKey } from "@near-js/crypto";
-import { actionCreators, SignedDelegate } from "@near-js/transactions";
+import { actionCreators, type SignedDelegate } from "@near-js/transactions";
 import { parseNearAmount } from "@near-js/utils";
-import { base58 } from "@scure/base";
-import { useMutation } from "@tanstack/react-query";
+import { useState } from "react";
 import { useLocalStorage } from "usehooks-ts";
-import { Button } from "~/ui/Button";
+import { ActionRow } from "./ActionRow";
+import type { IActionResultField } from "./results/resultsModel";
+import { useActionResults, useLatestActionResult } from "./results/ActionResultsUi";
+import { summarizeSignedDelegates } from "./results/summaries";
+import { ActionButton, TextField } from "./ui";
 
 BigInt.prototype["toJSON"] = function () {
   return `${this.toString()}`;
 };
+
+const RELAYER_URL = "http://localhost:8787/test-relayed-transaction";
+
+const KEY_SIGN_DELEGATES = "near::sign_delegate_actions";
+const KEY_RELAY = "relay_signed_delegates";
 
 export const SignDelegateActionTest = ({
   account,
@@ -18,106 +25,168 @@ export const SignDelegateActionTest = ({
   account: IMeteorConnectAccount;
   meteorConnect: MeteorConnect;
 }) => {
+  const { run } = useActionResults();
+  const { accountId, network } = account.identifier;
+  const [receiverId, setReceiverId] = useState("pebble.testnet");
+  const [amount, setAmount] = useState("0.001");
   const [signedDelegates, setSignedDelegates] = useLocalStorage<SignedDelegate[] | undefined>(
     "sign_delegate_action_test",
     undefined,
   );
 
-  const mutate_signDelegateAction = useMutation({
-    mutationKey: ["mutate_signDelegateAction", account.identifier],
-    mutationFn: async (multiple: boolean) => {
-      const action = await meteorConnect.createAction({
-        id: "near::sign_delegate_actions",
-        input: {
-          target: account.identifier,
-          delegateActions: [
-            {
-              receiverId: "pebble.testnet",
-              actions: [actionCreators.transfer(BigInt(parseNearAmount("0.001")!))],
-            },
-            ...(multiple
-              ? [
-                  {
-                    receiverId: "pebble.testnet",
-                    actions: [actionCreators.transfer(BigInt(parseNearAmount("0.001")!))],
-                  },
-                ]
-              : []),
-          ],
-        },
-      });
+  const signing = useLatestActionResult(KEY_SIGN_DELEGATES);
+  const relaying = useLatestActionResult(KEY_RELAY);
+  const amountYocto = parseNearAmount(amount.trim());
 
-      return await action.promptForExecution();
-    },
-  });
+  const signDelegates = (count: 1 | 2) => {
+    if (amountYocto == null) return;
+    const delegateActions = Array.from({ length: count }, () => ({
+      receiverId: receiverId.trim(),
+      actions: [actionCreators.transfer(BigInt(amountYocto))],
+    }));
+    void run({
+      key: KEY_SIGN_DELEGATES,
+      label: count > 1 ? "Sign delegate actions (2)" : "Sign delegate action",
+      actionId: "near::sign_delegate_actions",
+      accountId,
+      network,
+      execute: async () => {
+        const action = await meteorConnect.createAction({
+          id: "near::sign_delegate_actions",
+          input: { target: account.identifier, delegateActions },
+        });
+        const output = await action.promptForExecution();
+        setSignedDelegates(output.signedDelegatesWithHashes.map((d) => d.signedDelegate));
+        return output;
+      },
+      summarize: (output) => summarizeSignedDelegates(output, count),
+    });
+  };
 
-  const mutate_testRelayDelegateAction = useMutation({
-    mutationKey: ["mutate_testRelayDelegateAction", signedDelegates],
-    mutationFn: async () => {
-      if (!signedDelegates) {
-        throw new Error("No signed delegates to test");
-      }
-
-      const response = await fetch("http://localhost:8787/test-relayed-transaction", {
-        body: JSON.stringify({
-          signedDelegates,
-        }),
-        method: "POST",
-      });
-
-      const json = await response.json();
-
-      console.log("Relay response", json);
-    },
-  });
+  const relay = () => {
+    if (signedDelegates == null) return;
+    void run({
+      key: KEY_RELAY,
+      label: "Relay signed delegates",
+      accountId,
+      network,
+      execute: async () => {
+        const response = await fetch(RELAYER_URL, {
+          body: JSON.stringify({ signedDelegates }),
+          method: "POST",
+        });
+        const text = await response.text();
+        let body: unknown = text;
+        try {
+          body = JSON.parse(text);
+        } catch {
+          // Not JSON — keep the text.
+        }
+        if (!response.ok) throw new Error(`Relayer answered HTTP ${response.status}: ${text}`);
+        return { status: response.status, body };
+      },
+      summarize: ({ status, body }) => {
+        const fields: IActionResultField[] = [];
+        if (body != null && typeof body === "object") {
+          for (const [label, value] of Object.entries(body).slice(0, 6)) {
+            if (value == null || typeof value === "object") continue;
+            fields.push({ label, value: String(value) });
+          }
+        }
+        return {
+          headline: `Relayer accepted ${signedDelegates.length} delegate(s) (HTTP ${status})`,
+          fields,
+        };
+      },
+    });
+  };
 
   return (
-    <div className="p-5 flex flex-col gap-2 border border-gray-200 dark:border-gray-700 rounded-lg">
-      <code>Send 0.001 NEAR to pebble.testnet</code>
-      <Button
-        onClick={async () => {
-          const response = await mutate_signDelegateAction.mutateAsync(false);
-          console.log("Signed delegate action response", response);
-
-          const publicKey = new PublicKey({
-            keyType: KeyType.ED25519,
-            data: Uint8Array.from(
-              response.signedDelegatesWithHashes[0].signedDelegate.delegateAction.publicKey
-                .ed25519Key!.data!,
-            ),
-          });
-
-          console.log("Public key string", publicKey.toString());
-
-          setSignedDelegates(response.signedDelegatesWithHashes.map((d) => d.signedDelegate));
-        }}
-      >
-        Test Signed Delegate Action
-      </Button>
-      <Button
-        onClick={async () => {
-          const response = await mutate_signDelegateAction.mutateAsync(true);
-          console.log("Signed (multiple) delegate action response", response);
-          setSignedDelegates(response.signedDelegatesWithHashes.map((d) => d.signedDelegate));
-        }}
-      >
-        Test Signed Delegate Action (multiple)
-      </Button>
-      {signedDelegates && (
-        <div className="flex flex-col gap-2">
-          <code>Signed Delegates ({signedDelegates.length}):</code>
-          {mutate_testRelayDelegateAction.isPending && <div>Testing relay...</div>}
-          <div className="max-h-60 overflow-auto bg-gray-100 dark:bg-gray-800 p-2 rounded">
-            <pre>{JSON.stringify(signedDelegates, null, 2)}</pre>
-          </div>
-          <Button
-            disabled={mutate_testRelayDelegateAction.isPending}
-            onClick={() => mutate_testRelayDelegateAction.mutateAsync()}
+    <ActionRow
+      title={"Sign delegate actions"}
+      description={
+        "Meta-transactions: the wallet signs NEAR transfers for a relayer to submit. The last signed set is kept so it can be relayed."
+      }
+      resultKeys={[KEY_SIGN_DELEGATES, KEY_RELAY]}
+      inputs={
+        <>
+          <TextField label={"Receiver"} value={receiverId} onChange={setReceiverId} mono />
+          <TextField
+            label={"Amount per transfer (NEAR)"}
+            value={amount}
+            onChange={setAmount}
+            inputMode={"decimal"}
+            hint={amountYocto == null ? "Enter a valid NEAR amount" : undefined}
+          />
+        </>
+      }
+      actions={
+        <>
+          <ActionButton
+            pending={signing.pending}
+            pendingLabel={"Waiting for wallet…"}
+            disabled={amountYocto == null || receiverId.trim() === ""}
+            onClick={() => signDelegates(1)}
           >
-            Test Relaying Signed Delegates
-          </Button>
+            Sign 1 delegate action
+          </ActionButton>
+          <ActionButton
+            variant={"secondary"}
+            disabled={signing.pending || amountYocto == null || receiverId.trim() === ""}
+            onClick={() => signDelegates(2)}
+          >
+            Sign 2 delegate actions
+          </ActionButton>
+        </>
+      }
+    >
+      {signedDelegates != null && signedDelegates.length > 0 && (
+        <div
+          className={
+            "flex flex-col gap-2 rounded-xl border border-dashed border-slate-300 p-3 dark:border-slate-700"
+          }
+        >
+          <div className={"flex flex-wrap items-center gap-2"}>
+            <span className={"mr-auto text-sm text-slate-700 dark:text-slate-300"}>
+              {signedDelegates.length} signed delegate(s) ready to relay
+            </span>
+            <ActionButton
+              size={"sm"}
+              variant={"secondary"}
+              pending={relaying.pending}
+              pendingLabel={"Relaying…"}
+              onClick={relay}
+            >
+              Relay via local relayer
+            </ActionButton>
+            <ActionButton
+              size={"sm"}
+              variant={"ghost"}
+              onClick={() => setSignedDelegates(undefined)}
+            >
+              Forget
+            </ActionButton>
+          </div>
+          <p className={"text-xs text-slate-500 dark:text-slate-400"}>
+            Posts to <code>{RELAYER_URL}</code> — reachable from the desktop running the backend,
+            not from a phone.
+          </p>
+          <details>
+            <summary
+              className={"cursor-pointer text-xs font-medium text-slate-500 dark:text-slate-400"}
+            >
+              Show stored delegates
+            </summary>
+            <pre
+              className={
+                "mt-1 max-h-60 overflow-auto rounded-lg bg-slate-900 p-3 font-mono text-[11px] text-slate-100 dark:bg-black"
+              }
+            >
+              {JSON.stringify(signedDelegates, null, 2)}
+            </pre>
+          </details>
         </div>
       )}
-    </div>
+    </ActionRow>
   );
 };

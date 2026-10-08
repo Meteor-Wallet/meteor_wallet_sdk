@@ -75,7 +75,7 @@ export default function App() {
 
   return (
     <div>
-      <div className={"flex justify-start justify-items-start items-start gap-5 p-5"}>
+      <div className={"flex flex-wrap items-center justify-start gap-3 p-4 sm:gap-5 sm:p-5"}>
         {/* <Button
           active={location.pathname === "/"}
           onClick={() => {
