@@ -226,6 +226,17 @@ export interface IMeteorConnectMobileBridgeConfig {
   meteorAppId?: EMeteorAppId.meteor_wallet_mobile | EMeteorAppId.meteor_wallet_mobile_dev;
   leaseProvider?: IMeteorConnectBridgeLeaseProvider;
   nativeAppOpener?: IMeteorConnectNativeAppOpener;
+  /**
+   * Open Meteor Mobile automatically for a request from an account signed in with it, instead of
+   * waiting for the user to tap "Open Meteor Mobile". Default `true`.
+   *
+   * Browsers only let a page open an app right after a real tap, so this happens only on a phone,
+   * while the tap that started the request is still live, through the SDK's own opener (never a
+   * host-supplied `nativeAppOpener`), and only for a wallet this browser has opened before — the
+   * evidence that the app is on this device. In every other case nothing changes: the push
+   * notification and the Open button behave exactly as before, and both stay as fallbacks.
+   */
+  autoOpenPairedWallet?: boolean;
   partnerMetadata?: {
     name?: string;
     description?: string;

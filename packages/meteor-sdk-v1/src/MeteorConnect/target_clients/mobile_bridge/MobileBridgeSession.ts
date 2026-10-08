@@ -181,7 +181,28 @@ interface IMobileBridgeSessionInput {
   assertIdentityGeneration(): Promise<void>;
   acquireFirstPairingLease(): Promise<IMeteorConnectBridgeLeaseHandle>;
   registerLiveSession(): Promise<{ stop(): Promise<void> }>;
+  /**
+   * Same-device auto-open (`mobileAppAutoOpen.ts`), offered only for an eligible request. Called
+   * once, after the link is published and before the push wake; resolves true only when the app
+   * demonstrably came to the foreground, in which case the push is skipped — it would only race
+   * the link's claim with a second one for the same bridge.
+   */
+  autoOpen?: (session: MobileBridgeSession) => Promise<boolean>;
+  /** Records what this page learned about whether the wallet's app lives on this device. */
+  sameDevice?: {
+    remember(walletVerifyPublicKey: string): void;
+    forget(walletVerifyPublicKey: string): void;
+  };
 }
+
+/** Authenticated phases that exist only once a wallet has claimed the bridge. */
+const CLAIMED_SESSION_PHASES: ReadonlySet<ESessionPhase> = new Set([
+  ESessionPhase.wallet_confirmation,
+  ESessionPhase.wallet_verification,
+  ESessionPhase.wallet_action,
+  ESessionPhase.result_ready,
+  ESessionPhase.external_work,
+]);
 
 /** Local phases that mean the flow is over; nothing may re-enter the transport from here. */
 const SETTLED_PHASES: readonly TMobileBridgePhase[] = ["completed", "failed", "cancelled"];
@@ -255,6 +276,14 @@ export class MobileBridgeSession {
    * terminal outcome other than the `closed` we asked for, still fails the turn.
    */
   private closingAfterOwnResult = false;
+  /**
+   * How this page last opened the wallet link (a tap, or an automatic same-device attempt) and
+   * whether the page went to the background after it. Together with a claim, that is the evidence
+   * the wallet's app is on this device (`input.sameDevice`).
+   */
+  private linkOpened?: "user" | "automatic";
+  private hiddenAfterLinkOpened = false;
+  private sameDeviceNoted = false;
   /** Set once this session parks in the external-work hold; cleared when the next turn starts. */
   private externalWorkHold?: IMobileBridgeExternalWorkHold;
   /**
@@ -385,8 +414,10 @@ export class MobileBridgeSession {
       this.publishWalletLink(session);
       this.applySessionFacts(session.facts);
       this.collectionPromise ??= this.collectResult();
+      const appOpened = (await this.input.autoOpen?.(this).catch(() => false)) === true;
       if (this.input.pushWallet != null) {
-        await this.notifyPairedWallet(this.input.pushWallet);
+        if (appOpened) this.update({ push: "not_attempted" });
+        else await this.notifyPairedWallet(this.input.pushWallet);
       }
     } catch (error) {
       this.fail(error);
@@ -495,6 +526,7 @@ export class MobileBridgeSession {
     const onVisibility = () => {
       if (!this.input.isCurrent(this.token)) return;
       if (document.visibilityState === "hidden") {
+        if (this.linkOpened != null) this.hiddenAfterLinkOpened = true;
         this.markHandedOff();
         return;
       }
@@ -522,6 +554,7 @@ export class MobileBridgeSession {
       idleExpiresAt: facts.idleExpiresAt,
       absoluteExpiresAt: facts.absoluteExpiresAt,
     });
+    if (CLAIMED_SESSION_PHASES.has(facts.phase)) this.noteSameDeviceClaim();
     if (isTerminalPhase(facts)) {
       if (facts.phase === ESessionPhase.failed) {
         this.fail(new Error(MOBILE_BRIDGE_ENDING.failed));
@@ -654,6 +687,7 @@ export class MobileBridgeSession {
           ? await this.collectMeteorWalletCoreResult(kind.sharedActionId)
           : await this.collectNearResult();
       this.resultSettled = true;
+      this.noteSameDeviceClaim();
       // A journal-backed external-work hold keeps the SESSION live even though this TURN is
       // settled: the AddKey window runs next, then the verification turn on the same bridge.
       this.update({ phase: this.externalWorkHold == null ? "completed" : "external_work" });
@@ -1015,13 +1049,48 @@ export class MobileBridgeSession {
     return this.resultPromise;
   }
 
-  openInApp(open: (fullLink: string) => void): void {
+  openInApp(open: (fullLink: string) => void, options: { automatic?: boolean } = {}): void {
     if (this.snapshot.deepLink == null) throw new Error("mobile_bridge_link_not_ready");
     open(this.snapshot.deepLink);
+    if (options.automatic === true) {
+      // Not a hand-off yet: nothing proves the app came up until the page goes to the background,
+      // which the visibility listener records on its own.
+      this.linkOpened ??= "automatic";
+      return;
+    }
+    this.linkOpened = "user";
     this.markHandedOff();
   }
 
+  /**
+   * A wallet claimed after this page opened its app link and then went to the background: the app
+   * that claimed is on this device. Web wallet links prove nothing about the device.
+   */
+  private noteSameDeviceClaim(): void {
+    if (this.sameDeviceNoted || this.linkOpened == null || !this.hiddenAfterLinkOpened) return;
+    if (this.selectedWalletLink?.linkType !== EBridgeLinkType.app_deep_link) return;
+    const claimed = this.input.client.claimedWallet;
+    if (claimed == null) return;
+    this.sameDeviceNoted = true;
+    this.input.sameDevice?.remember(claimed.walletVerifyPublicKey);
+  }
+
+  /**
+   * An automatic open the page never left for means the app did not come up on this device —
+   * blocked, dismissed, or uninstalled since. Forget the evidence so later requests go back to
+   * waiting for a tap rather than repeating an attempt this device does not honour.
+   */
+  private concludeSameDeviceEvidence(): void {
+    if (this.sameDeviceNoted) return;
+    this.sameDeviceNoted = true;
+    const expected = this.input.pushWallet?.walletVerifyPublicKey;
+    if (this.linkOpened === "automatic" && !this.hiddenAfterLinkOpened && expected != null) {
+      this.input.sameDevice?.forget(expected);
+    }
+  }
+
   private async disposeInternal(): Promise<void> {
+    this.concludeSameDeviceEvidence();
     this.abortController.abort();
     for (const unsubscribe of this.clientSubscriptions.splice(0)) unsubscribe();
     this.visibilityListener?.();

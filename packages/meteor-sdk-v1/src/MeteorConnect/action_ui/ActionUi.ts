@@ -44,6 +44,20 @@ export function usingBrowserThatRequiresUserAction() {
   return isMobile || isSafari;
 }
 
+/**
+ * The known target the prompt acts on straight away. Mobile/Safari need another tap only when the
+ * current request has no live user gesture — except Meteor Mobile: its known-target step only
+ * prepares the bridge (no window opens), and the bridge panel carries its own tap-driven Open
+ * button / QR. Routing it through the continue screen gave an "Open Meteor Mobile" button that
+ * never opened the app (and no QR on desktop Safari).
+ */
+export function immediateKnownExecutionTarget(
+  knownExecutionTarget: TMeteorConnectionExecutionTarget | undefined,
+): TMeteorConnectionExecutionTarget | undefined {
+  if (knownExecutionTarget === "v2_bridge_mobile") return knownExecutionTarget;
+  return usingBrowserThatRequiresUserAction() ? undefined : knownExecutionTarget;
+}
+
 export class ActionUi {
   private container: HTMLElement | null = null;
   private actionUiComponent: MeteorActionUiContainer | MeteorTransferAccountsContainer | null =
@@ -80,11 +94,7 @@ export class ActionUi {
       // Store the original known target before we potentially override it
       this.knownExecutionTargetBeforeUiCheck = knownExecutionTarget;
 
-      // Mobile/Safari need another tap only when the current request has no live user gesture.
-
-      if (usingBrowserThatRequiresUserAction()) {
-        knownExecutionTarget = undefined;
-      }
+      knownExecutionTarget = immediateKnownExecutionTarget(knownExecutionTarget);
       // knownExecutionTarget = undefined;
 
       if (knownExecutionTarget === "v2_bridge_mobile") {

@@ -1,5 +1,9 @@
 import { describe, expect, it } from "bun:test";
-import { ActionUi, usingBrowserThatRequiresUserAction } from "./ActionUi";
+import {
+  ActionUi,
+  immediateKnownExecutionTarget,
+  usingBrowserThatRequiresUserAction,
+} from "./ActionUi";
 
 describe("ActionUi lifecycle", () => {
   it("releases the active action before asynchronous session disposal finishes", async () => {
@@ -50,4 +54,22 @@ describe("known-platform automatic opening", () => {
       }
     });
   }
+});
+
+describe("known Meteor Mobile target without a live tap", () => {
+  it("keeps Meteor Mobile (the bridge panel owns the tap) while web targets still ask for a tap", () => {
+    const original = Object.getOwnPropertyDescriptor(globalThis, "navigator");
+    try {
+      Object.defineProperty(globalThis, "navigator", {
+        configurable: true,
+        value: { userAgent: "iPhone Safari", userActivation: { isActive: false } },
+      });
+      expect(immediateKnownExecutionTarget("v2_bridge_mobile")).toBe("v2_bridge_mobile");
+      expect(immediateKnownExecutionTarget("v1_web")).toBeUndefined();
+      expect(immediateKnownExecutionTarget(undefined)).toBeUndefined();
+    } finally {
+      if (original) Object.defineProperty(globalThis, "navigator", original);
+      else Reflect.deleteProperty(globalThis, "navigator");
+    }
+  });
 });

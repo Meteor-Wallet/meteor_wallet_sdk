@@ -32,6 +32,12 @@ import type {
 } from "./MeteorConnectMobileBridgeClient.types";
 import { MobileBridgeSession } from "./MobileBridgeSession";
 import {
+  AUTO_OPEN_CONFIRMATION_MS,
+  canOpenAppWithoutNewTap,
+  isSameDeviceAutoOpenEligible,
+  waitForPageToHide,
+} from "./mobileAppAutoOpen";
+import {
   directBrowserNativeAppOpener,
   StorageBakeryBridgeLeaseProvider,
   WebLockBridgeLeaseProvider,
@@ -47,6 +53,7 @@ import {
   sdkActionToMobileBridge,
 } from "./sdkActionToMobileBridge";
 
+import { isMobile } from "../../action_ui/utils/isMobile";
 import {
   isExtensionNewKeyTransferAvailable,
   openExtensionNewKeyTransfer,
@@ -520,6 +527,9 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
     }
     const prepared = await sdkActionToMobileBridge(request, sensitiveTransferSource);
     const pushWallet = await this.selectPushWallet(request, prepared, targetWalletConnection);
+    const autoOpen = (await this.isSameDeviceAutoOpenEligible(request, pushWallet, target))
+      ? (session: MobileBridgeSession) => this.autoOpenSession(session)
+      : undefined;
     // Stabilization SDK-3: a wallet-targeted request whose paired-wallet record is gone (identity
     // reset, ledger eviction, changed backend scope) is NOT a dead end. The session is created
     // without push or a backend pin — QR/link delivery, copy directing the user to the exact
@@ -562,6 +572,20 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
           .setKey(network, accountId, keyPair);
       },
       assertIdentityGeneration: () => this.assertCurrentGeneration(),
+      autoOpen,
+      sameDevice: {
+        remember: (walletVerifyPublicKey) => {
+          void this.storage?.rememberSameDeviceWallet(walletVerifyPublicKey).catch((error) => {
+            this.logger.err("Could not record the same-device wallet", error);
+          });
+        },
+        forget: (walletVerifyPublicKey) => {
+          this.logger.log("Automatic open was not taken; waiting for a tap next time");
+          void this.storage?.forgetSameDeviceWallet(walletVerifyPublicKey).catch((error) => {
+            this.logger.err("Could not forget the same-device wallet", error);
+          });
+        },
+      },
       acquireFirstPairingLease: () =>
         this.leaseProvider!.acquire(`${this.storage!.environmentId}:first-pairing`, {
           timeoutMs: 1_000,
@@ -586,6 +610,57 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
     this.currentTransferTargetPlatform = transferTargetPlatform;
     void session.startPreparation().catch(() => {});
     return session;
+  }
+
+  /** See `mobileAppAutoOpen.ts` for why each condition is required. */
+  private async isSameDeviceAutoOpenEligible(
+    request: TMCActionRequestUnionExpandedInput<TMCActionRegistry>,
+    pushWallet: TPartnerPairedWallet | undefined,
+    target: IMobileBridgeRequestTarget,
+  ): Promise<boolean> {
+    const base = {
+      enabled: this.config?.autoOpenPairedWallet !== false,
+      hostSuppliedOpener: this.config?.nativeAppOpener != null,
+      actionId: request.id,
+      transferTargetPlatform: target.transferTargetPlatform,
+      pushWalletVerifyPublicKey: pushWallet?.walletVerifyPublicKey,
+      mobileDevice: typeof navigator !== "undefined" && isMobile(),
+    };
+    // The storage read is the only cost, so it runs last and only when it can still matter.
+    const walletKey = base.pushWalletVerifyPublicKey;
+    const storage = this.storage;
+    if (
+      walletKey == null ||
+      storage == null ||
+      !isSameDeviceAutoOpenEligible({ ...base, knownOnThisDevice: true })
+    ) {
+      return false;
+    }
+    const knownOnThisDevice = await storage.hasSameDeviceWallet(walletKey).catch(() => false);
+    return isSameDeviceAutoOpenEligible({ ...base, knownOnThisDevice });
+  }
+
+  /**
+   * The automatic open itself: only while the starting tap is still live, the page is in the
+   * foreground, this is still the current request, and the wallet has not already picked it up.
+   * Resolves whether the app demonstrably came up (the page went to the background).
+   */
+  private async autoOpenSession(session: MobileBridgeSession): Promise<boolean> {
+    if (this.currentSession !== session || !canOpenAppWithoutNewTap()) return false;
+    if (session.getSnapshot().phase !== "waiting_for_wallet") return false;
+    try {
+      this.openCurrentSessionInApp(undefined, { automatic: true });
+    } catch (error) {
+      this.logger.err("Automatic open of the paired wallet failed", error);
+      return false;
+    }
+    const opened = await waitForPageToHide(AUTO_OPEN_CONFIRMATION_MS);
+    this.logger.log(
+      opened
+        ? "Opened the paired wallet automatically"
+        : "Automatic open not confirmed; sending the push notification as usual",
+    );
+    return opened;
   }
 
   /**
@@ -733,7 +808,16 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
    * a fresh popup; a placeholder the user already closed is respected as a decline. Native deep
    * links never navigate it — it is closed rather than stranded.
    */
-  openCurrentSessionInApp(pendingWindow?: Window): void | Promise<void> {
+  openCurrentSessionInApp(
+    pendingWindow?: Window,
+    options: {
+      /**
+       * A same-device auto-open rather than a tap: only ever the paired app's custom-scheme link
+       * — never a web-wallet window, which would be an unrequested popup.
+       */
+      automatic?: boolean;
+    } = {},
+  ): void | Promise<void> {
     const opener = this.config?.nativeAppOpener ?? directBrowserNativeAppOpener;
     const session = this.currentSession;
     if (session == null) {
@@ -751,6 +835,9 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
         throw new Error("mobile_bridge_native_scheme_not_allowed");
       }
       const protocol = new URL(link).protocol;
+      if (options.automatic === true && selectedLink.linkType !== EBridgeLinkType.app_deep_link) {
+        throw new Error("mobile_bridge_auto_open_not_app_link");
+      }
       if (selectedLink.linkType === EBridgeLinkType.web_app_url) {
         if (protocol !== "https:" && protocol !== "http:") {
           throw new Error("mobile_bridge_native_scheme_not_allowed");
@@ -772,7 +859,7 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
       }
       pendingWindow?.close();
       opener.open(link);
-    });
+    }, options);
     return extensionOpen;
   }
 

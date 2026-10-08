@@ -122,6 +122,7 @@ export class MeteorConnect {
         partnerMetadata: mobileBridge?.partnerMetadata,
         leaseProvider: objectFingerprint(mobileBridge?.leaseProvider),
         nativeAppOpener: objectFingerprint(mobileBridge?.nativeAppOpener),
+        autoOpenPairedWallet: mobileBridge?.autoOpenPairedWallet ?? true,
         nearKeyStoreProvider: objectFingerprint(nearKeyStoreProvider),
         transferAccounts:
           mobileBridge?.transferAccounts == null

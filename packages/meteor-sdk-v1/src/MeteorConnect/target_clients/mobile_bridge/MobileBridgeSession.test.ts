@@ -956,3 +956,199 @@ describe("MobileBridgeSession claimed-wallet resolution", () => {
     expect(session.getCompletedConnection()).toBeUndefined();
   });
 });
+
+describe("MobileBridgeSession same-device auto-open", () => {
+  const APP_LINK = "meteorwalletdev://b?f=s2&l=lease1";
+  const createdWithAppLink = (): ICreatedPartnerSession =>
+    ({
+      ...createdSessionFor(ESessionPhase.waiting_for_wallet),
+      walletLinks: [
+        {
+          appId: EMeteorAppId.meteor_wallet_mobile_dev,
+          walletName: "Meteor Mobile Dev",
+          walletDescription: "dev",
+          platform: EWalletPlatform.mobile,
+          linkString: APP_LINK,
+          linkType: EBridgeLinkType.app_deep_link,
+        },
+      ],
+    }) as unknown as ICreatedPartnerSession;
+
+  /** Bun has no DOM: the minimum `document` the visibility tracking reads, with a background(). */
+  const withFakeDocument = async (run: (background: () => void) => Promise<void>) => {
+    const listeners = new Map<string, () => void>();
+    const fakeDocument = {
+      visibilityState: "visible",
+      addEventListener: (type: string, listener: () => void) => listeners.set(type, listener),
+      removeEventListener: (type: string) => listeners.delete(type),
+    };
+    const previous = (globalThis as { document?: unknown }).document;
+    (globalThis as { document?: unknown }).document = fakeDocument;
+    try {
+      await run(() => {
+        fakeDocument.visibilityState = "hidden";
+        listeners.get("visibilitychange")?.();
+      });
+    } finally {
+      (globalThis as { document?: unknown }).document = previous;
+    }
+  };
+
+  const claimByWallet = (double: ReturnType<typeof createClientDouble>) =>
+    double.emit("factsChanged", {
+      facts: sessionFactsFor(ESessionPhase.wallet_action),
+      source: "realm",
+    });
+
+  const createTracked = (
+    overrides: Partial<TSessionInput> & { appLink?: boolean; pushes?: { count: number } } = {},
+  ) => {
+    const remembered: string[] = [];
+    const forgotten: string[] = [];
+    const double = createClientDouble({
+      ...(overrides.appLink ? { createSession: async () => createdWithAppLink() } : {}),
+      notifyWalletForInitialClaim: async () => {
+        if (overrides.pushes) overrides.pushes.count += 1;
+        return { delivered: true };
+      },
+    });
+    const session = new MobileBridgeSession({
+      ...sessionInputFor(double.client, { pushWallet: PAIRED_WALLET }),
+      targetMeteorAppIds: overrides.appLink
+        ? [EMeteorAppId.meteor_wallet_mobile_dev]
+        : [EMeteorAppId.meteor_wallet_web_dev],
+      sameDevice: {
+        remember: (key) => remembered.push(key),
+        forget: (key) => forgotten.push(key),
+      },
+      ...overrides,
+    });
+    return { session, double, remembered, forgotten };
+  };
+
+  it("skips the push when the app came up on the automatic open", async () => {
+    const pushes = { count: 0 };
+    const { session } = createTracked({ pushes, autoOpen: async () => true });
+    await session.startPreparation();
+    expect(pushes.count).toBe(0);
+    expect(session.getSnapshot().push).toBe("not_attempted");
+    await session.dispose();
+  });
+
+  it("still sends the push when the automatic open was not confirmed", async () => {
+    const pushes = { count: 0 };
+    const { session } = createTracked({ pushes, autoOpen: async () => false });
+    await session.startPreparation();
+    expect(pushes.count).toBe(1);
+    expect(session.getSnapshot().push).toBe("delivered");
+    await session.dispose();
+  });
+
+  it("sends the push as before when the automatic open throws", async () => {
+    const pushes = { count: 0 };
+    const { session } = createTracked({
+      pushes,
+      autoOpen: async () => {
+        throw new Error("opener exploded");
+      },
+    });
+    await session.startPreparation();
+    expect(pushes.count).toBe(1);
+    await session.dispose();
+  });
+
+  it("does not count an automatic open as a hand-off until the page goes to the background", async () => {
+    await withFakeDocument(async (background) => {
+      const { session } = createTracked({
+        autoOpen: async (target) => {
+          target.openInApp(() => {}, { automatic: true });
+          return false;
+        },
+      });
+      await session.startPreparation();
+      expect(session.getSnapshot().handedOff).toBeUndefined();
+      background();
+      expect(session.getSnapshot().handedOff).toBe(true);
+      await session.dispose();
+    });
+  });
+
+  it("remembers the wallet that claims after this page opened its app and went to the background", async () => {
+    await withFakeDocument(async (background) => {
+      const { session, double, remembered } = createTracked({ appLink: true });
+      await session.startPreparation();
+      session.openInApp(() => {});
+      background();
+      claimByWallet(double);
+      expect(remembered).toEqual([PAIRED_WALLET.walletVerifyPublicKey]);
+      await session.dispose();
+    });
+  });
+
+  it("does not take a claim the page never left for as same-device evidence", async () => {
+    await withFakeDocument(async () => {
+      const { session, double, remembered } = createTracked({ appLink: true });
+      await session.startPreparation();
+      session.openInApp(() => {});
+      claimByWallet(double);
+      expect(remembered).toEqual([]);
+      await session.dispose();
+    });
+  });
+
+  it("does not take a web-wallet link as same-device evidence", async () => {
+    await withFakeDocument(async (background) => {
+      const { session, double, remembered } = createTracked();
+      await session.startPreparation();
+      session.openInApp(() => {});
+      background();
+      claimByWallet(double);
+      expect(remembered).toEqual([]);
+      await session.dispose();
+    });
+  });
+
+  it("forgets the wallet after an automatic open the page never left", async () => {
+    await withFakeDocument(async () => {
+      const { session, forgotten } = createTracked({
+        autoOpen: async (target) => {
+          target.openInApp(() => {}, { automatic: true });
+          return false;
+        },
+      });
+      await session.startPreparation();
+      await session.dispose();
+      expect(forgotten).toEqual([PAIRED_WALLET.walletVerifyPublicKey]);
+    });
+  });
+
+  it("keeps the wallet when the page went to the background after the automatic open", async () => {
+    await withFakeDocument(async (background) => {
+      const { session, forgotten } = createTracked({
+        autoOpen: async (target) => {
+          target.openInApp(() => {}, { automatic: true });
+          background();
+          return true;
+        },
+      });
+      await session.startPreparation();
+      await session.dispose();
+      expect(forgotten).toEqual([]);
+    });
+  });
+
+  it("keeps the wallet when the user tapped Open after an automatic attempt", async () => {
+    await withFakeDocument(async () => {
+      const { session, forgotten } = createTracked({
+        autoOpen: async (target) => {
+          target.openInApp(() => {}, { automatic: true });
+          return false;
+        },
+      });
+      await session.startPreparation();
+      session.openInApp(() => {});
+      await session.dispose();
+      expect(forgotten).toEqual([]);
+    });
+  });
+});

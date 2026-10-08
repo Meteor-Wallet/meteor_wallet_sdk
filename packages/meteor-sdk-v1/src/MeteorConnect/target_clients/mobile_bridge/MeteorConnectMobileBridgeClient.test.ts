@@ -129,6 +129,36 @@ describe("MeteorConnectMobileBridgeClient open-in-app allowlist", () => {
     }
   });
 
+  it("never turns an automatic open into a web-wallet window", () => {
+    // Same-device auto-open exists for the paired APP. A web link opened without a fresh tap would
+    // be an unrequested popup, so the automatic path refuses it outright.
+    const harness = prepare({
+      selectedLink: { linkString: WEB_LINK, linkType: EBridgeLinkType.web_app_url },
+      presentedLink: `${WEB_LINK}#partnerSecret=abc`,
+    });
+    try {
+      expect(() => harness.client.openCurrentSessionInApp(undefined, { automatic: true })).toThrow(
+        "mobile_bridge_auto_open_not_app_link",
+      );
+      expect(harness.windowOpened).toEqual([]);
+    } finally {
+      harness.restore();
+    }
+  });
+
+  it("opens the paired app's link on an automatic open", () => {
+    const harness = prepare({
+      selectedLink: { linkString: DEEP_LINK, linkType: EBridgeLinkType.app_deep_link },
+      presentedLink: `${DEEP_LINK}#partnerSecret=abc`,
+    });
+    try {
+      harness.client.openCurrentSessionInApp(undefined, { automatic: true });
+      expect(harness.opened).toEqual([`${DEEP_LINK}#partnerSecret=abc`]);
+    } finally {
+      harness.restore();
+    }
+  });
+
   it("refuses a link that does not extend the backend-issued wallet link", () => {
     const harness = prepare({
       selectedLink: { linkString: DEEP_LINK, linkType: EBridgeLinkType.app_deep_link },

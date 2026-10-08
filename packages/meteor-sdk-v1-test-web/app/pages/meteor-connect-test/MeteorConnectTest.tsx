@@ -69,6 +69,13 @@ const resolveBackendUrl = (): string => {
 const MOBILE_BRIDGE_BACKEND_URL = resolveBackendUrl();
 const MOBILE_BRIDGE_APP_ID = DEPLOYMENT.mobileAppId;
 const MOBILE_BRIDGE_DEEP_LINK = DEPLOYMENT.mobileDeepLink;
+/**
+ * `?autoOpen=off` disables the SDK's same-device auto-open of Meteor Mobile, so both behaviours
+ * can be compared on a phone. Read once at init for the same reason as `?backend=`.
+ */
+const AUTO_OPEN_PAIRED_WALLET =
+  typeof window === "undefined" ||
+  new URLSearchParams(window.location.search).get("autoOpen") !== "off";
 
 const meteorConnectClient =
   (import.meta.hot?.data.meteorConnectClient as MeteorConnect | undefined) ?? new MeteorConnect();
@@ -88,6 +95,7 @@ const initializedMeteorConnect = async (): Promise<MeteorConnect> => {
       enabled: true,
       backendUrl: MOBILE_BRIDGE_BACKEND_URL,
       meteorAppId: MOBILE_BRIDGE_APP_ID,
+      autoOpenPairedWallet: AUTO_OPEN_PAIRED_WALLET,
       partnerMetadata: {
         name: "Meteor SDK test web",
         description: "Development harness for the Meteor Connect mobile bridge",
@@ -318,6 +326,18 @@ const switchBackend = (target: Exclude<TBackendChoice, "custom">) => {
   window.location.href = url.toString();
 };
 
+const switchAutoOpen = (enabled: boolean) => {
+  const url = new URL(window.location.href);
+  if (enabled) url.searchParams.delete("autoOpen");
+  else url.searchParams.set("autoOpen", "off");
+  window.location.href = url.toString();
+};
+
+const AUTO_OPEN_OPTIONS = [
+  { value: "on", label: "On" },
+  { value: "off", label: "Off" },
+] as const;
+
 const BACKEND_OPTIONS = [
   { value: "local", label: "Local" },
   { value: "development", label: "Dev" },
@@ -484,6 +504,28 @@ const ConnectionCard = ({
                 <code>../meteor-connect-bridge/packages/meteor-connect-backend</code>.
               </p>
             )}
+            <div className={"flex flex-wrap items-center gap-3"}>
+              <span className={"text-xs font-medium text-slate-600 dark:text-slate-400"}>
+                Auto-open Meteor Mobile
+              </span>
+              <SegmentedControl<"on" | "off">
+                ariaLabel={"Auto-open Meteor Mobile"}
+                value={AUTO_OPEN_PAIRED_WALLET ? "on" : "off"}
+                options={AUTO_OPEN_OPTIONS}
+                onChange={(choice) => {
+                  if ((choice === "on") !== AUTO_OPEN_PAIRED_WALLET)
+                    switchAutoOpen(choice === "on");
+                }}
+              />
+              <span className={"text-xs text-slate-500 dark:text-slate-400"}>
+                (reloads the page)
+              </span>
+            </div>
+            <p className={"text-xs text-slate-500 dark:text-slate-400"}>
+              For a Meteor Mobile account on a phone, a request started by a tap opens the app
+              directly — once this browser has opened that wallet&apos;s app before (tap Open Meteor
+              Mobile once). Otherwise the push and the Open button work as before.
+            </p>
             <dl className={"grid grid-cols-1 gap-x-4 gap-y-1.5 text-sm sm:grid-cols-[auto_1fr]"}>
               {[
                 ["Backend", MOBILE_BRIDGE_BACKEND_URL],

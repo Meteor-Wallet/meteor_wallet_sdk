@@ -17,7 +17,18 @@ export interface IMobileBridgeStorageContext {
   setFencingGeneration(generation: number): Promise<void>;
   registerLiveSession(token: string): Promise<{ stop(): Promise<void> }>;
   hasOtherLiveSessions(token?: string): Promise<boolean>;
+  /**
+   * Wallets (by verify key) this browser opened Meteor Mobile for and then saw claim the request —
+   * the only evidence the app is installed on THIS device, which gates automatic opening. Lives
+   * under the identity namespace, so an identity reset forgets it along with the pairings.
+   */
+  hasSameDeviceWallet(walletVerifyPublicKey: string): Promise<boolean>;
+  rememberSameDeviceWallet(walletVerifyPublicKey: string): Promise<void>;
+  forgetSameDeviceWallet(walletVerifyPublicKey: string): Promise<void>;
 }
+
+/** Newest-first bound for the same-device wallet record; a phone rarely holds more than one. */
+const MAX_SAME_DEVICE_WALLETS = 8;
 
 export function normalizeBridgeBackendUrl(input: string): string {
   const url = new URL(input);
@@ -50,6 +61,7 @@ export function createMobileBridgeStorage(
   const rootPrefix = `${BRIDGE_STORAGE_PREFIX}${environmentId}::`;
   const generationKey = `${rootPrefix}coordination::generation`;
   const sessionPrefix = `${rootPrefix}coordination::live_session::`;
+  const sameDeviceWalletsKey = `${rootPrefix}device::same_device_wallets`;
   const sessionTtlMs = 15_000;
   const storageAdapter = new StorageAdapter({
     keyPrefix: rootPrefix,
@@ -80,6 +92,19 @@ export function createMobileBridgeStorage(
       }),
     );
     return live;
+  };
+
+  const readSameDeviceWallets = async (): Promise<string[]> => {
+    try {
+      const parsed: unknown = JSON.parse((await storage.getItem(sameDeviceWalletsKey)) ?? "[]");
+      return Array.isArray(parsed) ? parsed.filter((key) => typeof key === "string") : [];
+    } catch {
+      return [];
+    }
+  };
+  const writeSameDeviceWallets = async (keys: string[]): Promise<void> => {
+    if (keys.length === 0) await storage.removeItem(sameDeviceWalletsKey);
+    else await storage.setItem(sameDeviceWalletsKey, JSON.stringify(keys));
   };
 
   return {
@@ -122,6 +147,19 @@ export function createMobileBridgeStorage(
       };
     },
     hasOtherLiveSessions: async (token) => (await readLiveSessions(token)).length > 0,
+    hasSameDeviceWallet: async (walletVerifyPublicKey) =>
+      (await readSameDeviceWallets()).includes(walletVerifyPublicKey),
+    rememberSameDeviceWallet: async (walletVerifyPublicKey) => {
+      const others = (await readSameDeviceWallets()).filter((key) => key !== walletVerifyPublicKey);
+      await writeSameDeviceWallets(
+        [walletVerifyPublicKey, ...others].slice(0, MAX_SAME_DEVICE_WALLETS),
+      );
+    },
+    forgetSameDeviceWallet: async (walletVerifyPublicKey) => {
+      const keys = await readSameDeviceWallets();
+      if (!keys.includes(walletVerifyPublicKey)) return;
+      await writeSameDeviceWallets(keys.filter((key) => key !== walletVerifyPublicKey));
+    },
   };
 }
 
