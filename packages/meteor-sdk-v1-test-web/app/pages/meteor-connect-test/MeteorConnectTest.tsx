@@ -10,6 +10,7 @@ import {
 } from "~/pages/meteor-sdk-test/guestbook";
 import { ActionList, ActionRow } from "./ActionRow";
 import { NewKeyTransferTest } from "./NewKeyTransferTest";
+import { resolvePartnerOrigin } from "./partnerOrigin";
 import { explorerAccountUrl, type TNearNetwork } from "./results/resultsModel";
 import {
   ActionResultsPanel,
@@ -89,6 +90,8 @@ const initializedMeteorConnect = async (): Promise<MeteorConnect> => {
     throw new Error("MeteorConnect must be initialized in the browser");
   }
 
+  const partnerOrigin = resolvePartnerOrigin();
+
   await meteorConnectClient.initialize({
     storage: webpage_local_storage,
     mobileBridge: {
@@ -97,10 +100,14 @@ const initializedMeteorConnect = async (): Promise<MeteorConnect> => {
       meteorAppId: MOBILE_BRIDGE_APP_ID,
       autoOpenPairedWallet: AUTO_OPEN_PAIRED_WALLET,
       partnerMetadata: {
-        name: "Meteor SDK test web",
+        // Claiming another site (`?partnerOrigin=`) also takes its name, as an impersonator would
+        name:
+          partnerOrigin === window.location.origin
+            ? "Meteor SDK test web"
+            : new URL(partnerOrigin).hostname,
         description: "Development harness for the Meteor Connect mobile bridge",
         iconUrl: `${window.location.origin}/favicon.ico`,
-        originUrl: window.location.origin,
+        originUrl: partnerOrigin,
       },
       transferAccounts: {
         // Dark by default in the SDK — the test harness opts in explicitly.
