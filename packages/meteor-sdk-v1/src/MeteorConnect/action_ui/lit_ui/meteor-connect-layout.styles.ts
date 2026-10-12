@@ -29,8 +29,7 @@ export const meteorConnectLayoutStyles = [
         max-height: calc(var(--meteor-viewport-height, 100dvh) - 1rem - 2px);
       }
 
-      :host([mobile-device]) .option-buttons-row { grid-template-columns: minmax(0, 1fr); }
-      :host([mobile-device]) .platform-button.dev { grid-row: auto; }
+      :host([mobile-device]) .option-buttons-row .platform-button { flex-basis: 100%; max-width: 100%; }
       :host([mobile-device]) .modal { min-height: min(378px, calc(var(--meteor-viewport-height, 100dvh) - 1rem - 2px)); }
       /* Add your styles here */
       .modal {
@@ -401,10 +400,11 @@ export const meteorConnectLayoutStyles = [
       .title-text-box .title, .title-text-box .subsection-title, .page-title { font-family: 'Gilroy', sans-serif; font-weight: 500; font-style: normal; font-size: 22px; line-height: normal; letter-spacing: 0px; vertical-align: bottom; }
       .close-circle svg { width: 55%; height: 55%; }
       .meteor-connect-content { padding: 1rem 1rem 0; gap: .8rem; }
-      .options { align-items: stretch; gap: .75rem; }
+      .options { align-items: center; gap: .75rem; }
       .section-action-title, .mobile-divider { font-family: 'Gilroy', sans-serif; font-weight: 400; font-style: normal; font-size: 16px; line-height: normal; letter-spacing: 0px; vertical-align: bottom; }
-      .section-action-title { text-transform: none; color: #999; text-align: left; filter: none; }
-      .option-buttons-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .5rem; align-items: stretch; }
+      .section-action-title { text-transform: none; color: #999; text-align: center; filter: none; }
+      .option-buttons-row { display: flex; flex-direction: row; flex-wrap: wrap; justify-content: center; gap: .5rem; align-items: stretch; }
+      .option-buttons-row .platform-button { flex: 1 1 calc(50% - .25rem); max-width: calc(50% - .25rem); }
       .platform-button { display: flex; align-items: center; justify-content: center; gap: .5rem; width: 100%; min-height: 3rem; padding: .65rem .8rem; background: #21213f; color: #fff; border: 0; border-radius: .4rem; font-family: 'Gilroy', sans-serif; font-weight: 600; font-style: normal; font-size: 16px; line-height: normal; letter-spacing: 0; text-align: center; cursor: pointer; }
       .mobile-option-button { position: relative; padding-inline: 2.5rem; }
       .button-spinner { position: absolute; right: .8rem; width: 1rem; height: 1rem; }
@@ -414,7 +414,7 @@ export const meteorConnectLayoutStyles = [
       .platform-button:disabled { cursor: not-allowed; background: #29263f; color: #aaa6bf; filter: none; }
       .platform-button:disabled[aria-busy="true"] { cursor: wait; }
       .platform-button.primary:not(:disabled) { background: linear-gradient(110deg, #4210ec, #602cff); }
-      .platform-button.dev { grid-column: 1 / -1; grid-row: 2; }
+      .option-buttons-row .platform-button.dev { flex-basis: 100%; max-width: 100%; }
       .platform-button span { min-width: 0; overflow-wrap: anywhere; }
       .platform-button svg { width: 1.6rem; height: 1.6rem; flex-shrink: 0; }
       .platform-button:hover:not(:disabled), .get-wallet-link:hover { filter: brightness(1.15); }
