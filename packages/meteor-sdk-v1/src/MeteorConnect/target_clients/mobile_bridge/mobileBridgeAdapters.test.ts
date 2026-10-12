@@ -82,6 +82,11 @@ describe("Meteor mobile bridge NEAR adapters", () => {
     expect(JSON.parse(JSON.stringify(converted))).toEqual(converted);
     expect(converted[1]?.params.codeEncoding).toBe("base64");
     expect(converted[2]?.params.argsEncoding).toBe("base64");
+    // A u64, so a string: a number could lose precision. Meteor Mobile accepts either form.
+    expect(converted[5]?.params).toEqual({
+      publicKey: publicKey.toString(),
+      accessKey: { nonce: "0", permission: "FullAccess" },
+    });
   });
 
   it("rejects an empty transaction batch before bridge creation", async () => {

@@ -9,6 +9,7 @@ import { parseNearAmount } from "@near-js/utils";
 import { useState } from "react";
 import { createSimpleNonce, GUESTBOOK_CONTRACT_ID } from "~/pages/meteor-sdk-test/guestbook";
 import { ActionList, ActionRow } from "./ActionRow";
+import { FullAccessKeyRequestTest } from "./FullAccessKeyRequestTest";
 import { useActionResults, useLatestActionResult } from "./results/ActionResultsUi";
 import {
   summarizeSignedMessage,
@@ -256,6 +257,8 @@ export const WalletActionsPanel = ({
         />
 
         <SignDelegateActionTest account={account} meteorConnect={meteorConnect} />
+
+        <FullAccessKeyRequestTest account={account} meteorConnect={meteorConnect} />
       </ActionList>
     </Section>
   );
