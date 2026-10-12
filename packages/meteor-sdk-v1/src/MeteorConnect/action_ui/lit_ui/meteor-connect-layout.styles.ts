@@ -405,8 +405,15 @@ export const meteorConnectLayoutStyles = [
       .section-action-title { text-transform: none; color: #999; text-align: center; filter: none; }
       .option-buttons-row { display: flex; flex-direction: row; flex-wrap: wrap; justify-content: center; gap: .5rem; align-items: stretch; }
       .option-buttons-row .platform-button { flex: 1 1 calc(50% - .25rem); max-width: calc(50% - .25rem); }
-      .platform-button { display: flex; align-items: center; justify-content: center; gap: .5rem; width: 100%; min-height: 3rem; padding: .65rem .8rem; background: #21213f; color: #fff; border: 0; border-radius: .4rem; font-family: 'Gilroy', sans-serif; font-weight: 600; font-style: normal; font-size: 16px; line-height: normal; letter-spacing: 0; text-align: center; cursor: pointer; }
-      .mobile-option-button { position: relative; padding-inline: 2.5rem; }
+      .platform-button { position: relative; display: flex; align-items: center; justify-content: center; gap: .5rem; width: 100%; min-height: 3rem; padding: .65rem .8rem; background: #21213f; color: #fff; border: 0; border-radius: .4rem; font-family: 'Gilroy', sans-serif; font-weight: 600; font-style: normal; font-size: 16px; line-height: normal; letter-spacing: 0; text-align: center; cursor: pointer; }
+      .mobile-option-button { padding-inline: 2.5rem; }
+      /* A pressed platform button keeps its exact size and label; only its background sweeps while the wallet opens. */
+      .platform-button.opening:disabled { cursor: progress; color: #fff; background: #21213f; overflow: hidden; }
+      .platform-button.primary.opening:disabled { background: linear-gradient(110deg, #4210ec, #602cff); }
+      .platform-button.opening::after { content: ""; position: absolute; inset: 0; background: linear-gradient(100deg, transparent 20%, rgba(255,255,255,.18) 50%, transparent 80%); background-size: 250% 100%; animation: platform-button-sweep 1.4s ease-in-out infinite; pointer-events: none; }
+      @keyframes platform-button-sweep { from { background-position: 150% 0; } to { background-position: -150% 0; } }
+      .platform-button.opening > * { position: relative; }
+      @media (prefers-reduced-motion: reduce) { .platform-button.opening::after { animation: none; background: rgba(255,255,255,.1); } }
       .button-spinner { position: absolute; right: .8rem; width: 1rem; height: 1rem; }
       .mobile-request-spinner { width: 1.3rem; height: 1.3rem; flex-shrink: 0; border: 2px solid rgba(255,255,255,.35); border-top-color: white; border-radius: 50%; animation: mobile-request-spin .8s linear infinite; }
       .mobile-option-button .button-spinner { width: 1rem; height: 1rem; }

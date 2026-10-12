@@ -77,6 +77,30 @@ export class MeteorActionUiContainer extends LitElement {
     return html`<div class="dev-mobile-wallet-switch"><span>Mobile wallet (dev only)</span>${control}</div>`;
   }
 
+  /** The platform button the user just pressed, while the action has not yet reported itself executing. */
+  @state() private pendingPlatformTarget?: TMeteorConnectionExecutionTarget;
+
+  private selectPlatform(target: TMeteorConnectionExecutionTarget) {
+    if (this.pendingPlatformTarget != null) return;
+    this.pendingPlatformTarget = target;
+    void this.actionController.executeAction(target).catch(() => {}).finally(() => {
+      if (this.isConnected) this.pendingPlatformTarget = undefined;
+    });
+  }
+
+  private renderPlatformButton(
+    target: TMeteorConnectionExecutionTarget,
+    label: string,
+    icon: string,
+    extraClass = "",
+  ) {
+    const pending = this.pendingPlatformTarget === target;
+    const anyPending = this.pendingPlatformTarget != null;
+    return html`<button class=${`platform-button${extraClass}${pending ? " opening" : ""}`} ?disabled=${anyPending} aria-busy=${pending ? "true" : "false"} aria-label=${pending ? `${label} — opening` : label} @click=${() => this.selectPlatform(target)}>
+      ${unsafeSVG(icon)}<span>${label}</span>
+    </button>`;
+  }
+
   private async selectMobile() {
     if (this.mobilePreparing || this.mobileSession?.getSnapshot().deepLink == null) return;
     try {
@@ -129,6 +153,7 @@ export class MeteorActionUiContainer extends LitElement {
     this.actionController = new ActionUiController(this, this.action, this.closeAction);
     this.removeExecutionListener = this.action.addExecutionStateListener((executionState) => {
       this.executionState = executionState;
+      if (executionState.isExecuting) this.pendingPlatformTarget = undefined;
       this.logger.log("Received execution state update in container", executionState);
     });
 
@@ -208,9 +233,10 @@ export class MeteorActionUiContainer extends LitElement {
     } else if (showingContinueKnownTarget) {
       renderedScreen = html`<continue-action-screen
                   .executionTarget=${continueExecutionTarget}
+                  .opening=${this.pendingPlatformTarget != null}
                   .onContinue=${() => {
                     if (this.pendingKnownExecutionTarget) {
-                      this.actionController.executeAction(this.pendingKnownExecutionTarget);
+                      this.selectPlatform(this.pendingKnownExecutionTarget);
                     }
                   }}
                   .onBack=${() => {
@@ -230,20 +256,14 @@ export class MeteorActionUiContainer extends LitElement {
             <div class="options" aria-label="Platform choices">
               <span class="section-action-title">Choose how you’d like to connect</span>
               <div class="option-buttons-row">
-                ${mobileDevice && mobileWalletAvailable ? html`<button class="platform-button primary mobile-option-button" ?disabled=${this.mobilePreparing} aria-busy=${this.mobilePreparing ? "true" : "false"} aria-label=${this.mobilePreparing ? "Meteor Mobile — preparing connection" : "Meteor Mobile"} @click=${() => void this.selectMobile()}>
+                ${mobileDevice && mobileWalletAvailable ? html`<button class="platform-button primary mobile-option-button" ?disabled=${this.mobilePreparing || this.pendingPlatformTarget != null} aria-busy=${this.mobilePreparing ? "true" : "false"} aria-label=${this.mobilePreparing ? "Meteor Mobile — preparing connection" : "Meteor Mobile"} @click=${() => void this.selectMobile()}>
                   <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 2h10a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1Zm5 16a1 1 0 1 0 0 2 1 1 0 0 0 0-2Z"/></svg>
                   <span>Meteor Mobile</span>
             ${this.mobilePreparing ? html`<span class="mobile-request-spinner button-spinner" aria-hidden="true"></span>` : ""}
                 </button>` : ""}
-                  ${webWalletAvailable ? html`<button class=${`platform-button${mobileDevice ? "" : " primary"}`} @click=${() => this.actionController.executeAction("v1_web")}>
-                    ${unsafeSVG(svg_icons_text.icon_web_globe)}<span>Meteor Web</span>
-                  </button>` : ""}
-                ${extensionWalletAvailable ? html`<button class="platform-button" @click=${() => this.actionController.executeAction("v1_ext")}>
-                  ${unsafeSVG(svg_icons_text.icon_chrome)}<span>Chrome Extension</span>
-                </button>` : ""}
-                  ${includeWebDevLocalhost ? html`<button class="platform-button dev" @click=${() => this.actionController.executeAction("v1_web_localhost")}>
-                    ${unsafeSVG(svg_icons_text.icon_web_globe)}<span>Dev Web (Localhost)</span>
-                  </button>` : ""}
+                ${webWalletAvailable ? this.renderPlatformButton("v1_web", "Meteor Web", svg_icons_text.icon_web_globe, mobileDevice ? "" : " primary") : ""}
+                ${extensionWalletAvailable ? this.renderPlatformButton("v1_ext", "Chrome Extension", svg_icons_text.icon_chrome) : ""}
+                ${includeWebDevLocalhost ? this.renderPlatformButton("v1_web_localhost", "Dev Web (Localhost)", svg_icons_text.icon_web_globe, " dev") : ""}
               </div>
             </div>`
                 : ""
