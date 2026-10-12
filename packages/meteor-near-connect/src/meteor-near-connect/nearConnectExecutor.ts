@@ -131,12 +131,11 @@ async function getMeteorConnect(): Promise<MeteorConnect> {
     storage: selectorStorage,
     nearKeyStoreProvider: selectorKeyStoreProvider,
     mobileBridge: {
-      // Production remains gated off until the compatible backend/mobile rollout is recorded.
       // NEAR actions are session-eligible (the bridge backend's
       // `session_policies.ts::hasImplementedRecoverySeams` admits the `act_impl_near` domain), so
-      // a development build offers Meteor Mobile for sign-in and mobile-connected accounts. NEAR
-      // keeps working unchanged over the `v1_web` / `v1_ext` targets.
-      enabled: IS_DEVELOPMENT_BUILD,
+      // every build offers Meteor Mobile for sign-in and mobile-connected accounts. NEAR keeps
+      // working unchanged over the `v1_web` / `v1_ext` targets.
+      enabled: true,
       // Backend and mobile wallet build move together — each wallet build claims only from its own
       // environment's backend. In a development build the Connect popup also offers a dev-only
       // switch between the dev and production mobile wallets.
