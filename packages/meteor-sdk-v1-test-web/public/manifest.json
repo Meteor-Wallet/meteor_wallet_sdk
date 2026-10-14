@@ -31,8 +31,8 @@
         "allowsOpen": [
           "https://wallet.meteorwallet.app",
           "https://meteorwallet.app",
-          "meteorwallet://bridge_request",
-          "meteorwalletdev://bridge_request"
+          "meteorwallet://",
+          "meteorwalletdev://"
         ],
         "external": ["meteorCom", "meteorComV2"]
       }

@@ -216,6 +216,9 @@ const CLAIMED_SESSION_PHASES: ReadonlySet<ESessionPhase> = new Set([
 /** Local phases that mean the flow is over; nothing may re-enter the transport from here. */
 const SETTLED_PHASES: readonly TMobileBridgePhase[] = ["completed", "failed", "cancelled"];
 
+const isPromiseLike = (value: unknown): value is PromiseLike<void> =>
+  value != null && typeof (value as PromiseLike<void>).then === "function";
+
 /**
  * Local phases where the wallet already holds — or has already answered — the request. Cancelling
  * from any of them is a `target_already_committed` outcome, never a silent discard.
@@ -1059,9 +1062,32 @@ export class MobileBridgeSession {
     return this.resultPromise;
   }
 
-  openInApp(open: (fullLink: string) => void, options: { automatic?: boolean } = {}): void {
+  /**
+   * Open the wallet link through `open`. A synchronous opener counts as an attempt as soon as it
+   * returns; an opener that answers asynchronously (a sandboxed host relaying the attempt to its
+   * host frame) counts only once its promise resolves — a refusal is a rejection, returned to the
+   * caller so the UI can report it, and it never reads as a hand-off: the wallet was not reached.
+   */
+  openInApp(
+    open: (fullLink: string) => void | Promise<void>,
+    options: { automatic?: boolean } = {},
+  ): void | Promise<void> {
     if (this.snapshot.deepLink == null) throw new Error("mobile_bridge_link_not_ready");
-    open(this.snapshot.deepLink);
+    const attempt = open(this.snapshot.deepLink);
+    if (isPromiseLike(attempt)) {
+      return attempt.then(() => {
+        // The host may have answered after the app already came to the foreground: the page
+        // going to the background is still the evidence the same-device rule looks for.
+        if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+          this.hiddenAfterLinkOpened = true;
+        }
+        this.noteLinkOpened(options);
+      });
+    }
+    this.noteLinkOpened(options);
+  }
+
+  private noteLinkOpened(options: { automatic?: boolean }): void {
     if (options.automatic === true) {
       // Not a hand-off yet: nothing proves the app came up until the page goes to the background,
       // which the visibility listener records on its own.

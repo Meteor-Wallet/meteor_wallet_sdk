@@ -40,6 +40,7 @@ import { serialize } from "borsh";
 import type { TSimpleNearDelegateAction } from "../../../meteor-sdk-v1/src/MeteorConnect/action/mc_action.near";
 import type { PartialBy } from "../../../meteor-sdk-v1/src/ported_common/utils/special_typescript_types";
 import { SelectorStorageKeyStore } from "../utils/keystore";
+import { createSelectorNativeAppOpener } from "./selectorNativeAppOpener";
 import type {
   NaerConnectAccountWithSignedMessage,
   NearConnectAccount,
@@ -77,14 +78,9 @@ const selectorStorage: TSelectorStorage = {
   },
 };
 const selectorBridgeLeaseProvider = new StorageBakeryBridgeLeaseProvider(selectorStorage);
-const selectorNativeAppOpener = {
-  open: (fullLink: string) => {
-    if (typeof window.selector.openNativeApp !== "function") {
-      throw new Error("mobile_bridge_native_opener_unavailable");
-    }
-    window.selector.openNativeApp(fullLink);
-  },
-};
+// Opens the Meteor Mobile deep link through the host page's top-level `window.open` (see the
+// module for why the hidden-iframe `openNativeApp` route is dead on mobile browsers).
+const selectorNativeAppOpener = createSelectorNativeAppOpener(() => window.selector);
 const selectorKeyStoreProvider = { getKeyStore: () => selectorKeyStore };
 
 if (IS_DEVELOPMENT_BUILD) {

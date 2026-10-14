@@ -129,6 +129,47 @@ describe("MeteorConnectMobileBridgeClient open-in-app allowlist", () => {
     }
   });
 
+  it("returns a relaying opener's answer so the UI can report a refused open", async () => {
+    // The NEAR Connect executor can only ask its host frame to open the link; the host answers
+    // asynchronously and refuses links outside the manifest's allowsOpen. That refusal must reach
+    // the Open button as a rejection — not vanish as an unhandled promise behind a "handed off".
+    const refused = prepare({
+      selectedLink: { linkString: DEEP_LINK, linkType: EBridgeLinkType.app_deep_link },
+      presentedLink: `${DEEP_LINK}#partnerSecret=abc`,
+    });
+    (refused.client as unknown as { config: { nativeAppOpener: unknown } }).config.nativeAppOpener =
+      {
+        open: () =>
+          Promise.reject(new Error("mobile_bridge_native_opener_refused: Permission denied")),
+      };
+    try {
+      await expect(refused.client.openCurrentSessionInApp()).rejects.toThrow(
+        "mobile_bridge_native_opener_refused: Permission denied",
+      );
+    } finally {
+      refused.restore();
+    }
+
+    const confirmed = prepare({
+      selectedLink: { linkString: DEEP_LINK, linkType: EBridgeLinkType.app_deep_link },
+      presentedLink: `${DEEP_LINK}#partnerSecret=abc`,
+    });
+    (
+      confirmed.client as unknown as { config: { nativeAppOpener: unknown } }
+    ).config.nativeAppOpener = {
+      open: (link: string) => {
+        confirmed.opened.push(link);
+        return Promise.resolve();
+      },
+    };
+    try {
+      await expect(confirmed.client.openCurrentSessionInApp()).resolves.toBeUndefined();
+      expect(confirmed.opened).toEqual([`${DEEP_LINK}#partnerSecret=abc`]);
+    } finally {
+      confirmed.restore();
+    }
+  });
+
   it("never turns an automatic open into a web-wallet window", () => {
     // Same-device auto-open exists for the paired APP. A web link opened without a fresh tap would
     // be an unrequested popup, so the automatic path refuses it outright.

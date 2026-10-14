@@ -649,7 +649,7 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
     if (this.currentSession !== session || !canOpenAppWithoutNewTap()) return false;
     if (session.getSnapshot().phase !== "waiting_for_wallet") return false;
     try {
-      this.openCurrentSessionInApp(undefined, { automatic: true });
+      await this.openCurrentSessionInApp(undefined, { automatic: true });
     } catch (error) {
       this.logger.err("Automatic open of the paired wallet failed", error);
       return false;
@@ -825,7 +825,7 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
       return;
     }
     let extensionOpen: Promise<void> | undefined;
-    session.openInApp((link) => {
+    const nativeOpen = session.openInApp((link) => {
       // Both branches allow exactly the backend-issued wallet URL, extended only by the SDK's own
       // `#partnerSecret` fragment. The allowlist derives from the SELECTED walletLink — never
       // from a partner-supplied URL, and never from `config.meteorAppId`, which describes the
@@ -858,9 +858,11 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
         throw new Error("mobile_bridge_native_scheme_not_allowed");
       }
       pendingWindow?.close();
-      opener.open(link);
+      // A relaying opener (the NEAR Connect sandbox) answers asynchronously; the session counts the
+      // hand-off only once it has, and the rejection reaches the UI through the returned promise.
+      return opener.open(link);
     }, options);
-    return extensionOpen;
+    return extensionOpen ?? nativeOpen;
   }
 
   async resetPartnerIdentity(): Promise<void> {

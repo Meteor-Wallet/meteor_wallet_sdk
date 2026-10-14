@@ -41,9 +41,13 @@ mobile bridge namespace. A host without Web Locks and without key enumeration mu
 `IMeteorConnectBridgeLeaseProvider`.
 
 The default browser opener dispatches the generated `meteorwallet://` or `meteorwalletdev://` link
-synchronously from the click. Sandboxed hosts must inject `nativeAppOpener`; the Near Connect
-executor uses `window.selector.openNativeApp` and declares both exact bridge-request schemes in its
-manifest.
+synchronously from the click. Sandboxed hosts must inject `nativeAppOpener`; it may return a promise
+that rejects when the host refused the link, which the SDK reports to the user instead of treating
+the request as handed to the wallet. The Near Connect executor opens the link through the host's
+top-level `window.selector.open` (NEAR Connect's hidden-iframe `openNativeApp` never launches an app
+on iOS Safari or Chrome for Android) and declares both schemes bare — `meteorwallet://` and
+`meteorwalletdev://` — in its manifest, so the host's `allowsOpen` match does not depend on the
+backend's link path (`meteorwallet://b?…` today).
 
 ## Safety and routing
 

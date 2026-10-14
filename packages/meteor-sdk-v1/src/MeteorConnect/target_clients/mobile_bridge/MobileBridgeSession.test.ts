@@ -409,6 +409,37 @@ describe("MobileBridgeSession link status projection", () => {
     await session.dispose();
   });
 
+  it("counts an asynchronous opener as a hand-off only once the host has answered", async () => {
+    // The NEAR Connect executor cannot open the link itself: it asks its host frame to, and learns
+    // the outcome asynchronously. Nothing is recorded until the host confirms the attempt.
+    const session = createSession();
+    await session.startPreparation();
+    let confirmHost!: () => void;
+    const hostAnswer = new Promise<void>((resolve) => {
+      confirmHost = resolve;
+    });
+
+    const attempt = session.openInApp(() => hostAnswer);
+
+    expect(attempt).toBeInstanceOf(Promise);
+    expect(session.getSnapshot().handedOff).toBeUndefined();
+    confirmHost();
+    await attempt;
+    expect(session.getSnapshot().handedOff).toBe(true);
+    await session.dispose();
+  });
+
+  it("returns a host refusal to the caller and never counts it as a hand-off", async () => {
+    const session = createSession();
+    await session.startPreparation();
+
+    const attempt = session.openInApp(() => Promise.reject(new Error("Permission denied")));
+
+    await expect(attempt).rejects.toThrow("Permission denied");
+    expect(session.getSnapshot().handedOff).toBeUndefined();
+    await session.dispose();
+  });
+
   it("records a hand-off when the page is backgrounded mid-request, never before a link exists", async () => {
     // A push wake or a manual app switch reaches the wallet without the Open button — leaving the
     // page is the only trace of it. Bun has no DOM, so this is the minimum `document` it reads.

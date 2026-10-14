@@ -171,8 +171,16 @@ export interface IMeteorConnectBridgeLeaseProvider {
 }
 
 export interface IMeteorConnectNativeAppOpener {
-  /** Must synchronously attempt the opaque custom-scheme link from the originating click. */
-  open(fullLink: string): void;
+  /**
+   * Must synchronously attempt the opaque custom-scheme link from the originating click.
+   *
+   * A host that can only relay the attempt (the NEAR Connect sandbox asks its host frame to open the
+   * link) may return a promise: it resolves once the host has attempted the link and rejects when the
+   * host refused it. The SDK counts the request as handed to the wallet only once that promise
+   * resolves, and reports a rejection to the user instead of waiting for a wallet that was never
+   * reached. A synchronous opener that throws is treated the same way as a rejection.
+   */
+  open(fullLink: string): void | Promise<void>;
 }
 
 export interface IMeteorConnectNearKeyStoreProvider {

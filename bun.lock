@@ -17,7 +17,7 @@
       "name": "meteor-near-connect",
       "version": "0.0.1",
       "dependencies": {
-        "@hot-labs/near-connect": "0.10.0",
+        "@hot-labs/near-connect": "0.11.4",
         "@lit/react": "1.0.8",
         "@meteorwallet/sdk": "workspace:*",
         "@near-js/crypto": "2.2.5",
@@ -45,7 +45,7 @@
     },
     "packages/meteor-sdk-v1": {
       "name": "@meteorwallet/sdk",
-      "version": "3.21.0",
+      "version": "3.23.0",
       "dependencies": {
         "@lit/context": "1.1.6",
         "@lit/task": "1.0.3",
@@ -86,7 +86,7 @@
     "packages/meteor-sdk-v1-test-web": {
       "name": "meteor-sdk-v1-test-web",
       "dependencies": {
-        "@hot-labs/near-connect": "0.11.1",
+        "@hot-labs/near-connect": "0.11.4",
         "@meteorwallet/sdk": "workspace:*",
         "@meteorwallet/utils": "1.28.0-0",
         "@near-js/crypto": "2.2.5",
@@ -307,7 +307,7 @@
 
     "@hono/standard-validator": ["@hono/standard-validator@0.2.3", "", { "peerDependencies": { "@standard-schema/spec": "^1.0.0", "hono": ">=3.9.0" } }, "sha512-bp9vHu6Va6SfMHC3D4ZLBbT/woi+AZ9CRdTXQu3kLJuLh2W/Gb9UO4hijS+BQAGFXi4EGpXdetxpzwTAawSVeg=="],
 
-    "@hot-labs/near-connect": ["@hot-labs/near-connect@0.10.0", "", {}, "sha512-J05rYGrkUtz/eeAwmAGi5b+DzpNGbhA5jEuP9yAtZ4QLSYDZj+w/fmKjTSmv4/A/U9hGDaa5a5MUVlwzifafhg=="],
+    "@hot-labs/near-connect": ["@hot-labs/near-connect@0.11.4", "", {}, "sha512-exAL1gqysyCHewcMO334YJ3ddTPg3j9EyVM9novz5Jx4fLbG/YSYBlkYMjMNB8E9K/4I7BiemjOw9bQ+h80hEA=="],
 
     "@img/colour": ["@img/colour@1.1.0", "", {}, "sha512-Td76q7j57o/tLVdgS746cYARfSyxk8iEfRxewL9h4OMzYhbW4TAcppl0mT4eyqXddh6L/jwoM75mo7ixa/pCeQ=="],
 
@@ -2026,8 +2026,6 @@
     "lru-cache/yallist": ["yallist@3.1.1", "", {}, "sha512-a4UGQaWPH59mOXUYnAG2ewncQS4i4F43Tv3JoAM+s2VDAmS9NsK8GpDMLrCHPksFT7h3K6TOoUNn2pb7RoXx4g=="],
 
     "meteor-near-connect/borsh": ["borsh@2.0.0", "", {}, "sha512-kc9+BgR3zz9+cjbwM8ODoUB4fs3X3I5A/HtX7LZKxCLaMrEeDFoBpnhZY//DTS1VZBSs6S5v46RZRbZjRFspEg=="],
-
-    "meteor-sdk-v1-test-web/@hot-labs/near-connect": ["@hot-labs/near-connect@0.11.1", "", {}, "sha512-pREyFIGuC5CapWD0p1FkAJSB32AS5qM/7h4OtgRm6K2lZnUZtT6w8dnvs7Tn8vHmi4IASGRdTdpoYvQZ3nstUA=="],
 
     "meteor-sdk-v1-test-web/@types/node": ["@types/node@20.19.10", "", { "dependencies": { "undici-types": "~6.21.0" } }, "sha512-iAFpG6DokED3roLSP0K+ybeDdIX6Bc0Vd3mLW5uDqThPWtNos3E+EqOM11mPQHKzfWHqEBuLjIlsBQQ8CsISmQ=="],
 
