@@ -1204,10 +1204,15 @@ export class MeteorMobileBridgePanel extends LitElement {
     }
 
     if (snapshot.phase === "failed" || snapshot.phase === "cancelled") {
-      // The classifier already produced the copy (headline/detail); the only branch left is the
-      // one typed id with a remedy of its own, and it is matched by ID, never by message.
+      // The classifier already produced the copy (headline/detail); the branches left are matched
+      // by typed id / kind, never by message: the one id with a remedy of its own, and the
+      // backend-connection kind, whose classifier detail is written for the integrator (it names
+      // dev servers and firewalls) and so stays out of the user's card. That card is reached only
+      // when the mobile bridge is the user's way through — while another wallet is on offer the
+      // container leaves the mobile option out quietly instead (`isMobileBridgeQuietlyUnavailable`).
       const walletUpdateRequired =
         snapshot.errorIds?.includes(EErr_Bridge_Session.wallet_update_required) === true;
+      const backendUnreachable = snapshot.errorKind === "connection";
       return html`<section class="panel stage-panel slim error-panel" aria-label="${this.walletLabel}">
         ${this.renderStatusStage(
           `mobile-${snapshot.phase}`,
@@ -1215,10 +1220,14 @@ export class MeteorMobileBridgePanel extends LitElement {
           "bad",
           walletUpdateRequired
             ? `Update ${this.walletLabel} to continue`
-            : (snapshot.errorHeadline ?? this.statusText(snapshot)),
+            : backendUnreachable
+              ? `${this.walletLabel} can’t be reached right now`
+              : (snapshot.errorHeadline ?? this.statusText(snapshot)),
           walletUpdateRequired
             ? `This request needs a newer ${this.walletLabel} than the one that answered it.`
-            : snapshot.errorDetail,
+            : backendUnreachable
+              ? "The Meteor Connect service did not respond. Check your connection and try again in a moment."
+              : snapshot.errorDetail,
           snapshot.error,
         )}
       </section>`;

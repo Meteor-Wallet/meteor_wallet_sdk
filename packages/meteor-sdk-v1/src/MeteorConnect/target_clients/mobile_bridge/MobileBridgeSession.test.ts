@@ -670,6 +670,7 @@ describe("MobileBridgeSession failure surfacing", () => {
     const snapshot = session.getSnapshot();
     expect(snapshot).toMatchObject({
       phase: "failed",
+      errorKind: "session",
       errorIds: [EErr_Bridge_Session.wallet_update_required],
     });
     expect(snapshot.errorHeadline).toBeTruthy();
@@ -678,6 +679,25 @@ describe("MobileBridgeSession failure surfacing", () => {
     expect(snapshot.error).toBe(describeSessionError(refusal).originalMessage);
     // The ORIGINAL typed error is what the outcome mapper receives — never a flattened string.
     expect(await result).toBe(refusal);
+  });
+
+  it("publishes the classifier's kind, so an unreachable backend is decided by kind, not message", async () => {
+    const unreachable = new TypeError("Failed to fetch");
+    const double = createClientDouble({
+      createSession: async () => {
+        throw unreachable;
+      },
+    });
+    const session = createSession({ client: double.client });
+    const result = rejectionOf(session);
+    await expect(session.startPreparation()).rejects.toThrow();
+    const snapshot = session.getSnapshot();
+    // The Connect popup reads `errorKind` to leave the mobile option out quietly while another
+    // wallet is on offer (`isMobileBridgeQuietlyUnavailable`); the copy is still the classifier's.
+    expect(snapshot).toMatchObject({ phase: "failed", errorKind: "connection", errorIds: [] });
+    expect(snapshot.errorHeadline).toBe("Could not reach https://bridge.example at all");
+    expect(snapshot.error).toBe("Failed to fetch");
+    expect(await result).toBe(unreachable);
   });
 
   it("surfaces any other failure with its untouched original message", async () => {

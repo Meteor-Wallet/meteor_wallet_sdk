@@ -10,6 +10,7 @@ import {
   isTerminalPhase,
   type PartnerSessionClient,
   type TPartnerPairedWallet,
+  type TSessionErrorKind,
   type TSessionLinkPhase,
 } from "@meteorwallet/connect";
 import {
@@ -143,6 +144,14 @@ export interface IMobileBridgeSnapshot {
   errorHeadline?: string;
   errorDetail?: string;
   errorIds?: string[];
+  /**
+   * The classifier's typed kind for the failure — `"connection"` when the backend could not be
+   * reached (or answered wrongly), as opposed to a protocol rejection or a local guard. The
+   * Connect popup decides presentation against this, never against the message: a backend that
+   * is unreachable before any wallet took part is dropped quietly while another wallet platform
+   * is on offer (`isMobileBridgeQuietlyUnavailable`).
+   */
+  errorKind?: TSessionErrorKind;
   error?: string;
   identityResetRequired?: boolean;
 }
@@ -913,6 +922,7 @@ export class MobileBridgeSession {
       errorDetail: described.detail,
       errorIds:
         described.kind === "session" || described.kind === "bridge" ? [...described.ids] : [],
+      errorKind: described.kind,
       error: described.originalMessage,
     });
     if (!this.resultSettled) {

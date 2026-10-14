@@ -19,23 +19,71 @@ import "./meteor-action-button";
 import { overlayCloseTriggerContext } from "./meteor-action-ui-context";
 import "./meteor-action-ui-executing";
 import "./meteor-mobile-bridge-panel";
-import type { MobileBridgeSession } from "../../target_clients/mobile_bridge/MobileBridgeSession";
+import type {
+  IMobileBridgeSnapshot,
+  MobileBridgeSession,
+} from "../../target_clients/mobile_bridge/MobileBridgeSession";
 import { getVisibleActionTargets } from "../action-ui-targets";
+import { isMobileBridgeQuietlyUnavailable } from "../mobile-bridge-availability";
 
 @customElement("meteor-action-ui-container")
 export class MeteorActionUiContainer extends LitElement {
   @state() private mobilePreparing = true;
+  /** The observed mobile session's latest snapshot — what the quiet-unavailable rule reads. */
+  @state() private mobileSnapshot?: IMobileBridgeSnapshot;
   private unsubscribeMobilePreparation?: () => void;
   private observedMobileSession?: MobileBridgeSession;
+  /** The session whose unreachable backend was already reported to the console (once each). */
+  private mobileUnavailableReportedFor?: MobileBridgeSession;
 
   protected updated() {
     if (this.observedMobileSession === this.mobileSession) return;
     this.unsubscribeMobilePreparation?.();
     this.observedMobileSession = this.mobileSession;
+    this.mobileSnapshot = undefined;
     this.unsubscribeMobilePreparation = this.mobileSession?.subscribe(snapshot => {
+      this.mobileSnapshot = snapshot;
       this.mobilePreparing = snapshot.deepLink == null && !["failed", "cancelled", "completed"].includes(snapshot.phase);
-      if (["wallet_confirmation", "wallet_verification", "wallet_action", "result_ready", "external_work"].includes(snapshot.phase) || (isMobile() && snapshot.phase === "failed")) this.mobileSelected = true;
+      const quietlyUnavailable = this.isMobileQuietlyUnavailable(snapshot);
+      if (quietlyUnavailable) this.reportMobileUnavailable(snapshot);
+      // On a phone the panel is only shown once mobile is selected, so a failure selects it to be
+      // seen — except the quiet kind, which must stay out of sight.
+      if (["wallet_confirmation", "wallet_verification", "wallet_action", "result_ready", "external_work"].includes(snapshot.phase) || (isMobile() && snapshot.phase === "failed" && !quietlyUnavailable)) this.mobileSelected = true;
     });
+  }
+
+  /**
+   * Another wallet platform is on offer beside Meteor Mobile — the same set the picker renders:
+   * the web wallet, the dev localhost wallet, or (off phones) the extension — unless the request
+   * is locked to the platform that owns its account.
+   */
+  private otherWalletOptionAvailable(): boolean {
+    if (this.action.getActionKnownContextualTarget() != null) return false;
+    const targets = this.action.getAllExecutionTargetConfigs().map((target) => target.executionTarget);
+    return targets.includes("v1_web") || targets.includes("v1_web_localhost") || (!isMobile() && targets.includes("v1_ext"));
+  }
+
+  /**
+   * The mobile bridge's backend could not be reached before any wallet took part, while Meteor
+   * Web / the extension still work: the mobile option is dropped from this screen and reported
+   * to the console, never rendered as an error card (`isMobileBridgeQuietlyUnavailable`).
+   */
+  private isMobileQuietlyUnavailable(snapshot = this.mobileSnapshot): boolean {
+    return isMobileBridgeQuietlyUnavailable(snapshot, {
+      otherWalletAvailable: this.otherWalletOptionAvailable(),
+      mobileEngaged: this.mobileSelected,
+    });
+  }
+
+  /** Console only, once per session — the classifier's detail is written for the integrator. */
+  private reportMobileUnavailable(snapshot: IMobileBridgeSnapshot): void {
+    if (this.mobileUnavailableReportedFor === this.mobileSession) return;
+    this.mobileUnavailableReportedFor = this.mobileSession;
+    const reason = [snapshot.errorHeadline, snapshot.errorDetail].filter((part) => part).join(" ");
+    console.warn(
+      `[MeteorConnect] Meteor Mobile is not offered for this request because the Meteor Connect backend could not be reached. ${reason}`.trim(),
+      snapshot.error,
+    );
   }
 
   @state() private mobileSelected = false;
@@ -214,10 +262,13 @@ export class MeteorActionUiContainer extends LitElement {
     const extensionWalletAvailable = !mobileDevice && availablePlatformTargets.includes("v1_ext");
     const webWalletAvailable = availablePlatformTargets.includes("v1_web");
     const mobileWalletAvailable = availablePlatformTargets.includes("v2_bridge_mobile");
+    const otherWalletAvailable = extensionWalletAvailable || webWalletAvailable || includeWebDevLocalhost;
+    // The mobile bridge's backend is unreachable while another wallet still works: the mobile
+    // option is left out of this screen (reported to the console), never rendered as an error.
+    const mobileQuietlyUnavailable = !isPlatformLocked && this.isMobileQuietlyUnavailable();
     const showDevMobileWalletSwitch =
       this.devMobileWalletEnvironment != null && mobileWalletAvailable && !isPlatformLocked && !this.mobileSelected;
-    const showMobileDivider =
-      !mobileDevice && !isPlatformLocked && (extensionWalletAvailable || webWalletAvailable || includeWebDevLocalhost);
+    const showMobileDivider = !mobileDevice && !isPlatformLocked && otherWalletAvailable && !mobileQuietlyUnavailable;
     const showingContinueKnownTarget = this.pendingKnownExecutionTarget != null;
     const continueExecutionTarget = this.pendingKnownExecutionTarget ?? "v1_web";
 
@@ -251,17 +302,17 @@ export class MeteorActionUiContainer extends LitElement {
           <div class=${`meteor-connect-content${isPlatformLocked ? " contextual" : ""}`}>
             ${
               !isPlatformLocked &&
-              (extensionWalletAvailable || webWalletAvailable || includeWebDevLocalhost || (mobileDevice && mobileWalletAvailable))
+              (otherWalletAvailable || (mobileDevice && mobileWalletAvailable && !mobileQuietlyUnavailable))
                 ? html`
             <div class="options" aria-label="Platform choices">
               <span class="section-action-title">Choose how you’d like to connect</span>
               <div class="option-buttons-row">
-                ${mobileDevice && mobileWalletAvailable ? html`<button class="platform-button primary mobile-option-button" ?disabled=${this.mobilePreparing || this.pendingPlatformTarget != null} aria-busy=${this.mobilePreparing ? "true" : "false"} aria-label=${this.mobilePreparing ? "Meteor Mobile — preparing connection" : "Meteor Mobile"} @click=${() => void this.selectMobile()}>
+                ${mobileDevice && mobileWalletAvailable && !mobileQuietlyUnavailable ? html`<button class="platform-button primary mobile-option-button" ?disabled=${this.mobilePreparing || this.pendingPlatformTarget != null} aria-busy=${this.mobilePreparing ? "true" : "false"} aria-label=${this.mobilePreparing ? "Meteor Mobile — preparing connection" : "Meteor Mobile"} @click=${() => void this.selectMobile()}>
                   <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 2h10a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1Zm5 16a1 1 0 1 0 0 2 1 1 0 0 0 0-2Z"/></svg>
                   <span>Meteor Mobile</span>
             ${this.mobilePreparing ? html`<span class="mobile-request-spinner button-spinner" aria-hidden="true"></span>` : ""}
                 </button>` : ""}
-                ${webWalletAvailable ? this.renderPlatformButton("v1_web", "Meteor Web", svg_icons_text.icon_web_globe, mobileDevice ? "" : " primary") : ""}
+                ${webWalletAvailable ? this.renderPlatformButton("v1_web", "Meteor Web", svg_icons_text.icon_web_globe, mobileDevice && !mobileQuietlyUnavailable ? "" : " primary") : ""}
                 ${extensionWalletAvailable ? this.renderPlatformButton("v1_ext", "Chrome Extension", svg_icons_text.icon_chrome) : ""}
                 ${includeWebDevLocalhost ? this.renderPlatformButton("v1_web_localhost", "Dev Web (Localhost)", svg_icons_text.icon_web_globe, " dev") : ""}
               </div>
@@ -270,7 +321,7 @@ export class MeteorActionUiContainer extends LitElement {
             }
             ${this.mobileOpenError ? html`<p role="alert">${this.mobileOpenError}</p>` : ""}
             ${
-              mobileWalletAvailable && (!mobileDevice || this.mobileSelected || isPlatformLocked)
+              mobileWalletAvailable && !mobileQuietlyUnavailable && (!mobileDevice || this.mobileSelected || isPlatformLocked)
                 ? html`
               ${showMobileDivider ? html`<div class="mobile-divider"><span></span><div>or connect with <strong>mobile</strong></div><span></span>${showDevMobileWalletSwitch ? this.renderDevMobileWalletSwitch(true) : ""}</div>` : ""}
               <meteor-mobile-bridge-panel
