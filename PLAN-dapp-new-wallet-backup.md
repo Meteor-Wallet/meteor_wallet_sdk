@@ -1,6 +1,8 @@
 # PLAN: Recovery-phrase backup for wallets created from a DApp request
 
-Status: proposal, 2026-10-17. Nothing implemented yet.
+Status: proposal, 2026-10-17. Decisions D1 to D5 settled the same day (§9). Nothing implemented yet.
+
+Scope: only accounts created during a DApp approval flow. In-wallet creation and existing accounts are unchanged.
 
 Repos involved:
 
@@ -64,11 +66,14 @@ their phrase, and loses the account if they lose the device or the browser's sto
    are still in the create wizard's step list. In v2 it is `NewKeyTransferSeedBackupScreen` and
    `SeedPhraseFirstLastCheck`, already used for wallet backup and Meteor Connect transfers.
 
+5. In the v1 web popup, the connection details are saved for the popup's lifetime, so reloading during setup no
+   longer loses the request (D5, §4.7).
+
 The SDK, the bridge protocol and DApps need no changes.
 
 On mobile, the bridge session has a fixed 5-minute lifetime. Some first-time users will finish setting up after the
-request has expired. We handle that with a clear "your wallet is ready, connect again" screen rather than by
-shortening the backup (§4.5, decision D4).
+request has expired. We keep the 5 minutes and show a clear "your wallet is ready, connect again" screen rather than
+shortening the backup (D4, §4.5).
 
 ---
 
@@ -168,7 +173,7 @@ Nothing under `add_wallet/**` knows a request is pending.
   (`v1common/.../AuthEncryptSign/AuthEncryptSign.constants.ts:54-66`). Locking swaps the UI to `Section_SignIn`,
   which unmounts the create wizard and drops the phrase held in memory.
 - **Reloading the popup.** After `navigate("/add_wallet")` the URL no longer has `connectionUid`, and the in-memory
-  request is gone. A reload therefore loses the request. This problem already exists today (D5).
+  request is gone. A reload therefore loses the request. This problem already exists today; §4.7 fixes it (D5).
 
 **v2 bridge.** The SDK always uses the `single_turn_v1` profile
 (`sdk/MeteorConnect/target_clients/mobile_bridge/MobileBridgeSession.ts:420-429`).
@@ -187,7 +192,7 @@ Nothing under `add_wallet/**` knows a request is pending.
 
 | Component | What it does | Notes |
 | --- | --- | --- |
-| `v1fe/pages/wallet_create_sections/Section_P2_SecretRecoveryPhrase.tsx`, props `{ onClickContinue, generateSeedPhrase }` | Phrase blurred until revealed, "I saved it" checkbox, Copy, Generate New | Takes the same `IUseGenerateSeedPhrase_HookOutput` the create wizard already holds. Copy button: see D3 |
+| `v1fe/pages/wallet_create_sections/Section_P2_SecretRecoveryPhrase.tsx`, props `{ onClickContinue, generateSeedPhrase }` | Phrase blurred until revealed, "I saved it" checkbox, Copy, Generate New | Takes the same `IUseGenerateSeedPhrase_HookOutput` the create wizard already holds. Copy stays as it is (D3) |
 | `v1fe/pages/wallet_create_sections/Section_P3_SecretPhraseConfirmation.tsx`, props `{ onConfirm(wasGood), generateSeedPhrase, isLoading? }` | User picks the first and last word from a 12-word grid | Returns only a boolean. The decoy words change on every mount. The caller shows the error toast |
 | `v1fe/pages/wallet_sections/setting_sections/manage_keys_subsections/SubSection_ManageKeys_AddNewKey.tsx:489-497, 634-648` | Runs P2, then P3, then adds the key with `isBackedUp: true` | The pattern to copy |
 | `v1fe/pages/wallet_sections/backup_seedphrase/PageBackupSeedPhrase.tsx` (with `Validate` and `Confirm`) | Backup after creation, for the selected account; asks for the password first | Not used by the main path. Its progress never resets, so a second backup in the same session opens at the quiz (§10) |
@@ -200,7 +205,7 @@ Nothing under `add_wallet/**` knows a request is pending.
 | `v2app/components/by_feature/meteor_connect/NewKeyTransferSeedBackupScreen.tsx`, props `{ seedPhrase, isWorking, onConfirmed, onPressBack?, title?, description?, screenCaptureKey?, children? }` | Tap to reveal the phrase; no copy button; protected against screen capture. "I've Saved My Recovery Phrase" opens `NewKeyTransferRecoveryPhraseConfirmationSheet` | Already generic. Used by `WalletSeedPhraseBackupScreen`, the bridge new-key transfer and its recovery screen. Only its name, folder and default copy are transfer-specific |
 | `v2app/components/by_feature/seed_phrase/SeedPhraseFirstLastCheck.tsx` and `v2app/app_logic/utils/seedPhraseFirstLast.ts` | The only check in the codebase: pick the first and last word from 12 (2 real words plus 10 decoys, cached per phrase). Returns `ISeedPhraseFirstLastConfirmation` | The caller checks the words again with `isSeedPhraseFirstLastMatch` |
 | `v2app/components/by_feature/key_management/KeyWizardParts.tsx:48` `useNewPhraseKey()` | Generates a phrase in the UI before anything is registered | Used by Add Key and Replace Key |
-| `WalletSeedPhraseBackupScreen` and `User.confirmSeedPhraseBackup` | Backup for an account that already exists | Not needed by the main path. Only used if D1 is adopted |
+| `WalletSeedPhraseBackupScreen` and `User.confirmSeedPhraseBackup` | Backup for an account that already exists | Not needed by this plan |
 | `v2app/screens/meteor_connect/MeteorConnectBridgeNewKeyTransferScreen.tsx:608-722, 908-931` | Shows the backup screen in place of the request, and answers the partner only after confirmation | The pattern for holding a request until the backup is checked |
 | Do **not** reuse | `SeedPhraseBackup.tsx` and `NewKeyTransferSeedBackupWizard.tsx` (unused; they have a copy button; the audit says to delete them); the `*PreviewScreen` mockups | |
 
@@ -223,9 +228,9 @@ Also:
 
 **Not part of this plan:**
 
-- changing the in-wallet create flow (D2);
-- blocking existing accounts that were never backed up when they're used with a DApp (D1);
-- SDK or bridge protocol changes (D4);
+- changing the in-wallet create flow (D2: it stays as it is);
+- blocking or nudging existing accounts that were never backed up when they're used with a DApp (D1: left for now);
+- SDK or bridge protocol changes, including the bridge session lifetime (D4);
 - Harvest Moon / Telegram onboarding (`Page_HMOnboarding_Create.tsx`, `Section_OnboardingCreate.tsx`);
 - turning account creation back on in the v1 extension.
 
@@ -262,14 +267,14 @@ When the creation came from a DApp, the steps become:
 
 P0 password (unchanged) → P1 name → **P2 show phrase → P3 check** → `createWallet` → back to the request (unchanged).
 
-1. **When to add the steps.** Set `requireBackupStep` when the creation came from a DApp; D2 may later make it always
-   true. Ledger skips P2 and P3 because it has no phrase.
+1. **When to add the steps.** Set `requireBackupStep` only when the creation came from a DApp. In-wallet creation keeps
+   its current steps (D2). Ledger skips P2 and P3 because it has no phrase.
 2. **P1.** For a local key with `requireBackupStep` set, P1's `onContinue` no longer calls `createWallet`.
    - It saves `fullAccountId`, `accountIdType`, `keyAlgorithm` and `route` into `wizards.createAccount`, which already
      holds `setNamedAccountId` and `accountIdType`.
    - It then sets `progress = P2_GEN_PHASE`.
 3. **P2.** Render `Section_P2_SecretRecoveryPhrase` with the hook that matches `keyAlgorithm` (`generateSeedPhrase` or
-   `generateMlDsa65SeedPhrase`). Continue moves to `P3_CONFIRM_PHASE`.
+   `generateMlDsa65SeedPhrase`). Continue moves to `P3_CONFIRM_PHASE`. Copy and Generate New stay as they are (D3).
 4. **P3.** Render `Section_P3_SecretPhraseConfirmation` (improved, §5).
    - On success, `onVerified(confirmation)` calls `createWallet({ ...saved P1 values, backupConfirmation })`.
    - Wrong words show a toast using the existing `seedPhraseConfirmation.confirmationWrongHeading` / `…Blurb` copy,
@@ -316,7 +321,8 @@ account opens a tab and involves no phrase.
 2. **`CreateNewWallet.tsx`.** When `requireBackupStep` is set (§4.1), two stages run before `Creating`:
    - **Phrase.** Generate it in the component with `useNewPhraseKey()`, so it exists before any network call. Keep it
      in memory until the flow completes, is cancelled or unmounts, as `PLAN-key-management.md` §5.6 requires.
-   - **Backup.** Show the backup screen (renamed, §5):
+   - **Backup.** Show the backup screen (renamed, §5). It has no Copy button today and stays that way (D3: keep each
+     wallet's current behaviour).
      - title "Back Up Your Recovery Phrase";
      - description "Save it before connecting to {partner}. It's the only way to restore this wallet if you lose
        this device.";
@@ -349,10 +355,12 @@ account opens a tab and involves no phrase.
      appears.
 5. **Bridge-level check.** Every bridge handler reaches the account through `getReadyMeteorConnectAccount`
    (`v2app/app_logic/by_feature/meteor_connect/meteorConnectWalletReadiness.ts:53-61`, called via `selectedAccount()` in
-   `meteorConnectBridgeClient.ts:361-363`). In Phase 2 leave it unchanged: with step 3 in place, a DApp-created account
-   can't be missing its backup. Extend it only if D1 asks for a gate.
+   `meteorConnectBridgeClient.ts:361-363`). Leave it unchanged: with step 3 in place, a DApp-created account can't be
+   missing its backup.
 
 ### 4.5 v2: when the 5-minute session runs out
+
+Decided (D4): keep the SDK's `single_turn_v1` profile and its 5-minute lifetime.
 
 A first-time user who installs the app from the store will often use up the 300 s before approving, with or without
 the backup step. Don't shorten the backup to fit. Instead:
@@ -366,7 +374,7 @@ the backup step. Don't shorten the backup to fit. Instead:
   (`MeteorConnectBridgeScreen.tsx:641`). Add this setup-specific version.
 - **The second attempt is quick,** because the account already exists and is backed up.
 - **Measure it.** Send an analytics event with the time from claim to account created, and whether setup finished
-  after the session expired. If that happens often, revisit D4.
+  after the session expired. That tells us whether the lifetime is worth revisiting later.
 
 ### 4.6 SDK, bridge and DApps
 
@@ -377,9 +385,44 @@ No change needed. The DApp sees one of:
   closed during backup;
 - `mobile_bridge_expired` on mobile.
 
-Sign-in results have no "new account" field, and nothing needs one. If D4 changes the timing, add a short note to
-`packages/meteor-sdk-v1/README.md`: first-time users may spend a few minutes inside the popup, and closing it rejects
-as usual.
+Sign-in results have no "new account" field, and nothing needs one. The SDK README needs no change.
+
+### 4.7 v1 web: keep the request across a popup reload (D5)
+
+**Today.** `initializeApp` (`v1common/modules_app_core/state/initializeApp.ts:95-138`) sets up the post-message
+manager only when the URL matches `/connect/:network/:action` with `source=wpm`. After `navigate("/add_wallet")` the
+URL no longer matches, so a reload during setup leaves the popup with no request. The SDK keeps waiting until the
+window closes.
+
+**The handshake already exists.**
+
+- On start-up, `MeteorPostMessageManager.initialize` sends `attempting_reconnect` with the `connectionUid`
+  (`v1common/modules_feature/dapp_connect/MeteorPostMessageManager.ts:160-200`).
+- The SDK goes back to `initializing` and re-sends the request inputs (`sdk/postMessage/MeteorPostMessenger.ts:237-243, 369-371`).
+- `processData` puts the request back into `externalActions` (`MeteorPostMessageManager.ts:76-114`).
+
+All that's missing is the connection details after a reload.
+
+**Change.**
+
+1. **New module.** Add `v1common/modules_feature/dapp_connect/wpmConnectionSession.ts` with `save`, `load` and `clear`
+   for `{ connectionUid, referrerUri, network, actionType }` under one `sessionStorage` key. `sessionStorage` belongs to
+   the popup window and survives its reloads. Wrap every access in try/catch, since storage can throw in private modes.
+2. **Save.** In `initializeApp`, when a `wpm` connect URL is matched, save the details. Save the `referrerUri` exactly
+   as computed on that first load (`document.referrer`, falling back to `pageUri`). Don't recompute it after a reload.
+3. **Restore.** In `initializeApp`, when the URL does **not** match a connect route, restore only if:
+   - `window.opener != null`, meaning this is still a popup opened by a DApp; and
+   - a saved entry exists.
+
+   Then call `getPostMessageManager({ referrerUri, source: wpm }).initialize(wpm, connectionUid)`, and the existing
+   handshake does the rest. The route the user was on (for example `/add_wallet`) stays as it is. The create wizard's
+   in-memory progress resets on reload, so the user restarts setup with a new phrase.
+4. **Clear.** Clear the entry when the manager receives `closed_success` or `closed_fail`, just before
+   `window.close()` (`MeteorPostMessageManager.ts:153`). A new `/connect` URL overwrites it.
+
+**Security.** Every request still records `senderOrigin` from the browser's `MessageEvent.origin`
+(`MeteorPostMessageManager.ts:108, 170`). The saved data only lets the popup ask the window that opened it to re-send
+its request, which is the same thing a reload of the original `/connect` URL does today.
 
 ---
 
@@ -394,12 +437,13 @@ as usual.
      so repeated tries can narrow down the real words. v2 caches the grid per phrase and clears it on sign-out.
    - If 24-word (ML-DSA) creation is turned back on, make the grid size and the copy depend on the word count. The
      `new_key_transfer.*` copy currently hard-codes "12th word".
-2. **`Section_P2_SecretRecoveryPhrase`:** add `allowCopy?: boolean` (D3) and an optional `headerNote?: ReactNode` for
-   the DApp line.
+2. **`Section_P2_SecretRecoveryPhrase`:** add an optional `headerNote?: ReactNode` for the DApp line. Copy and
+   Generate New are unchanged (D3).
 3. **New `v1common/modules_utility/cryptography/seedPhraseFirstLast.ts`:** `isSeedPhraseFirstLastMatch(phrase, { firstWord, lastWord })`.
    It normalises with `trim().toLowerCase().normalize("NFKD")`, like the v2 version, and is used by P3 and by
    `createWallet`.
 4. **`IOCreateWallet_Input`:** gains `backupConfirmation?`.
+5. **New `wpmConnectionSession.ts`**, plus small changes in `initializeApp.ts` and `MeteorPostMessageManager.ts` (§4.7).
 
 **v2**
 
@@ -423,7 +467,7 @@ as usual.
 ### Phase 1: v1 web (`meteor_wallet`), size S–M
 
 1. The `seedPhraseFirstLast.ts` utility and its tests.
-2. P3 `onVerified` and a stable decoy grid; P2 `allowCopy` and `headerNote`.
+2. P3 `onVerified` and a stable decoy grid; P2 `headerNote`.
 3. `Section_CreateNewWallet_V2`:
    - detect that the creation came from a DApp;
    - run P1 → P2 → P3 → `createWallet`;
@@ -431,7 +475,8 @@ as usual.
    - set `isBackedUp` from the confirmation;
    - reset to P2 after a remount.
 4. Translation keys (`en.tsx`, `translation_types.ts`).
-5. Tests (§7) and manual QA (§8), using the SDK demo (`packages/meteor-sdk-v1-test-web`, or sdk-demo-dev) for the
+5. Keep the popup's request across a reload (§4.7).
+6. Tests (§7) and manual QA (§8), using the SDK demo (`packages/meteor-sdk-v1-test-web`, or sdk-demo-dev) for the
    popup.
 
 ### Phase 2: v2 mobile (`meteor-v2-apps`), on top of `paul/key-management-v2`, size M
@@ -444,11 +489,8 @@ as usual.
 5. The "expired during setup" screen (§4.5) and its analytics event.
 6. Tests (§7). Device QA (§8) against the **remote dev** bridge, because local dev's 24 h lifetime hides the timeout.
 
-### Phase 3: follow-ups that depend on decisions
-
-- **D2:** turn on `requireBackupStep` for in-wallet creation in both wallets.
-- **D1:** a backup prompt or block on DApp requests for existing accounts that were never backed up.
-- **D4:** the bridge session lifetime for first-time sign-ins.
+No further phases are planned. In-wallet creation (D2), existing accounts that were never backed up (D1) and the
+bridge session lifetime (D4) are left as they are.
 
 ---
 
@@ -466,7 +508,14 @@ as usual.
   - when the creation came from a DApp, a missing or wrong confirmation throws before any network call (mock
     recaptcha and the API, and assert they weren't called);
   - a correct confirmation leads to `addWalletAccount` with `isBackedUp: true`, so `needsToBackupSeedPhrase: false`.
-- **In-wallet creation** is unchanged (`isBackedUp: false`) until D2.
+- **In-wallet creation** is unchanged (`isBackedUp: false`, no P2/P3).
+- **`wpmConnectionSession`:**
+  - save, load and clear round-trip;
+  - storage that throws is handled;
+  - restore happens only with `window.opener` set and a saved entry, and never on a `/connect` URL (which always uses
+    the URL);
+  - the entry is cleared on `closed_success` and `closed_fail`;
+  - the saved `referrerUri` is the one from the first load.
 
 **v2** (`bun test`, `packages/app`)
 
@@ -495,55 +544,28 @@ as usual.
 | 4 | v1 web | Existing account, login request, account selector "Create or import", create | Goes through P2 and P3 |
 | 5 | v1 web | Keypom "claim with new account"; `?redirect=` partner create | P2 and P3 before creation, then the existing redirect |
 | 6 | v1 web | Let the wallet auto-lock at P3, then sign in again | Back at P2 with a new phrase and the notice |
-| 7 | v1 web | In-wallet create, no DApp | Unchanged until D2 |
+| 7 | v1 web | In-wallet create, no DApp | Unchanged: no phrase shown, home banner as today |
 | 8 | v1 ext | DApp sign-in with no account | The extension modal still offers only import or opening the web wallet |
+| 8a | v1 web | Reload the popup on `/add_wallet` and again at P3 | The request comes back: setup restarts with a new phrase and ends on the approval for the original DApp request |
+| 8b | v1 web | Finish a request, then reload a wallet tab that isn't a popup | Nothing reconnects (no `window.opener`, entry cleared) |
 | 9 | v2 iOS and Android | Fresh install, NEAR Connect DApp QR or link, create from the bridge screen within 5 min | Intro, create, phrase, check, back on the request, approve, then (Android) back to the DApp |
 | 10 | v2 | Same, taking more than 5 min | "Wallet ready, request expired" screen; connecting again from the DApp works with the new account |
 | 11 | v2 | Kill the app at the backup stage | No account on chain; the next launch starts clean |
 | 12 | v2 | "I already have a wallet" from the bridge screen | Import works and the request resumes |
 | 13 | v2 | Old route while the session is live: "Back to wallet", intro, create | Still gets the backup stage, because detection uses the session |
-| 14 | v2 | In-wallet create with no session | Unchanged until D2 |
+| 14 | v2 | In-wallet create with no session | Unchanged: no phrase shown, home banner as today |
 
 ---
 
-## 9. Open decisions
+## 9. Decisions (settled 2026-10-17)
 
-**D1. Existing accounts that were never backed up.**
-
-- **Question:** should DApp approval also block or nudge existing accounts that were never backed up? That means v1
-  `needsToBackupSeedPhrase` or v2 `hasBackupSeedphrase === false`. Every v1 and v2 user who created an account in the
-  wallet and ignored the banner is in this group.
-- **Recommendation:** not as a hard block. Later (Phase 3), add a dismissible "Back up your recovery phrase" card on the
-  approval screen that links to the existing backup screens. First:
-  - v1 needs the `PageBackupSeedPhrase` progress-reset fix and a parameter for returning to the request;
-  - v2 `WalletSeedPhraseBackupScreen` needs `account` and `onDone` props in place of its hard-coded
-    `dismissTo(home)`.
-
-**D2. The in-wallet create flow.**
-
-- **Question:** should the in-wallet create flow also show and check the phrase? Today neither wallet does.
-- **Recommendation:** yes. It is the same component and flag. Ship it after Phases 1 and 2 so we can compare how many
-  users finish setup before and after.
-
-**D3. v1 Copy button.**
-
-- **Question:** should P2 keep its Copy button in the DApp flow? v2's policy is no copy button for phrases
-  (`PLAN-key-management.md` §5.6), because the clipboard can be read by other apps and is synced across devices.
-- **Recommendation:** hide Copy in the DApp flow (`allowCopy={false}`). Leave in-wallet creation as it is until D2.
-
-**D4. The v2 bridge's 5-minute session.**
-
-- **Option 1:** accept it and show the "connect again" screen (§4.5).
-- **Option 2:** have the SDK pick `interactive_v1` for `sign_in`. That gives 600 s absolute; the 300 s idle window
-  stays. NEAR policy already allows this profile, but it breaks the SDK's one-request-per-session assumption and needs
-  the D35 profile review.
-- **Recommendation:** accept it for now, and decide using real numbers from the §4.5 analytics.
-
-**D5. v1 popup reload.**
-
-- **Question:** after `navigate("/add_wallet")`, reloading the popup loses `connectionUid` and the request. This
-  already happens today, but a longer setup makes reloads more likely.
-- **Recommendation:** low priority. Save the wpm connection details in `sessionStorage` while the popup is open.
+| # | Question | Decision |
+| --- | --- | --- |
+| D1 | Should DApp approval also block or nudge existing accounts that were never backed up (v1 `needsToBackupSeedPhrase`, v2 `hasBackupSeedphrase === false`)? | **Left for now.** No change to approval screens for existing accounts. |
+| D2 | Should the in-wallet create flow also show and check the phrase? | **No, keep it as it is.** Only the DApp approval creation flow changes. `requireBackupStep` is set only when the creation came from a DApp. |
+| D3 | Copy button on the phrase in the DApp flow | **Keep each wallet's current behaviour.** v1 reuses P2 as is, Copy included. v2 reuses its existing backup screen, which has no Copy (`PLAN-key-management.md` §5.6). |
+| D4 | The v2 bridge's 5-minute session lifetime | **Option 1: keep it.** The SDK stays on `single_turn_v1`. Setup that runs past the limit ends on the "wallet ready, connect again" screen (§4.5). The rejected alternative was having the SDK pick `interactive_v1` for `sign_in` (600 s absolute). |
+| D5 | Reloading the v1 popup during setup loses the request | **Fix it:** save the wpm connection details in `sessionStorage` while the popup is open (§4.7, Phase 1). |
 
 ---
 
@@ -580,6 +602,9 @@ as usual.
 - `meteor-frontend/src/pages/wallet_create_sections/Section_P2_SecretRecoveryPhrase.tsx`
 - `meteor-frontend/src/pages/wallet_create_sections/Section_P3_SecretPhraseConfirmation.tsx`
 - `meteor-common/src/modules_utility/cryptography/seedPhraseFirstLast.ts` (new) and its test
+- `meteor-common/src/modules_feature/dapp_connect/wpmConnectionSession.ts` (new) and its test
+- `meteor-common/src/modules_app_core/state/initializeApp.ts`
+- `meteor-common/src/modules_feature/dapp_connect/MeteorPostMessageManager.ts`
 - `meteor-common/src/modules_app_core/translation/languages/en.tsx` and `translation_types.ts`
 
 **v2 (`meteor-v2-apps/packages/app/`)**
