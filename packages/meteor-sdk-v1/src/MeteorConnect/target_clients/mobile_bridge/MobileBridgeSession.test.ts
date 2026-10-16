@@ -11,12 +11,14 @@ import type {
 import { describeCloseOptions, describeSessionError, isTerminalPhase } from "@meteorwallet/connect";
 import {
   EBridgeLinkType,
+  EErr_Bridge,
   EErr_Bridge_Session,
   EMeteorAppId,
   ESessionNotifyWalletReason,
   ESessionPhase,
   ESessionResourceProfile,
   EWalletPlatform,
+  merr_bridge,
   merr_bridge_session,
   type TSessionFacts,
 } from "@meteorwallet/connect-shared";
@@ -741,6 +743,58 @@ describe("MobileBridgeSession failure surfacing", () => {
     void rejectionOf(session);
     await expect(session.startPreparation()).rejects.toThrow("something specific went wrong");
     expect(session.getSnapshot().error).toBe("something specific went wrong");
+  });
+
+  it("records the phase a failure interrupted: a refusal at creation never had a link", async () => {
+    // The 2026-10-16 production shape: the backend refused the NEW allocation outright.
+    const refusal = merr_bridge.fromId(EErr_Bridge.allocation_halted);
+    const double = createClientDouble({
+      createSession: async () => {
+        throw refusal;
+      },
+    });
+    const session = createSession({ client: double.client });
+    void rejectionOf(session);
+    await expect(session.startPreparation()).rejects.toThrow();
+    const snapshot = session.getSnapshot();
+    expect(snapshot).toMatchObject({
+      phase: "failed",
+      failedFromPhase: "creating_bridge",
+      errorKind: "bridge",
+      errorIds: [EErr_Bridge.allocation_halted],
+    });
+    expect(snapshot.deepLink).toBeUndefined();
+  });
+
+  it("records the phase a failure interrupted: a published link that lapses before any claim", async () => {
+    const double = createClientDouble();
+    const session = createSession({ client: double.client });
+    const result = rejectionOf(session);
+    await session.startPreparation();
+    expect(session.getSnapshot().phase).toBe("waiting_for_wallet");
+    double.emit("terminal", { outcome: { reason: "bridge_gone", selfInitiated: false } });
+    expect(session.getSnapshot()).toMatchObject({
+      phase: "failed",
+      failedFromPhase: "waiting_for_wallet",
+    });
+    expect(session.getSnapshot().deepLink).toBeDefined();
+    expect((await result)?.message).toBe("mobile_bridge_expired");
+  });
+
+  it("records the phase a failure interrupted: one a wallet was already handling", async () => {
+    const double = createClientDouble();
+    const session = createSession({ client: double.client });
+    void rejectionOf(session);
+    await session.startPreparation();
+    double.emit("factsChanged", {
+      facts: sessionFactsFor(ESessionPhase.wallet_action),
+      source: "realm",
+    });
+    double.emit("terminal", { outcome: { reason: "retry_budget", selfInitiated: false } });
+    expect(session.getSnapshot()).toMatchObject({
+      phase: "failed",
+      failedFromPhase: "wallet_action",
+    });
   });
 });
 

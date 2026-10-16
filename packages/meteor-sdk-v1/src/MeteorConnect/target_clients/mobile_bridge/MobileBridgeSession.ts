@@ -153,6 +153,13 @@ export interface IMobileBridgeSnapshot {
    */
   errorKind?: TSessionErrorKind;
   error?: string;
+  /**
+   * The flow phase this session was in when it failed, recorded by the failure itself. It tells a
+   * request no wallet ever took part in — one that failed while being created, or while its link
+   * waited to be opened — apart from one a wallet was already handling, without reading the error:
+   * only the first is safely replaced by a fresh request (`mobileBridgeRetryableFailure`).
+   */
+  failedFromPhase?: TMobileBridgePhase;
   identityResetRequired?: boolean;
 }
 
@@ -927,6 +934,7 @@ export class MobileBridgeSession {
         described.kind === "session" || described.kind === "bridge" ? [...described.ids] : [],
       errorKind: described.kind,
       error: described.originalMessage,
+      failedFromPhase: this.snapshot.phase,
     });
     if (!this.resultSettled) {
       this.resultSettled = true;

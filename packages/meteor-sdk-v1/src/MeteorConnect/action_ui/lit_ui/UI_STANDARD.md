@@ -55,7 +55,7 @@ The user reduced all sizes by a total of 4px. The shared bridge panel receives `
 - Create the mobile request eagerly. Until its link is ready, keep the mobile icon and “Meteor Mobile” visible in the disabled button; show a small spinner inside the button at its trailing edge with an accessible preparing-connection label. Do not add a loading row above the button or replace its label.
 - Clicking Meteor Mobile directly calls the same `openCurrentSessionInApp` path as Open Meteor Mobile; do not toggle the QR/connection panel on click. Session advancement can reveal required pairing/approval states.
 - Get Meteor Wallet keeps internal installation navigation despite the arrow decoration.
-- No cancel-request or refresh-code button on these redesigned pages. Retain header close behavior and existing protocol lifecycle/recovery behavior.
+- No cancel-request or refresh-code button on these redesigned pages. Retain header close behavior and existing protocol lifecycle/recovery behavior. The one exception is the failure card's **Try Again** for a request no wallet took part in (see Failure card).
 
 Verify desktop and real phone-width previews when changing layout. Use package-local TypeScript checks; run relevant tests from `packages/meteor-sdk-v1` so its decorator configuration is applied.
 
@@ -65,6 +65,7 @@ Inside NEAR Connect the UI renders without the overlay, straight into near-conne
 
 - Below 640px of viewport height a compact tier applies: 3.25rem header with a 2.1rem logo and 2.4rem close button, .75rem content top padding and .55rem section gaps, 2.6rem platform buttons, a tighter mobile panel and footer. The QR keeps its 180px compact size; the chrome around it gives up the room.
 - At 480px wide or less, desktop platform buttons use .5rem inline padding so “Chrome Extension” stays on one line.
+- The failure card compacts too: 1rem padding, a 64px warning graphic, and a 2.6rem Try Again button, so the desktop chooser plus the card fit the 418x557 frame without scrolling.
 - Verify with `node ./preview/action-ui/screenshot.mjs --near-connect`, which renders every scenario at those frame sizes and reports overflow. Only the QR-revealed PIN stage (`pin-qr`) may scroll, as it does at every size.
 
 ## Transfer after platform selection
@@ -99,3 +100,13 @@ The shared continuation also owns a neutral busy state (`busy`: GIF, title, mess
 ## Failure card
 
 Use the supplied `graphical/meteor-warning.ts` warning SVG above centered heading and description, on `#12121D`. Raw error details appear left-aligned in a selectable, wrapping `#181823` inset without an “Error Message” label. Generic unclassified failures use “Something Went Wrong”; preserve actionable update and cancellation headings and their explanations. Wallet context remains in the accessible label. Success and identity-reset flows retain their dedicated states.
+
+**Before any wallet took part** (`mobileBridgeRetryableFailure`: the session failed while being created or while its link waited to be opened), the card is for the user, not the integrator — the user-requested exception of 2026-10-16, after a backend refusal reached users as “New bridge allocation is temporarily halted; retry later”:
+
+- Copy is fixed and plain. When no QR ever existed: “Couldn’t Generate QR Code” / “We couldn’t create a secure QR code for [wallet]. Please try again.”; once a QR existed: “QR Code Expired” / “This QR code is no longer valid. Try again to get a new one.” Where no QR is offered (phones, web and extension wallets) the same states read “Couldn’t Connect to [wallet]” / “We couldn’t set up a secure connection. Please try again.” and “Request Expired” / “This request to [wallet] is no longer valid. Try again to start a new one.”
+- No raw details inset and no classifier copy. The container reports those once per session to the console (`reportMobileBridgeFailure`).
+- A primary-gradient **Try Again** button (centered, minimum width 10rem, standard 3rem height) sits below the description and prepares a fresh request through the container's `refreshCode`; it shows a spinner while pending, and a failure of the retry itself appears beneath it.
+- On a phone the card shows under the platform choices instead of selecting Meteor Mobile: the disabled Meteor Mobile button stays, and Meteor Web stays available.
+- A backend that cannot be reached at all still drops the mobile option quietly while another wallet is on offer (`isMobileBridgeQuietlyUnavailable`); the card appears only where mobile is the user's way through.
+
+Failures a wallet already took part in keep the classified card above, unchanged.

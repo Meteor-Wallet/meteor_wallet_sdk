@@ -11,6 +11,10 @@ import type {
   MobileBridgeSession,
 } from "../../target_clients/mobile_bridge/MobileBridgeSession";
 import { getTransferAttachmentForAction } from "../../transfer_accounts/MeteorConnectTransferAccounts";
+import {
+  mobileBridgeRetryableFailure,
+  reportMobileBridgeFailure,
+} from "../mobile-bridge-availability";
 import { ActionUiController } from "./ActionUiController";
 import { customElement } from "./custom-element";
 import "./get-meteor-screen";
@@ -120,6 +124,8 @@ export class MeteorTransferAccountsContainer extends LitElement {
   private platformLocked = false;
   /** The eager Meteor Mobile bridge preparation behind the chooser's inline QR panel. */
   private inlineMobilePrepare?: Promise<void>;
+  /** The session whose failure was already reported to the console (once each). */
+  private failureReportedFor?: MobileBridgeSession;
 
   static styles = [css`
     :host {
@@ -398,6 +404,14 @@ export class MeteorTransferAccountsContainer extends LitElement {
     this.mobileSession = session;
     this.unsubscribeSession = session?.subscribe((snapshot) => {
       this.snapshot = snapshot;
+      // The panel shows the user Try Again; the classifier's copy is for the integrator.
+      if (mobileBridgeRetryableFailure(snapshot) != null && this.failureReportedFor !== session) {
+        this.failureReportedFor = session;
+        reportMobileBridgeFailure(
+          "The transfer request failed before any wallet took part in it; the user is offered Try Again.",
+          snapshot,
+        );
+      }
       // The chooser's inline QR was scanned: a wallet now owns the request, so the chooser is
       // over — commit to Meteor Mobile and hand the whole screen to the connect flow (PIN /
       // review / key card stages).
@@ -411,6 +425,20 @@ export class MeteorTransferAccountsContainer extends LitElement {
         this.screen = "connect";
       }
     });
+  }
+
+  /**
+   * The chooser's Try Again: a fresh Meteor-Mobile-targeted bridge for the inline QR. It stands in
+   * for the eager preparation, so a platform chosen meanwhile waits for it instead of racing it.
+   */
+  private retryInlineMobile(): Promise<void> {
+    const retry = this.actionController
+      .refreshMobileBridge({ transferTargetPlatform: "mobile" })
+      .then((session: MobileBridgeSession) => {
+        this.bindSession(session);
+      });
+    this.inlineMobilePrepare = retry;
+    return retry;
   }
 
   private revealSource = (): ITransferKeyRevealSource | undefined => {
@@ -471,6 +499,7 @@ export class MeteorTransferAccountsContainer extends LitElement {
         <meteor-mobile-bridge-panel connectDesign
           .session=${this.mobileSession} walletLabel="Meteor Mobile" walletPlatform="mobile" .contextual=${false}
           .openInApp=${() => this.action.meteorConnect.mobileBridgeClient.openCurrentSessionInApp()}
+          .refreshCode=${() => this.retryInlineMobile()}
           .resetIdentity=${async () => { this.bindSession(await this.actionController.resetMobileIdentityAndRePair()); }}
         ></meteor-mobile-bridge-panel>` : nothing}
       <div class="no-wallet-bottom-section">

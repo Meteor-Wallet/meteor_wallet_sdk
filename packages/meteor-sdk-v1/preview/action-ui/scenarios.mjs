@@ -37,6 +37,25 @@ const DEEP_LINK =
 const EXPIRES_SOON = () => Date.now() + 4 * 60_000 + 48_000;
 /** The absolute wall no refresh moves — comfortably beyond the idle deadline in most scenarios. */
 const HARD_STOP = () => Date.now() + 25 * 60_000;
+/**
+ * The exact snapshot the 2026-10-16 production allocation halt produced: the backend refused the
+ * new bridge, so no QR ever existed. The classifier copy is kept verbatim to prove it never
+ * reaches the user's card.
+ */
+const QR_NOT_CREATED = {
+  phase: "failed",
+  push: "not_attempted",
+  pinAttemptsUsed: 0,
+  linkPhase: "detached",
+  linkRedialAttempt: 0,
+  failedFromPhase: "creating_bridge",
+  errorKind: "bridge",
+  errorIds: ["allocation_halted"],
+  errorHeadline: "New bridge allocation is temporarily halted; retry later",
+  errorDetail:
+    "A typed bridge-level rejection (allocation, lease, or transport authorization). Check the ids against the bridge error catalogue; most are not retryable as-is.",
+  error: "New bridge allocation is temporarily halted; retry later",
+};
 
 /** @type {Array<Record<string, any>>} */
 export const SCENARIOS = [
@@ -351,10 +370,51 @@ export const SCENARIOS = [
       pinAttemptsUsed: 0,
       linkPhase: "detached",
       linkRedialAttempt: 0,
+      // A wallet had the request, so the failure keeps its own copy — no Try Again.
+      failedFromPhase: "wallet_action",
       // Classified copy the panel renders verbatim; `error` is the untouched original message.
       errorHeadline: "The request was rejected in Meteor Mobile.",
       errorDetail: "Nothing was signed. Start the request again when you are ready.",
       error: "[bridge_session](action_declined) wallet declined the action",
+    },
+  },
+  {
+    name: "qr-not-created",
+    description: "Mobile request refused before a QR existed: plain copy and Try Again",
+    targets: ALL_TARGETS,
+    snapshot: QR_NOT_CREATED,
+  },
+  {
+    name: "mobile-qr-not-created",
+    description: "Same on a phone: the card sits under the choices, Meteor Web stays available",
+    targets: ALL_TARGETS,
+    mobileUa: true,
+    snapshot: QR_NOT_CREATED,
+  },
+  {
+    name: "qr-not-created-locked",
+    description: "Same for an account that lives in Meteor Mobile (no other platform offered)",
+    targets: ALL_TARGETS,
+    knownTarget: "v2_bridge_mobile",
+    snapshot: QR_NOT_CREATED,
+  },
+  {
+    name: "qr-expired",
+    description: "QR stopped working before any wallet picked it up: Try Again",
+    targets: ALL_TARGETS,
+    snapshot: {
+      phase: "failed",
+      push: "not_attempted",
+      deepLink: DEEP_LINK,
+      pinAttemptsUsed: 0,
+      linkPhase: "detached",
+      linkRedialAttempt: 0,
+      failedFromPhase: "waiting_for_wallet",
+      errorKind: "unknown",
+      errorHeadline: "Something failed in the session flow",
+      errorDetail:
+        "This error was not recognized as a terminal outcome, typed protocol rejection, connection failure, or SDK guard — read the original message below for the specific cause.",
+      error: "mobile_bridge_expired",
     },
   },
   {
@@ -520,7 +580,7 @@ function makeTransferScenarios() {
         screen: "choose",
       },
     ),
-    base("transfer-error-phone", "Transfer: failed eager request on mobile chooser", "failed", { screen: "choose" }, { mobileUa: true, snapshot: { phase: "failed", push: "not_attempted", pinAttemptsUsed: 0, linkPhase: "offline", linkRedialAttempt: 0, errorHeadline: "Something failed in the session flow", errorDetail: "The connection expired. Close this window and start a new request.", error: "mobile_bridge_expired" } }),
+    base("transfer-error-phone", "Transfer: failed eager request on mobile chooser", "failed", { screen: "choose" }, { mobileUa: true, snapshot: { phase: "failed", push: "not_attempted", deepLink: DEEP_LINK, pinAttemptsUsed: 0, linkPhase: "offline", linkRedialAttempt: 0, failedFromPhase: "waiting_for_wallet", errorHeadline: "Something failed in the session flow", errorDetail: "The connection expired. Close this window and start a new request.", error: "mobile_bridge_expired" } }),
     base("transfer-choose-phone", "Transfer: mobile chooser", "waiting_for_wallet", { screen: "choose" }, { mobileUa: true }),
     base("transfer-loading-phone", "Transfer: preparing mobile connection", "creating_bridge", { screen: "choose" }, { mobileUa: true, snapshot: { phase: "creating_bridge", push: "not_attempted", pinAttemptsUsed: 0, linkPhase: "joining", linkRedialAttempt: 0 } }),
     base(

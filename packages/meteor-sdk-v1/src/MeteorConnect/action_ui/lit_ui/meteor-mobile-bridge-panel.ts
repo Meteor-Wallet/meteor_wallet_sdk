@@ -16,6 +16,10 @@ import type {
   MobileBridgeSession,
   TMobileBridgePhase,
 } from "../../target_clients/mobile_bridge/MobileBridgeSession";
+import {
+  mobileBridgeRetryableFailure,
+  type TMobileBridgeRetryableFailure,
+} from "../mobile-bridge-availability";
 import { isMobile } from "../utils/isMobile";
 import { customElement } from "./custom-element";
 
@@ -104,6 +108,8 @@ export class MeteorMobileBridgePanel extends LitElement {
   @state() private closeConfirmation = false;
   @state() private closePending = false;
   @state() private reconnectPending = false;
+  /** A replacement request (`refreshCode`) is being prepared. */
+  @state() private refreshPending = false;
   @state() private now = Date.now();
   @state() private presentedPushStage: "sending" | "sent" | "review" = "sending";
   @query("#mobile-bridge-qr") private qrTarget?: HTMLDivElement;
@@ -247,6 +253,18 @@ export class MeteorMobileBridgePanel extends LitElement {
     .error-description { margin: 0; color: #999; font-size: 14px; font-weight: 400; line-height: normal; overflow-wrap: anywhere; }
     .error-message { margin-top: 1.25rem; }
     .error-message p { margin: 0; text-align: left; padding: .85rem 1rem; border-radius: .25rem; background: #181823; color: #fff; font-size: 14px; font-weight: 400; line-height: normal; white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
+    .error-actions { display: flex; flex-direction: column; align-items: center; gap: .6rem; margin-top: 1.25rem; }
+    /* The approved primary platform-button treatment (UI_STANDARD.md "Surfaces and controls"). */
+    .error-actions button { min-width: 10rem; min-height: 3rem; padding: .65rem .8rem; border-radius: .4rem; background: linear-gradient(110deg, #4210ec, #602cff); filter: none; font-size: 16px; font-weight: 600; letter-spacing: 0; line-height: normal; }
+    .error-actions button:hover:not(:disabled) { background: linear-gradient(110deg, #4210ec, #602cff); filter: brightness(1.15); transform: none; }
+    .error-actions button:disabled { opacity: 1; cursor: wait; }
+    /* NEAR Connect's compact frames: the card gives up room so the chooser above never scrolls. */
+    @media (max-height: 640px) {
+      .error-card { padding: 1rem; }
+      .warning-asset { width: 64px; margin: .25rem auto .9rem; }
+      .error-actions { margin-top: .9rem; }
+      .error-actions button { min-height: 2.6rem; padding-top: .4rem; padding-bottom: .4rem; }
+    }
     /* ---------- Stage cards (push / review / pin / status) ---------- */
     .stage-panel { height: 292px; justify-content: center; }
     .stage-panel.auto { height: auto; min-height: 292px; padding: 1rem .9rem; }
@@ -403,10 +421,16 @@ export class MeteorMobileBridgePanel extends LitElement {
       this.presentationStartedAt = Date.now();
       this.closeConfirmation = false;
       this.pinQrOpen = false;
+      this.interactionError = undefined;
       if (this.presentationTimer != null) clearTimeout(this.presentationTimer);
     }
     this.unsubscribe?.();
     this.unsubscribe = this.session?.subscribe((snapshot) => {
+      // A failure ends every control the previous stage offered, so their errors end with it — the
+      // failure card's own Try Again must not inherit an earlier "could not be opened".
+      if (snapshot.phase === "failed" && this.snapshot?.phase !== "failed") {
+        this.interactionError = undefined;
+      }
       this.snapshot = snapshot;
       this.reconcilePinErrorPresentation(snapshot);
       this.reconcilePushPresentation(snapshot);
@@ -549,12 +573,65 @@ export class MeteorMobileBridgePanel extends LitElement {
   }
 
   private async refreshMobileCode(): Promise<void> {
+    if (this.refreshPending) return;
+    this.refreshPending = true;
     try {
       await this.refreshCode?.();
       this.interactionError = undefined;
     } catch {
       this.interactionError = "A new connection code could not be created. Please try again.";
+    } finally {
+      this.refreshPending = false;
     }
+  }
+
+  /**
+   * Copy for a request no wallet ever took part in (`mobileBridgeRetryableFailure`). The
+   * classifier's headline and detail are written for integrators, so they never reach this card —
+   * the container reports them to the console instead.
+   */
+  private retryableFailureCopy(failure: TMobileBridgeRetryableFailure): {
+    title: string;
+    description: string;
+  } {
+    // A QR is what this panel offers only for a phone wallet scanned from another screen.
+    const qr = this.walletPlatform === "mobile" && !this.hideQrOnMobile;
+    if (failure === "not_created") {
+      return qr
+        ? {
+            title: "Couldn’t Generate QR Code",
+            description: `We couldn’t create a secure QR code for ${this.walletLabel}. Please try again.`,
+          }
+        : {
+            title: `Couldn’t Connect to ${this.walletLabel}`,
+            description: "We couldn’t set up a secure connection. Please try again.",
+          };
+    }
+    return qr
+      ? {
+          title: "QR Code Expired",
+          description: "This QR code is no longer valid. Try again to get a new one.",
+        }
+      : {
+          title: "Request Expired",
+          description: `This request to ${this.walletLabel} is no longer valid. Try again to start a new one.`,
+        };
+  }
+
+  /** "Try Again" — a fresh request, prepared exactly like the eager one. */
+  private renderRetryAction() {
+    if (this.refreshCode == null) return undefined;
+    return html`<div class="error-actions">
+      <button
+        type="button"
+        ?disabled=${this.refreshPending}
+        aria-busy=${this.refreshPending ? "true" : "false"}
+        @click=${() => void this.refreshMobileCode()}
+      >
+        ${this.refreshPending ? html`<span class="spinner" role="status" aria-label="Trying again"></span>` : "Try Again"}
+      </button>
+      ${this.interactionError ? html`<span class="error" role="alert">${this.interactionError}</span>` : ""}
+    </div>`;
   }
 
   private async confirmIdentityReset(): Promise<void> {
@@ -980,6 +1057,8 @@ export class MeteorMobileBridgePanel extends LitElement {
     subtitle?: string,
     /** The untouched original error message — searchable fine print, never the headline. */
     fineprint?: string,
+    /** The failure card's own control (Try Again), below its description. */
+    action?: unknown,
   ) {
     if (tone === "bad") {
       const heading = title === "Something failed in the session flow" || title === "The request could not be completed."
@@ -989,6 +1068,7 @@ export class MeteorMobileBridgePanel extends LitElement {
         <h2>${heading}</h2>
         ${subtitle ? html`<p class="error-description">${subtitle}</p>` : ""}
         ${fineprint ? html`<div class="error-message"><p>${fineprint}</p></div>` : ""}
+        ${action ?? ""}
       </div>`);
     }
     return keyed(
@@ -1204,6 +1284,23 @@ export class MeteorMobileBridgePanel extends LitElement {
     }
 
     if (snapshot.phase === "failed" || snapshot.phase === "cancelled") {
+      // No wallet took part, so nothing is lost by starting over: say so in the user's terms and
+      // offer exactly that, instead of the classifier's integrator-facing copy.
+      const retryableFailure = mobileBridgeRetryableFailure(snapshot);
+      if (retryableFailure != null) {
+        const copy = this.retryableFailureCopy(retryableFailure);
+        return html`<section class="panel stage-panel slim error-panel" aria-label="${this.walletLabel}">
+          ${this.renderStatusStage(
+            `mobile-${retryableFailure}`,
+            "cross",
+            "bad",
+            copy.title,
+            copy.description,
+            undefined,
+            this.renderRetryAction(),
+          )}
+        </section>`;
+      }
       // The classifier already produced the copy (headline/detail); the branches left are matched
       // by typed id / kind, never by message: the one id with a remedy of its own, and the
       // backend-connection kind, whose classifier detail is written for the integrator (it names
