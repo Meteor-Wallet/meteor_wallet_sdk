@@ -27,6 +27,7 @@ import {
   summarizeSignOut,
 } from "./results/summaries";
 import { StagedAccountsPanel } from "./StagedAccountsPanel";
+import { SwapSafetyTest } from "./SwapSafetyTest";
 import {
   ActionButton,
   Chip,
@@ -239,7 +240,7 @@ const MeteorConnectTestInitialized = ({ meteorConnect }: { meteorConnect: Meteor
   return (
     <PageShell>
       {/*
-        Mobile order: connection → actions → results → transfer tools. On large screens the results
+        Mobile order: connection → actions → results → swap safety → transfer tools. On large screens the results
         log moves to a sticky right-hand column so it stays in view whatever is being tested.
       */}
       <div className={"grid gap-4 lg:grid-cols-[minmax(0,1fr)_26rem] lg:items-start lg:gap-5"}>
@@ -285,9 +286,22 @@ const MeteorConnectTestInitialized = ({ meteorConnect }: { meteorConnect: Meteor
 
         <ActionResultsPanel
           className={
-            "lg:sticky lg:top-4 lg:col-start-2 lg:row-span-3 lg:row-start-1 lg:max-h-[calc(100dvh-2rem)]"
+            "lg:sticky lg:top-4 lg:col-start-2 lg:row-span-4 lg:row-start-1 lg:max-h-[calc(100dvh-2rem)]"
           }
         />
+
+        {account != null && (
+          <CollapsibleSection
+            className={"lg:col-start-1"}
+            storageKey={"meteor_connect_test.swap_safety_open"}
+            title={"Swap safety (RHEA swaps)"}
+            description={
+              "The swap requests the wallets' Developer settings › Swap testing opens, sent from this dApp: check each wallet's approval screen warns, waits or can't tell, as it should."
+            }
+          >
+            <SwapSafetyTest account={account} meteorConnect={meteorConnect} />
+          </CollapsibleSection>
+        )}
 
         <CollapsibleSection
           className={"lg:col-start-1"}
