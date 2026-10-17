@@ -1,8 +1,11 @@
 # PLAN: Recovery-phrase backup for wallets created from a DApp request
 
-Status: proposal, 2026-10-17. Decisions D1 to D5 settled the same day (§9). Nothing implemented yet.
+Status: implemented 2026-10-17 on branch `paul/dapp-new-wallet-backup` in `meteor_wallet` and
+`meteor-v2-apps`. The changes are not yet committed. Decisions D1 to D5 were settled the same day (§9). Where the code
+differs from the design below, §12 says how and why. Device QA (§8) is still to do.
 
-Scope: only accounts created during a DApp approval flow. In-wallet creation and existing accounts are unchanged.
+Scope: only accounts created during a DApp approval flow. In-wallet creation, linkdrop claims,
+partner `?redirect=` links and existing accounts are unchanged.
 
 Repos involved:
 
@@ -542,8 +545,8 @@ bridge session lifetime (D4) are left as they are.
 | 2 | v1 web | Same, with wrong words at P3 | Error toast, stays on P3, no account on chain |
 | 3 | v1 web | Close the popup at P2 or P3 | The DApp gets the window-closed error; no account on chain |
 | 4 | v1 web | Existing account, login request, account selector "Create or import", create | Goes through P2 and P3 |
-| 5 | v1 web | Keypom "claim with new account"; `?redirect=` partner create | P2 and P3 before creation, then the existing redirect |
-| 6 | v1 web | Let the wallet auto-lock at P3, then sign in again | Back at P2 with a new phrase and the notice |
+| 5 | v1 web | Keypom "claim with new account"; `?redirect=` partner create | Unchanged: not DApp approval flows (§12) |
+| 6 | v1 web | Let the wallet auto-lock at P3, then sign in again | Back at P1 (name) with the "new recovery phrase" notice; the next P2 shows a new phrase |
 | 7 | v1 web | In-wallet create, no DApp | Unchanged: no phrase shown, home banner as today |
 | 8 | v1 ext | DApp sign-in with no account | The extension modal still offers only import or opening the web wallet |
 | 8a | v1 web | Reload the popup on `/add_wallet` and again at P3 | The request comes back: setup restarts with a new phrase and ends on the approval for the original DApp request |
@@ -620,3 +623,126 @@ bridge session lifetime (D4) are left as they are.
 - `screens/meteor_connect/MeteorConnectBridgeScreen.tsx`
 
 **SDK / bridge:** none.
+
+---
+
+## 12. Implementation notes (2026-10-17)
+
+The guiding rule while building this was that only creating a wallet for a pending DApp request may
+change. Every change to a shared component is an opt-in prop or a branch taken only in that
+situation. Where that rule conflicted with the design above, the rule won.
+
+### What was built
+
+**v1 (`meteor_wallet/web/packages/`)**
+
+- `meteor-common/src/modules_utility/cryptography/seedPhraseFirstLast.ts` (+ test): the
+  `ISeedPhraseFirstLastConfirmation` type and `isSeedPhraseFirstLastMatch`.
+- `meteor-frontend/src/pages/wallet_create_v2/dappCreateBackupFlow.ts` (+ test). Pure decisions:
+  - `isDappRequestCreation`;
+  - `getDappRequestDisplayHost`, which uses the browser-reported `senderOrigin` only;
+  - `checkCreateWalletBackup`, the guard `createWallet` runs before any network call;
+  - `shouldRestartBackupSteps`.
+- `Section_CreateNewWallet_V2.tsx`:
+  - for a DApp request, P1 runs P2 → P3 → `createWallet({ backupConfirmation })`;
+  - `isBackedUp` comes from the checked confirmation;
+  - the wizard resets after success or a lost phrase.
+- `Section_P3_SecretPhraseConfirmation.tsx`: an optional `onVerified(confirmation)`.
+- `Section_P2_SecretRecoveryPhrase.tsx`: an optional `headerNote`. Copy and Generate New are unchanged (D3).
+- `createNewWallet.dappRequestBackup.*` strings in `en.tsx` and `translation_types.ts`.
+- D5: `meteor-common/src/modules_feature/dapp_connect/wpmConnectionSession.ts` (+ test), with the save and restore in
+  `initializeApp.ts` and the clear in `MeteorPostMessageManager.ts`.
+
+**v2 (`meteor-v2-apps/packages/app/`)**
+
+- `meteorConnectSessionStore.ts`: `hasPendingMeteorConnectAction` and
+  `isMeteorConnectSessionPastDeadline` (+ tests).
+- `meteorConnectWalletCreation.ts` (+ test). Pure functions:
+  - the creation request (a pending sign-in);
+  - where to go after creation;
+  - the "request ended" copy;
+  - the analytics duration bucket.
+- `meteorConnectWalletCreationClient.ts`: the store- and user-bound getter and hook, plus the analytics
+  event (`button_clicked`, `meteor_connect:dapp_wallet_created:<request|request_ended>:<bucket>`).
+- `add_wallet/create_new/accountCreateBackup.ts` (+ test): `assertAccountCreateBackup`, run before
+  anything is created on chain.
+- `AccountCreate.ts`:
+  - accepts `seedPhrase`, `backupConfirmation` and `requireBackup`;
+  - exports `generateNewAccountSeedPhrase` so the phrase is generated exactly as before.
+- `import_wallet_old/seedPhraseAccountKeyMetadata.ts` (+ test) and an `origin` param on
+  `importAccountWithSeedPhrase`. A generated phrase that passed the check is recorded as
+  `source: "generated", backupConfirmed: true`; existing callers produce the same metadata as before.
+- `CreateNewWallet.tsx`:
+  - a `Backup` stage before `Creating`, which reuses `NewKeyTransferSeedBackupScreen` as is;
+  - the network switches to the one the request needs;
+  - "Continue to {partner}" goes back to `/bridge_request/request`, or to the result screen with an
+    expiry message.
+- `MeteorConnectBridgeScreen.tsx`: a "Create a new wallet" button, shown only with zero accounts and
+  a pending sign-in. "Back to wallet" is kept.
+
+### Where the code differs from the design above
+
+**v1 detection is DApp approval requests only.**
+
+- The rule is any pending external action, as long as none is a keypom claim.
+- Linkdrop claims and partner `?redirect=` links stay unchanged. These are not DApp approval flows
+  (D2: "We only care about the DApp approval creation flow").
+- This replaces §4.1's broader v1 list.
+
+**v2 detection also requires zero accounts.**
+
+- v2 has no "create a wallet for this DApp" entry for existing users; their only path to creation
+  during a request would be by chance.
+- Requiring zero accounts keeps existing users, including the network switch, fully unaffected.
+- v1 keeps its account-selector "Create or import" entry, which is an explicit "create a wallet
+  for this DApp" by an existing user. That is why v1 doesn't require zero accounts.
+
+**Detection ignores session deadlines.**
+
+- The session's idle deadline can lag behind the server, and a stale deadline must never drop the
+  backup step.
+- Only the after-creation routing uses the session's fixed `absoluteExpiresAt`.
+
+**No renaming, moving or deleting of existing v2 components (§5 v2 items 1, 5 and 6).**
+
+- `NewKeyTransferSeedBackupScreen` is reused with explicit props, as `WalletSeedPhraseBackupScreen`
+  already does.
+- The rename, the L107 placeholder and the dead-file deletion would touch existing flows. They are
+  left for a separate cleanup.
+
+**No v1 decoy cache (§5 v1 item 1, second bullet).**
+
+- In the creation flow the back button shows the phrase again anyway, so stable decoys add nothing.
+- The existing add-key flow keeps its exact behaviour.
+
+**After a lock or unmount, v1 restarts at P1, not P2.**
+
+- The picked name is held with the phrase in component state and is lost with it.
+- The user re-enters the name and sees a new phrase, with a notice saying so.
+
+**The v2 expired state reuses the existing bridge result screen** with a specific `errorMessage`.
+
+- Its "Done" button opens the wallet.
+- No Android return-to-partner button was added.
+
+**v2 analytics use `button_clicked`** rather than a new `sub_event_type_id`, so the backend needs no
+change.
+
+### Verification
+
+| Repo | Type-check | Tests |
+| --- | --- | --- |
+| v1 (`meteor-frontend`) | 0 errors | 485 pass. 1 fail and 1 error, both already on the branch (`rhea_referral.test.ts`) |
+| v1 (`meteor-common`) | (covered by the frontend type-check) | New tests pass (13) |
+| v2 (`packages/app`) | 95 errors before and after, none in changed files | 860 pass. 1 fail, already on the branch ("coin types > names the chips") |
+
+Biome passes on new files. Existing files have no new findings beyond those they already had.
+
+### Known edges, not handled
+
+- **v2, re-entering the bridge mid-setup.** Re-tapping the DApp link, or a push arriving, during
+  setup sends the app back to the bridge screen and drops the in-memory phrase. No account was
+  created, so the user just starts setup again.
+- **v1, reload during setup.** After a popup reload the request comes back about 0.5 s later, once
+  the DApp re-sends it. Continuing from the name step in that moment would take the in-wallet path.
+  It's practically unreachable, since typing a name takes longer.
