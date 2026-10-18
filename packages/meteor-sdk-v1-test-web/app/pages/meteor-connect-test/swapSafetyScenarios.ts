@@ -181,7 +181,7 @@ export const SWAP_SAFETY_SCENARIOS: readonly ISwapSafetyScenario[] = [
     id: "unreadable",
     title: "A RHEA call Meteor can't read",
     expect:
-      'A DCL limit order: "Meteor can\'t check what this gives you", with the USDC sent, and approving waits for its checkbox.',
+      "A DCL limit order Meteor can't read: no warning, and approving waits for nothing. The wallets don't flag such calls for now (builds before that show \"Meteor can't check what this gives you\").",
     transactions: [
       transferCall(USDC, DCL, SENT, {
         LimitOrder: { pool_id: NO_SUCH_DCL_POOL, buy_token: USDT, point: 0 },
