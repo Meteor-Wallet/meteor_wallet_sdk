@@ -73,6 +73,7 @@
     "zod": "^4.0.17"
   },
   "devDependencies": {
+    "@nice-code/action": "0.110.0",
     "@types/secp256k1": "^4.0.7",
     "esbuild": "0.27.2",
     "playwright-core": "1.61.1",

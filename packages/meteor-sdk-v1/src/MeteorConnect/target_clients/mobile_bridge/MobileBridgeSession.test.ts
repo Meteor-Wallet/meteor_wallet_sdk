@@ -1,4 +1,4 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it, spyOn } from "bun:test";
 import type {
   ICreatedPartnerSession,
   ICreateSessionInput,
@@ -6,6 +6,7 @@ import type {
   ISessionResultReceipt,
   PartnerSessionClient,
   TPartnerPairedWallet,
+  TSessionLinkPhase,
   TValidatedSessionResult,
 } from "@meteorwallet/connect";
 import { describeCloseOptions, describeSessionError, isTerminalPhase } from "@meteorwallet/connect";
@@ -22,12 +23,17 @@ import {
   merr_bridge_session,
   type TSessionFacts,
 } from "@meteorwallet/connect-shared";
+import { err_nice_transport } from "@nice-code/action";
 import {
   createSessionClientDoubleBase,
   sessionFactsFor,
 } from "../../test/test_utils/sessionClientDouble";
 import type { IMobileBridgePreparedAction } from "./MeteorConnectMobileBridgeClient.types";
-import { MobileBridgeSession, type TMobileBridgePhase } from "./MobileBridgeSession";
+import {
+  MOBILE_BRIDGE_ENDING,
+  MobileBridgeSession,
+  type TMobileBridgePhase,
+} from "./MobileBridgeSession";
 
 const PAIRED_WALLET: TPartnerPairedWallet = {
   walletVerifyPublicKey: "ed25519::raw_base64::d2FsbGV0",
@@ -915,10 +921,10 @@ describe("MobileBridgeSession explicit close verbs", () => {
     expect(session.getSnapshot().phase).toBe("completed");
   });
 
-  it("still fails the turn when a real failure lands while its own close verb is in flight", async () => {
-    // The flag above suppresses exactly one reading — "the `closed` we asked for is a cancel".
-    // A bridge that fails underneath the acknowledgement is a genuine ending and must still be
-    // raised as one, with its own reason rather than a cancellation.
+  it("delivers the verified answer when the bridge fails while its own close verb is in flight", async () => {
+    // Once the wallet's answer is verified, the close is transport receipt only: a bridge that
+    // fails underneath the acknowledgement ends the SESSION, never the answer it already carried
+    // (`deliveringWalletAnswer`). The DApp gets the sign-in instead of `mobile_bridge_expired`.
     const double = createClientDouble({
       waitForValidatedResult: async () => ({
         status: "ok",
@@ -928,8 +934,8 @@ describe("MobileBridgeSession explicit close verbs", () => {
     });
     const session = new MobileBridgeSession(sessionInputFor(double.client));
     const settled = session.awaitResult().then(
-      () => undefined,
-      (error: Error) => error,
+      (value) => ({ value }),
+      (error: Error) => ({ error }),
     );
     double.client.events.on("factsChanged", ({ facts, source }) => {
       // The realm-sourced failure arrives while the acknowledgement is still awaiting.
@@ -938,7 +944,158 @@ describe("MobileBridgeSession explicit close verbs", () => {
     });
     await session.startPreparation();
 
-    expect((await settled)?.message).toBe("mobile_bridge_expired");
+    expect(await settled).toEqual({ value: { success: true } });
+    expect(session.getSnapshot().phase).toBe("completed");
+  });
+});
+
+/**
+ * The same-device iOS report: the DApp's tab is suspended while the user approves in Meteor Mobile,
+ * and the acknowledgement it sends as it resumes is aborted mid-flight when the dead socket finally
+ * detaches (`err_nice_transport` `send_failed` — `Failed to send action "—" [Unknown status]: link
+ * channel disconnected`). The wallet's answer is verified by then, so the verb is re-sent across the
+ * loss, and an answer whose acknowledgement never lands is still the turn's outcome.
+ */
+describe("MobileBridgeSession closing verb across a transport loss", () => {
+  const RECEIPT: ISessionResultReceipt = {
+    bridgeId: "b1",
+    sequence: 1,
+    turnId: "turn-id-0123456789ab",
+    requestHash: "request-hash",
+    resultHash: "result-hash",
+  };
+  const FAST_RETRY = { maxRetries: 2, budgetMs: 2_000, initialBackoffMs: 1 };
+  /** Exactly what `abortInFlight` raises for a request the detaching link was still carrying. */
+  const linkDropped = () =>
+    err_nice_transport.fromId("send_failed", {
+      actionId: "—",
+      actionState: "request",
+      message: "link channel disconnected",
+    });
+
+  const runWith = async (input: {
+    outcome?: TValidatedSessionResult<unknown>;
+    linkPhase?: TSessionLinkPhase;
+    acknowledgeAndClose: (
+      attempt: number,
+      double: ReturnType<typeof createClientDouble>,
+    ) => Promise<TSessionFacts>;
+  }) => {
+    let attempts = 0;
+    const double = createClientDouble({
+      linkStatus: { phase: input.linkPhase ?? "live" },
+      waitForValidatedResult: async () =>
+        input.outcome ?? { status: "ok", output: { success: true }, receipt: RECEIPT },
+      acknowledgeAndClose: () => input.acknowledgeAndClose((attempts += 1), double),
+    });
+    const session = new MobileBridgeSession({
+      ...sessionInputFor(double.client),
+      closingVerbRetry: FAST_RETRY,
+    });
+    const warn = spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const settled = session.awaitResult().then(
+        (value) => ({ value }),
+        (error: Error) => ({ error }),
+      );
+      await session.startPreparation();
+      return { settled: await settled, session, attempts, warnings: warn.mock.calls.length };
+    } finally {
+      warn.mockRestore();
+    }
+  };
+
+  it("re-sends an acknowledgement the link dropped, then delivers the answer", async () => {
+    const run = await runWith({
+      acknowledgeAndClose: async (attempt) => {
+        if (attempt === 1) throw linkDropped();
+        return sessionFactsFor(ESessionPhase.closed);
+      },
+    });
+    expect(run.attempts).toBe(2);
+    expect(run.settled).toEqual({ value: { success: true } });
+    expect(run.session.getSnapshot().phase).toBe("completed");
+    expect(run.warnings).toBe(0);
+  });
+
+  it("delivers the verified answer when the acknowledgement never lands", async () => {
+    const run = await runWith({
+      acknowledgeAndClose: async () => {
+        throw linkDropped();
+      },
+    });
+    expect(run.attempts).toBe(1 + FAST_RETRY.maxRetries);
+    expect(run.settled).toEqual({ value: { success: true } });
+    expect(run.session.getSnapshot().phase).toBe("completed");
+    expect(run.warnings).toBe(1);
+  });
+
+  it("does not re-send a typed refusal, and still delivers the answer", async () => {
+    const run = await runWith({
+      acknowledgeAndClose: async () => {
+        throw merr_bridge_session.fromId(EErr_Bridge_Session.ack_mismatch);
+      },
+    });
+    expect(run.attempts).toBe(1);
+    expect(run.settled).toEqual({ value: { success: true } });
+  });
+
+  it("stops re-sending once the session has closed behind the lost reply", async () => {
+    // The backend applied the close; only its reply died with the socket. The realm reports the
+    // closed session on the redialed link — sending again could only trip a local guard.
+    const run = await runWith({
+      acknowledgeAndClose: async (_attempt, double) => {
+        double.emit("factsChanged", {
+          facts: sessionFactsFor(ESessionPhase.closed),
+          source: "realm",
+        });
+        throw linkDropped();
+      },
+    });
+    expect(run.attempts).toBe(1);
+    expect(run.settled).toEqual({ value: { success: true } });
+    expect(run.session.getSnapshot().phase).toBe("completed");
+  });
+
+  it("waits for the redialed link before re-sending", async () => {
+    let linkLiveAtResend: boolean | undefined;
+    let linkLive = false;
+    const run = await runWith({
+      linkPhase: "reconnecting",
+      acknowledgeAndClose: async (attempt, double) => {
+        if (attempt === 1) {
+          setTimeout(() => {
+            linkLive = true;
+            double.emit("linkStatusChanged", {
+              status: { ...double.client.linkStatus, phase: "live" },
+            });
+          }, 20);
+          throw linkDropped();
+        }
+        linkLiveAtResend = linkLive;
+        return sessionFactsFor(ESessionPhase.closed);
+      },
+    });
+    expect(run.attempts).toBe(2);
+    expect(linkLiveAtResend).toBe(true);
+    expect(run.settled).toEqual({ value: { success: true } });
+  });
+
+  it("keeps a signed decline as the outcome when its acknowledgement is lost", async () => {
+    const run = await runWith({
+      outcome: {
+        status: "declined",
+        errorIds: ["user_rejected"],
+        errorMessage: "The user rejected the request",
+        receipt: RECEIPT,
+      },
+      acknowledgeAndClose: async () => {
+        throw linkDropped();
+      },
+    });
+    expect("error" in run.settled && run.settled.error.message).toStartWith(
+      MOBILE_BRIDGE_ENDING.walletDeclined,
+    );
   });
 });
 

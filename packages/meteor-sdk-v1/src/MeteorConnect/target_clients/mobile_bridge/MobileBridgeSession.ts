@@ -80,6 +80,26 @@ export const MOBILE_BRIDGE_ENDING = {
   externalWorkHoldUnavailable: "mobile_bridge_external_work_hold_unavailable",
 } as const;
 
+/**
+ * How long a turn keeps re-sending a closing verb the transport lost (`sendClosingVerb`). The
+ * wallet's verified answer waits on it, so the window is short: long enough for a resumed mobile
+ * tab to redial its bridge link, never long enough to leave the user watching a spinner.
+ */
+export interface IClosingVerbRetryPolicy {
+  /** Re-sends after the first attempt. */
+  maxRetries: number;
+  /** The whole window, first attempt included; no re-send starts after it. */
+  budgetMs: number;
+  /** Pause before the first re-send, doubled for each one after it. */
+  initialBackoffMs: number;
+}
+
+export const CLOSING_VERB_RETRY: IClosingVerbRetryPolicy = {
+  maxRetries: 4,
+  budgetMs: 10_000,
+  initialBackoffMs: 250,
+};
+
 export type TMobileBridgePhase =
   | "initializing"
   | "busy_other_tab"
@@ -209,6 +229,8 @@ interface IMobileBridgeSessionInput {
     remember(walletVerifyPublicKey: string): void;
     forget(walletVerifyPublicKey: string): void;
   };
+  /** Test seam: the re-send window for a lost closing verb. Defaults to {@link CLOSING_VERB_RETRY}. */
+  closingVerbRetry?: IClosingVerbRetryPolicy;
 }
 
 /** Authenticated phases that exist only once a wallet has claimed the bridge. */
@@ -225,6 +247,22 @@ const SETTLED_PHASES: readonly TMobileBridgePhase[] = ["completed", "failed", "c
 
 const isPromiseLike = (value: unknown): value is PromiseLike<void> =>
   value != null && typeof (value as PromiseLike<void>).then === "function";
+
+/** Resolve after `ms`, or as soon as `signal` aborts. */
+const pauseUnlessAborted = (ms: number, signal: AbortSignal): Promise<void> =>
+  new Promise((resolve) => {
+    if (ms <= 0 || signal.aborted) {
+      resolve();
+      return;
+    }
+    const finish = () => {
+      clearTimeout(timer);
+      signal.removeEventListener("abort", finish);
+      resolve();
+    };
+    const timer = setTimeout(finish, ms);
+    signal.addEventListener("abort", finish);
+  });
 
 /**
  * Local phases where the wallet already holds — or has already answered — the request. Cancelling
@@ -291,10 +329,20 @@ export class MobileBridgeSession {
    * `acknowledgeAndClose` terminalizes the session inside its own still-pending await, and the
    * client dispatches `factsChanged`/`terminal` synchronously from there, so without this flag the
    * `closed` phase this session just asked for reads back as a counterparty close and rejects the
-   * very result being acknowledged. Only that one reading is suppressed: a `failed` phase, or any
-   * terminal outcome other than the `closed` we asked for, still fails the turn.
+   * very result being acknowledged. Only that one reading is suppressed here: a `failed` phase, or
+   * any terminal outcome other than the `closed` we asked for, still fails the turn — unless
+   * {@link deliveringWalletAnswer} says the answer is delivered whatever the session does.
    */
   private closingAfterOwnResult = false;
+  /**
+   * Set once this turn holds the wallet's verified answer and is only closing the session behind it
+   * (`acknowledgeAndClose`). From then on the session's own fate — a failed phase, a terminal
+   * outcome, a refused link, a passed deadline — no longer decides the turn: acknowledgement is
+   * transport receipt, never acceptance, so the answer is delivered whatever becomes of the bridge.
+   * The external-work hold never sets it; that verb opens state the next turn depends on, so a
+   * session failing under it still fails the turn.
+   */
+  private deliveringWalletAnswer = false;
   /**
    * How this page last opened the wallet link (a tap, or an automatic same-device attempt) and
    * whether the page went to the background after it. Together with a claim, that is the evidence
@@ -460,6 +508,7 @@ export class MobileBridgeSession {
     this.resultSettled = false;
     this.resultReceipt = undefined;
     this.closingAfterOwnResult = false;
+    this.deliveringWalletAnswer = false;
     this.resultPromise = this.armResultPromise();
     this.collectionPromise = undefined;
     this.update({ phase: "creating_bridge", error: undefined });
@@ -528,7 +577,7 @@ export class MobileBridgeSession {
           linkRedialAttempt: status.attempt,
           linkRetryInMs: status.retryInMs,
         });
-        if (status.phase === "rejected") {
+        if (status.phase === "rejected" && !this.deliveringWalletAnswer) {
           // The backend refused the handshake for this identity (pinned-key mismatch and friends).
           // Redialing cannot help; only a partner-identity reset re-pairs.
           this.update({ identityResetRequired: true });
@@ -576,7 +625,7 @@ export class MobileBridgeSession {
     if (CLAIMED_SESSION_PHASES.has(facts.phase)) this.noteSameDeviceClaim();
     if (isTerminalPhase(facts)) {
       if (facts.phase === ESessionPhase.failed) {
-        this.fail(new Error(MOBILE_BRIDGE_ENDING.failed));
+        this.failFromSession(new Error(MOBILE_BRIDGE_ENDING.failed));
         return;
       }
       // `closed` while nothing has settled locally: the counterparty closed the session, which is
@@ -604,17 +653,28 @@ export class MobileBridgeSession {
     this.update({ terminalReason: outcome.reason });
     if (this.resultSettled) return;
     if (outcome.reason === "bridge_gone") {
-      this.fail(new Error(MOBILE_BRIDGE_ENDING.expired));
+      this.failFromSession(new Error(MOBILE_BRIDGE_ENDING.expired));
       return;
     }
     if (outcome.reason === "terminal_status" && outcome.statusId === ESessionPhase.closed) {
       // Same rule as `applySessionFacts`: the terminalization our own close verb produces is not
       // a counterparty cancel. Every other reason still fails the turn, so a genuine failure
-      // arriving in that same window is never swallowed.
+      // arriving in that same window is never swallowed — unless the turn is already delivering
+      // the wallet's verified answer (`failFromSession`).
       if (!this.closingAfterOwnResult) this.markCancelled();
       return;
     }
-    this.fail(new Error(MOBILE_BRIDGE_ENDING.failed));
+    this.failFromSession(new Error(MOBILE_BRIDGE_ENDING.failed));
+  }
+
+  /**
+   * A failure the SESSION reported — its facts, its terminal outcome, its deadline — as opposed to
+   * one this turn's own collection raised. Ignored while {@link deliveringWalletAnswer}: the
+   * wallet's verified answer is delivered whatever becomes of the bridge behind it.
+   */
+  private failFromSession(error: Error): void {
+    if (this.deliveringWalletAnswer) return;
+    this.fail(error);
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -734,12 +794,12 @@ export class MobileBridgeSession {
     if (outcome.status === "mismatch") {
       // Receipt-only acknowledgement: nothing from a mismatched output may be trusted, but the
       // session must not be left parked in `result_ready` either.
-      await client.acknowledgeAndClose(outcome.receipt);
+      await this.acknowledgeAndClose(outcome.receipt);
       throw new Error(MOBILE_BRIDGE_ENDING.resultMismatch);
     }
     if (outcome.status === "declined") {
       // A signed typed-error result. Acknowledgement is transport receipt, never acceptance.
-      await client.acknowledgeAndClose(outcome.receipt);
+      await this.acknowledgeAndClose(outcome.receipt);
       throw new Error(
         `${MOBILE_BRIDGE_ENDING.walletDeclined}: ${outcome.errorIds.join(",")} — ${outcome.errorMessage}`,
       );
@@ -766,9 +826,10 @@ export class MobileBridgeSession {
         await client.acknowledgeAndClose(outcome.receipt).catch(() => {});
         throw error;
       }
-      const facts = await client.acknowledgeAndBeginExternalWork(
-        outcome.receipt,
-        journaledResultHash,
+      // Re-sent across a transport loss like the close, but NOT delivered regardless: the hold is
+      // state the verification turn needs, so a hold that never opens still fails this turn.
+      const facts = await this.sendClosingVerb(() =>
+        client.acknowledgeAndBeginExternalWork(outcome.receipt, journaledResultHash),
       );
       const walletConnection = this.input.buildConnection(this.resolveClaimedWallet());
       this.completedConnection = walletConnection;
@@ -784,7 +845,7 @@ export class MobileBridgeSession {
     // The verb goes FIRST, before any business-level mapping: the result is already verified and
     // bound to this turn, so acknowledging it is correct regardless of what the SDK then makes of
     // it — and a mapping that throws must never leave the session parked in `result_ready`.
-    await client.acknowledgeAndClose(outcome.receipt);
+    await this.acknowledgeAndClose(outcome.receipt);
     if (sharedActionId !== "transfer_accounts") {
       // Pin the exact wallet identity that authored this result; the matching `..._verify_active`
       // turn is bound to it.
@@ -805,23 +866,121 @@ export class MobileBridgeSession {
     // Same rule as the meteor_wallet_core collector: raised before the first closing verb.
     this.closingAfterOwnResult = true;
     if (outcome.status === "mismatch") {
-      await client.acknowledgeAndClose(outcome.receipt);
+      await this.acknowledgeAndClose(outcome.receipt);
       throw new Error(MOBILE_BRIDGE_ENDING.resultMismatch);
     }
     if (outcome.status === "declined") {
-      await client.acknowledgeAndClose(outcome.receipt);
+      await this.acknowledgeAndClose(outcome.receipt);
       throw new Error(
         `${MOBILE_BRIDGE_ENDING.walletDeclined}: ${outcome.errorIds.join(",")} — ${outcome.errorMessage}`,
       );
     }
     // Same rule as above: acknowledge and close before the SDK-shaped hydration, which does local
     // key persistence and account-identity checks that must not be able to park the session.
-    await client.acknowledgeAndClose(outcome.receipt);
+    await this.acknowledgeAndClose(outcome.receipt);
     const connection = this.input.buildConnection(this.resolveClaimedWallet());
     this.completedConnection = connection;
     return nearOutputToSdk(this.prepared, outcome.output, {
       getConnection: () => connection,
       persistFunctionCallKey: this.input.persistFunctionCallKey,
+    });
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // Closing verbs
+  // ---------------------------------------------------------------------------------------------
+
+  /**
+   * End this turn with `acknowledgeAndClose`. Never throws: the wallet's answer is already verified
+   * and bound to this turn, and acknowledgement is transport receipt, never acceptance — so a verb
+   * that cannot be delivered (the backgrounded mobile tab whose bridge socket died as it resumed)
+   * must not discard that answer. The unacknowledged session expires on the backend by itself.
+   */
+  private async acknowledgeAndClose(receipt: ISessionResultReceipt): Promise<void> {
+    this.deliveringWalletAnswer = true;
+    try {
+      await this.sendClosingVerb(() => this.input.client.acknowledgeAndClose(receipt));
+    } catch (error) {
+      // A disposed session delivers nothing; its owner already ended the flow.
+      if (this.abortController.signal.aborted) return;
+      console.warn(
+        "[MeteorConnect] The wallet's answer was delivered, but its closing acknowledgement could not be confirmed; an unacknowledged bridge session expires on its own.",
+        error,
+      );
+    }
+  }
+
+  /**
+   * Send one closing verb, re-sending it while the failure was the transport's. Every closing verb
+   * is an exact replay — the client caches its signed request per receipt and the backend converges
+   * on a repeat — so a send the bridge link dropped mid-flight is simply sent again once the link is
+   * back, inside the {@link IClosingVerbRetryPolicy} window. A session that ended in the meantime
+   * (the first send may have landed and only its answer been lost) is not sent to again. Rejects
+   * with the last failure.
+   */
+  private async sendClosingVerb<T>(send: () => Promise<T>): Promise<T> {
+    const policy = this.input.closingVerbRetry ?? CLOSING_VERB_RETRY;
+    const deadline = Date.now() + policy.budgetMs;
+    const sessionEnded = () => {
+      const facts = this.input.client.sessionFacts;
+      return this.abortController.signal.aborted || facts == null || isTerminalPhase(facts);
+    };
+    for (let retry = 0; ; retry += 1) {
+      try {
+        return await send();
+      } catch (error) {
+        if (
+          retry >= policy.maxRetries ||
+          Date.now() >= deadline ||
+          !this.isTransportLoss(error) ||
+          sessionEnded()
+        ) {
+          throw error;
+        }
+        await this.awaitBridgeLinkForResend(policy.initialBackoffMs * 2 ** retry, deadline);
+        if (sessionEnded()) throw error;
+      }
+    }
+  }
+
+  /**
+   * Whether a failed closing verb is worth sending again. An exact replay converges on the backend,
+   * so the only question is whether the transport lost it: an `exact`-retry classification, or none
+   * at all — a request the link dropped mid-flight (`err_nice_transport` `send_failed`, "link
+   * channel disconnected") is still unclassified by this client version. Typed refusals, terminal
+   * outcomes and local guards are final.
+   */
+  private isTransportLoss(error: unknown): boolean {
+    const described = describeSessionError(error, { backendUrl: this.input.client.backendUrl });
+    return described.retry === "exact" || described.kind === "unknown";
+  }
+
+  /**
+   * Pause before re-sending a lost closing verb, then give the bridge link — usually mid-redial
+   * after the drop that lost the verb — until `deadline` to come back `live`. An `offline` link (the
+   * bounded redial ladder gave up while the tab sat in the background) is revived first. A link that
+   * stays down is never waited out past the deadline; the re-send finds out for itself.
+   */
+  private async awaitBridgeLinkForResend(backoffMs: number, deadline: number): Promise<void> {
+    const client = this.input.client;
+    const signal = this.abortController.signal;
+    await pauseUnlessAborted(Math.min(backoffMs, deadline - Date.now()), signal);
+    const phase = client.linkStatus.phase;
+    if (phase === "live" || phase === "rejected" || signal.aborted) return;
+    if (phase === "offline") void client.connectBridgeLink().catch(() => {});
+    await new Promise<void>((resolve) => {
+      const finish = () => {
+        clearTimeout(timer);
+        unsubscribe();
+        signal.removeEventListener("abort", finish);
+        resolve();
+      };
+      const timer = setTimeout(finish, Math.max(0, deadline - Date.now()));
+      // Only resolves: an event handler must never call a client mutation itself.
+      const unsubscribe = client.events.on("linkStatusChanged", ({ status }) => {
+        if (status.phase === "live") finish();
+      });
+      signal.addEventListener("abort", finish);
     });
   }
 
@@ -866,7 +1025,7 @@ export class MobileBridgeSession {
     this.expiryTimer = setTimeout(
       () => {
         if (!SETTLED_PHASES.includes(this.snapshot.phase)) {
-          this.fail(new Error(MOBILE_BRIDGE_ENDING.expired));
+          this.failFromSession(new Error(MOBILE_BRIDGE_ENDING.expired));
         }
       },
       Math.min(delay, 2_147_483_647),
