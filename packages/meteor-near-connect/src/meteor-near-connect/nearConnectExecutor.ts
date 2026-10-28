@@ -37,7 +37,6 @@ import { SCHEMA } from "@near-js/transactions";
 import type { FinalExecutionOutcome } from "@near-js/types";
 import { base64 } from "@scure/base";
 import { serialize } from "borsh";
-import type { TSimpleNearDelegateAction } from "../../../meteor-sdk-v1/src/MeteorConnect/action/mc_action.near";
 import type { PartialBy } from "../../../meteor-sdk-v1/src/ported_common/utils/special_typescript_types";
 import { SelectorStorageKeyStore } from "../utils/keystore";
 import { createSelectorNativeAppOpener } from "./selectorNativeAppOpener";
@@ -441,7 +440,15 @@ class NearWallet implements Omit<NearWalletBase, "manifest"> {
         id: "near::sign_delegate_actions",
         input: {
           target: meteorData.identifier,
-          delegateActions: payload.delegateActions as TSimpleNearDelegateAction[],
+          // NEAR Connect hands delegate actions over in its connector format, exactly like
+          // transactions, so they are converted the same way. Passed through unconverted, the
+          // Meteor Mobile bridge cannot read them and fails to prepare the request.
+          delegateActions: payload.delegateActions.map((delegateAction) => ({
+            receiverId: delegateAction.receiverId,
+            actions: delegateAction.actions.map((action) =>
+              convertSelectorActionToNearAction(action as TMeteorAction),
+            ),
+          })),
         },
       });
 

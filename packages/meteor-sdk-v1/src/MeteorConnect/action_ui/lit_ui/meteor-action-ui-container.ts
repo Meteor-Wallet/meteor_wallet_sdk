@@ -217,7 +217,9 @@ export class MeteorActionUiContainer extends LitElement {
         this.mobileSession = session;
         if (session == null) this.mobilePreparing = false;
       }
-    }).catch(() => {
+    }).catch((error) => {
+      // Console only, for the integrator: the copy below is all the user is shown.
+      console.warn("[MeteorConnect] The Meteor Mobile request could not be prepared.", error);
       if (!this.isConnected) return;
       this.mobilePreparing = false;
       this.mobileSelected = isMobile();
@@ -277,6 +279,9 @@ export class MeteorActionUiContainer extends LitElement {
     // Meteor Mobile to be selected.
     const mobileRetryableFailure =
       !mobileQuietlyUnavailable && mobileBridgeRetryableFailure(this.mobileSnapshot) != null;
+    // The mobile request could not be prepared at all: there is no session for the panel to show,
+    // and without one it would sit on "Creating secure request" under the error indefinitely.
+    const mobilePrepareFailed = this.mobileSession == null && !this.mobilePreparing;
     const showDevMobileWalletSwitch =
       this.devMobileWalletEnvironment != null && mobileWalletAvailable && !isPlatformLocked && !this.mobileSelected;
     const showMobileDivider = !mobileDevice && !isPlatformLocked && otherWalletAvailable && !mobileQuietlyUnavailable;
@@ -332,7 +337,7 @@ export class MeteorActionUiContainer extends LitElement {
             }
             ${this.mobileOpenError ? html`<p role="alert">${this.mobileOpenError}</p>` : ""}
             ${
-              mobileWalletAvailable && !mobileQuietlyUnavailable && (!mobileDevice || this.mobileSelected || isPlatformLocked || mobileRetryableFailure)
+              mobileWalletAvailable && !mobileQuietlyUnavailable && !mobilePrepareFailed && (!mobileDevice || this.mobileSelected || isPlatformLocked || mobileRetryableFailure)
                 ? html`
               ${showMobileDivider ? html`<div class="mobile-divider"><span></span><div>or connect with <strong>mobile</strong></div><span></span>${showDevMobileWalletSwitch ? this.renderDevMobileWalletSwitch(true) : ""}</div>` : ""}
               <meteor-mobile-bridge-panel
@@ -351,7 +356,7 @@ export class MeteorActionUiContainer extends LitElement {
             `
                 : ""
             }
-            ${showDevMobileWalletSwitch && !showMobileDivider ? this.renderDevMobileWalletSwitch(false) : ""}
+            ${showDevMobileWalletSwitch && (!showMobileDivider || mobilePrepareFailed) ? this.renderDevMobileWalletSwitch(false) : ""}
             ${
               !isPlatformLocked
                 ? html`<div class="no-wallet-bottom-section">

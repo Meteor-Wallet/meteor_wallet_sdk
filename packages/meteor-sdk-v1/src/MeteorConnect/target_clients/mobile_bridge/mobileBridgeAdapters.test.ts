@@ -2,6 +2,8 @@ import { describe, expect, it } from "bun:test";
 import { act_impl_near, EMeteorAppId } from "@meteorwallet/connect-shared";
 import { KeyPair } from "@near-js/crypto";
 import { actionCreators } from "@near-js/transactions";
+import { convertSelectorActionToNearAction } from "../../../near_utils/convertSelectorActionToNearAction";
+import type { TMeteorAction } from "../../../near_utils/meteor_actions.types";
 import type { IMeteorConnection_V2_BridgeMobile } from "../../MeteorConnect.types";
 import type {
   IMobileBridgePreparedAction,
@@ -135,6 +137,47 @@ describe("Meteor mobile bridge NEAR adapters", () => {
     });
     expect(singular.kind.sharedActionId).toBe("sign_and_send_transaction");
     expect(plural.kind.sharedActionId).toBe("sign_and_send_transactions");
+  });
+
+  it("carries NEAR Connect delegate actions once converted the way its transactions are", async () => {
+    // A sponsored DAO proposal, as a NEAR Connect DApp hands it over: the connector format. The
+    // executor converts it with `convertSelectorActionToNearAction`, as it does for transactions;
+    // left unconverted, the request failed to prepare for every Meteor Mobile account.
+    const receiverId = "treasury.sputnik-dao.testnet";
+    const proposalArgs = {
+      proposal: {
+        description: "Payment",
+        kind: { Transfer: { token_id: "", receiver_id: "bob.testnet", amount: "1" } },
+      },
+    };
+    const connectorActions: TMeteorAction[] = [
+      {
+        type: "FunctionCall",
+        params: { methodName: "add_proposal", args: proposalArgs, gas: "270000000000000", deposit: "0" },
+      },
+      { type: "Transfer", params: { deposit: "1" } },
+    ];
+    const actions = connectorActions.map(convertSelectorActionToNearAction);
+
+    const delegate = await sdkActionToMobileBridge({
+      id: "near::sign_delegate_actions",
+      expandedInput: {
+        account,
+        target: account.identifier,
+        delegateActions: [{ receiverId, actions }],
+      },
+    });
+    const transaction = await sdkActionToMobileBridge({
+      id: "near::sign_transactions",
+      expandedInput: { account, target: account.identifier, transactions: [{ receiverId, actions }] },
+    });
+
+    // The wallet is asked to sign exactly the actions it would sign as a transaction.
+    const wireActions = actions.map(nearActionToConnectorAction);
+    expect(wireActions[0]?.params.args).toEqual(proposalArgs);
+    expect(delegate.kind.sharedActionId).toBe("sign_delegate_actions");
+    expect(delegate.actionInput).toMatchObject({ delegateActions: [{ receiverId, actions: wireActions }] });
+    expect(transaction.actionInput).toMatchObject({ receiverId, actions: wireActions });
   });
 
   it("hydrates a signed sign-in result and accepts an account with no public key", async () => {
