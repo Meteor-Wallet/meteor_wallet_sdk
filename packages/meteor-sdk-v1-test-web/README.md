@@ -44,6 +44,7 @@ they are recorded here:
 | Root directory | `packages/meteor-sdk-v1-test-web` | `packages/meteor-sdk-v1-test-web` |
 | Build command | `bun install --cwd ../.. --frozen-lockfile && bun run build:dev` | `bun install --cwd ../.. --frozen-lockfile && bun run build:production` |
 | Deploy command | `bun run deploy:dev` | `bun run deploy:production` |
+| Preview command (required by the form; never runs with previews off) | `echo "Preview builds are off for this Worker" && exit 1` | same |
 | Build variables | `BUN_VERSION=1.3.14`, `NODE_VERSION=22.22.0`, `SKIP_DEPENDENCY_INSTALL=1` | same |
 
 The install runs from the repo root so it reads `bunfig.toml` (`linker = "hoisted"`, which this build
