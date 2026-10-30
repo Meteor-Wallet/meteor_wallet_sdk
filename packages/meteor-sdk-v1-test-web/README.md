@@ -22,13 +22,34 @@ Each build targets one Meteor stack, chosen by `VITE_DEPLOYMENT_KIND` (config in
 | Mobile wallet | `meteor_wallet_mobile_dev` (`meteorwalletdev://`) | `meteor_wallet_mobile` (`meteorwallet://`) |
 | Build | `bun run build:dev` | `bun run build:production` |
 | Deploy branch | `release/sdk-demo-app-dev` | `release/sdk-demo-app` |
-| Cloudflare Pages project | `meteorwallet-sdk-demo-dev` | `meteorwallet-sdk-demo` |
+| Cloudflare Worker | `meteorwallet-sdk-demo-dev` | `meteorwallet-sdk-demo` |
 | URL | <https://sdk-demo-dev.meteorwallet.app> | <https://sdk-demo.meteorwallet.app> |
 
 `bun run dev` is the `dev` kind; run `VITE_DEPLOYMENT_KIND=production bun run dev` to try production
 locally. `?backend=local|development|production|<url>` still overrides the bridge backend per page
 load, and nothing else. The V1 extension is whichever one is installed in the browser, and the SDK
 always sends new-key transfers to the extension under the production web wallet identity.
+
+### Deployment
+
+Cloudflare Workers Builds deploys the demo itself: each kind is an assets-only Worker
+([`wrangler.jsonc`](wrangler.jsonc)) connected to this repo through the Cloudflare GitHub app, so a
+push to its deploy branch is a production deployment. There is no GitHub Actions workflow and no
+Cloudflare token in GitHub. The settings live in the dashboard (**Worker → Settings → Build**), so
+they are recorded here:
+
+| Setting | `dev` | `production` |
+| --- | --- | --- |
+| Branch control | `release/sdk-demo-app-dev`, **Enable Preview Builds** off | `release/sdk-demo-app`, **Enable Preview Builds** off |
+| Root directory | `packages/meteor-sdk-v1-test-web` | `packages/meteor-sdk-v1-test-web` |
+| Build command | `bun install --cwd ../.. --frozen-lockfile && bun run build:dev` | `bun install --cwd ../.. --frozen-lockfile && bun run build:production` |
+| Deploy command | `bun run deploy:dev` | `bun run deploy:production` |
+| Build variables | `BUN_VERSION=1.3.14`, `NODE_VERSION=22.22.0`, `SKIP_DEPENDENCY_INSTALL=1` | same |
+
+The install runs from the repo root so it reads `bunfig.toml` (`linker = "hoisted"`, which this build
+needs) and `patches/`; keep `BUN_VERSION` and `NODE_VERSION` in step with `.prototools`. The `dev`
+Worker deploys `wrangler.jsonc`'s `env.dev`, which Workers Builds accepts for the `-dev` name. The
+custom domains are attached to each Worker in the dashboard (**Settings → Domains & Routes**).
 
 ### Testing a NEAR Connect executor before releasing it
 

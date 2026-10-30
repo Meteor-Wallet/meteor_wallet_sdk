@@ -27,8 +27,10 @@ this repo leave the machine for good:
 - **A push to `release/meteor-near-connect`** — publishes the NEAR Connect executor that live DApps
   load (`.github/workflows/release-meteor-near-connect.yml` and
   `release-meteor-nera-connect-github.yml`).
-- **A push to `release/sdk-demo-app` or `release/sdk-demo-app-dev`** — a Cloudflare Pages production
-  deployment of the demo (`.github/workflows/release-sdk-demo-app.yml`).
+- **A push to `release/sdk-demo-app` or `release/sdk-demo-app-dev`** — a production deployment of the
+  demo by Cloudflare Workers Builds, which watches those branches itself (no workflow here; settings
+  in `packages/meteor-sdk-v1-test-web/README.md` "Deployment"). Its `bun run deploy:production` /
+  `deploy:dev` scripts are the deploy step: never run them either.
 
 This holds **even when releasing is the agreed goal of the task**, and even when the user approved a
 plan that says "release x.y.z". Approving a plan, or picking an option that mentions a release, is
