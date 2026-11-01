@@ -110,6 +110,40 @@ const readBlockHash = (result: unknown): string => {
 };
 
 /**
+ * Every key of the account at FINAL finality, read 100 at a time and pinned to the first page's
+ * block. Nodes refuse an unpaginated `view_access_key_list` for an account with more than 100
+ * keys, and the journal decides from the whole list, so a single call made such an account
+ * impossible to transfer. Throws rather than return part of the list.
+ */
+const readCompleteAccessKeyList = async (
+  networkId: TNearNetworkId,
+  accountId: string,
+): Promise<{ keys: unknown[] }> => {
+  const keys: unknown[] = [];
+  let blockHeight: unknown;
+  let afterKey: string | undefined;
+  for (let page = 0; page < 1_000; page++) {
+    const result = await rpcCall(networkId, "query", {
+      request_type: "view_access_key_list",
+      account_id: accountId,
+      ...(blockHeight == null ? { finality: "final" } : { block_id: blockHeight }),
+      limit: 100,
+      ...(afterKey != null ? { after_key: afterKey } : {}),
+    });
+    if (typeof result !== "object" || result == null || !("keys" in result)) break;
+    if (!Array.isArray(result.keys)) break;
+    blockHeight ??= "block_height" in result ? result.block_height : undefined;
+    keys.push(...result.keys);
+    const lastKey =
+      "last_key" in result && typeof result.last_key === "string" ? result.last_key : undefined;
+    if (lastKey == null) return { keys };
+    if (result.keys.length === 0 || lastKey === afterKey || blockHeight == null) break;
+    afterKey = lastKey;
+  }
+  throw new Error(`NEAR RPC could not list every access key of ${accountId}`);
+};
+
+/**
  * Resolve the source account's full-access signer from the staged secrets.
  *
  * Fails closed on a mismatch: the key derived from a stored secret must equal the
@@ -142,12 +176,7 @@ const networkOf = (job: IAddKeyJournalJob): TNearNetworkId =>
 export const createHarnessAddKeyChain = (
   getStaged: () => Promise<readonly TAccountTransferDataDecrypted[]>,
 ): IAddKeyJournalChain => ({
-  getAccessKeys: (job) =>
-    rpcCall(networkOf(job), "query", {
-      request_type: "view_access_key_list",
-      finality: "final",
-      account_id: job.accountId,
-    }),
+  getAccessKeys: (job) => readCompleteAccessKeyList(networkOf(job), job.accountId),
 
   signAddKeyTransaction: async (job): Promise<IAddKeySignedTransaction> => {
     const network = networkOf(job);

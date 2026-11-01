@@ -45,6 +45,13 @@ export const NEW_KEY_TRANSFER_ERROR_CODES = [
   "new_key_transfer_revoke_account_mismatch",
   /** Only fully secured (or fully resolved) transfers may be archived (SD10). */
   "new_key_transfer_session_not_terminal",
+  /**
+   * The host's storage refused a journal write as full (`QuotaExceededError`), even after this
+   * SDK freed what it could drop safely. Nothing was recorded by that write. The storage belongs
+   * to the host's whole origin, so the space is usually held by the host's own data; free some
+   * and retry. The original error is the `cause`.
+   */
+  "new_key_transfer_storage_full",
 ] as const;
 
 export type TNewKeyTransferErrorCode = (typeof NEW_KEY_TRANSFER_ERROR_CODES)[number];

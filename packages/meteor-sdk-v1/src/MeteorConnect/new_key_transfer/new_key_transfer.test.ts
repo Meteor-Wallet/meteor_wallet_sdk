@@ -434,6 +434,14 @@ function createHarness(input: { sessions?: Map<string, unknown>; outputs?: unkno
   let currentSession: MobileBridgeSession | undefined;
   const releasedSessions: MobileBridgeSession[] = [];
   let promptCount = 0;
+  /** Total serialized size the typed storage accepts, like a browser's per-origin quota. */
+  let jsonQuotaChars = Number.POSITIVE_INFINITY;
+  const serializedSizeWithout = (key: string) =>
+    [...values].reduce(
+      (total, [storedKey, value]) =>
+        storedKey === key ? total : total + JSON.stringify(value).length,
+      0,
+    );
 
   const meteorConnect = {
     localStorageAdapter: new CEnvironmentStorageAdapter(storage.implementation),
@@ -449,7 +457,16 @@ function createHarness(input: { sessions?: Map<string, unknown>; outputs?: unkno
     storage: {
       getJson: async (key: string) => values.get(key),
       setJson: async (key: string, value: unknown) => {
+        if (serializedSizeWithout(key) + JSON.stringify(value).length > jsonQuotaChars) {
+          throw new DOMException(
+            `Setting the value of 'met_data_${key}' exceeded the quota.`,
+            "QuotaExceededError",
+          );
+        }
         values.set(key, structuredClone(value));
+      },
+      removeItem: async (key: string) => {
+        values.delete(key);
       },
     },
     createAction: async (request: { id: string; input: Record<string, unknown> }) => {
@@ -546,6 +563,11 @@ function createHarness(input: { sessions?: Map<string, unknown>; outputs?: unkno
       heldSession = undefined;
     },
     setStoredSessions: (sessions: unknown) => values.set("newKeyTransferSessions", sessions),
+    values,
+    /** Fill the typed storage to `used + headroom` serialized characters, like a full origin. */
+    setJsonQuotaHeadroom: (headroom: number) => {
+      jsonQuotaChars = serializedSizeWithout("") + headroom;
+    },
   };
 }
 
@@ -1527,6 +1549,65 @@ describe("stabilization: SD10 retention", () => {
     await expect(second.api.archiveCompletedSession(CLIENT_ID)).rejects.toThrow(
       "new_key_transfer_session_not_terminal",
     );
+  });
+});
+
+describe("full host storage", () => {
+  /** A completed-session stand-in big enough that freeing it makes real room. */
+  const archivedFiller = Array.from({ length: 20 }, (_, index) => ({
+    clientTransferId: `ARCHIVED${index}`,
+    padding: "x".repeat(2_000),
+  }));
+
+  it("refuses a start with a typed code, before prompting, when nothing can be freed", async () => {
+    const harness = createHarness({ outputs: [START_OUTPUT] });
+    harness.setJsonQuotaHeadroom(0);
+
+    const refused = harness.api.start({
+      clientTransferId: CLIENT_ID,
+      targetPlatform: "web",
+      accounts: START_INPUT.accounts,
+    });
+
+    await expect(refused).rejects.toThrow("new_key_transfer_storage_full");
+    await refused.catch((error) => {
+      expect(error).toBeInstanceOf(NewKeyTransferError);
+      expect((error as NewKeyTransferError).cause).toBeInstanceOf(DOMException);
+      expect(((error as NewKeyTransferError).cause as DOMException).name).toBe(
+        "QuotaExceededError",
+      );
+    });
+    expect(harness.getPromptCount()).toBe(0);
+    expect(await harness.api.getSessions()).toEqual([]);
+  });
+
+  it("drops the write-only archive to make room, and the start proceeds", async () => {
+    const harness = createHarness({ outputs: [START_OUTPUT] });
+    harness.values.set("newKeyTransferArchivedSessions", archivedFiller);
+    harness.setJsonQuotaHeadroom(0);
+
+    const started = await harness.api.start({
+      clientTransferId: CLIENT_ID,
+      targetPlatform: "web",
+      accounts: START_INPUT.accounts,
+    });
+
+    expect(started.output).toEqual(START_OUTPUT);
+    expect(harness.values.has("newKeyTransferArchivedSessions")).toBe(false);
+    expect(await harness.api.getSessions()).toHaveLength(1);
+  });
+
+  it("still retires a completed session when even its archive copy cannot be written", async () => {
+    const harness = createHarness({ outputs: [START_OUTPUT, VERIFY_OUTPUT] });
+    await fullFlowToVerified(harness);
+    harness.values.set("newKeyTransferArchivedSessions", archivedFiller);
+    harness.setJsonQuotaHeadroom(0);
+
+    await harness.api.archiveCompletedSession(CLIENT_ID);
+
+    expect(await harness.api.getSessions()).toEqual([]);
+    expect(harness.values.has("newKeyTransferArchivedSessions")).toBe(false);
+    expect((await harness.api.getRecoveryState()).startResult).toBeNull();
   });
 });
 
