@@ -231,6 +231,11 @@ Nothing below has been run. Each step is yours:
    need it.
 4. **meteor-connect-bridge:** the comment-only change rides along with the next connect release.
 
+To rehearse with a real account that has more than 100 keys, use the SDK demo. Its new-key
+transfer panel runs My NEAR Wallet's on-chain checks and keeps a mainnet key in memory only (see
+"Testing a real account's new-key transfer" in
+[`packages/meteor-sdk-v1-test-web/README.md`](packages/meteor-sdk-v1-test-web/README.md)).
+
 ## Still open
 
 - [ ] **Meteor web batch revoke over 100 keys.** "Select all → revoke" in App Key Management and

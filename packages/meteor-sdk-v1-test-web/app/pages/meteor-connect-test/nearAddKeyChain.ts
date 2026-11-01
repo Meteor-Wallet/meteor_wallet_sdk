@@ -20,9 +20,9 @@ import { base58, base64 } from "@scure/base";
  * The source full-access key never reaches the SDK; it is resolved here, from the staged secrets
  * this harness already holds.
  *
- * Harness-grade on purpose: it signs with the staged testnet secret and talks to the public NEAR
- * RPC. A production host would resolve the signing key from its own keystore, but the seam is the
- * same shape.
+ * Harness-grade on purpose: it signs with the staged secret and talks to the public NEAR RPC. A
+ * production host would resolve the signing key from its own keystore, but the seam is the same
+ * shape — My NEAR Wallet's (`meteorConnectAddKeyChain.js`) is the one this mirrors.
  */
 
 const RPC_URLS = {
@@ -109,6 +109,17 @@ const readBlockHash = (result: unknown): string => {
   throw new Error("NEAR RPC block returned no usable header hash");
 };
 
+/** A field of an RPC answer as a bigint (NEAR sends u128s as strings), or say plainly it was not there. */
+const readBigIntField = (result: unknown, field: string, method: string): bigint => {
+  if (typeof result === "object" && result != null && field in result) {
+    const value: unknown = Reflect.get(result, field);
+    if (typeof value === "number" || typeof value === "string" || typeof value === "bigint") {
+      return BigInt(value);
+    }
+  }
+  throw new Error(`NEAR RPC ${method} returned no usable ${field}`);
+};
+
 /**
  * Every key of the account at FINAL finality, read 100 at a time and pinned to the first page's
  * block. Nodes refuse an unpaginated `view_access_key_list` for an account with more than 100
@@ -118,7 +129,7 @@ const readBlockHash = (result: unknown): string => {
 const readCompleteAccessKeyList = async (
   networkId: TNearNetworkId,
   accountId: string,
-): Promise<{ keys: unknown[] }> => {
+): Promise<{ keys: unknown[]; pages: number }> => {
   const keys: unknown[] = [];
   let blockHeight: unknown;
   let afterKey: string | undefined;
@@ -136,11 +147,137 @@ const readCompleteAccessKeyList = async (
     keys.push(...result.keys);
     const lastKey =
       "last_key" in result && typeof result.last_key === "string" ? result.last_key : undefined;
-    if (lastKey == null) return { keys };
+    if (lastKey == null) return { keys, pages: page + 1 };
     if (result.keys.length === 0 || lastKey === afterKey || blockHeight == null) break;
     afterKey = lastKey;
   }
   throw new Error(`NEAR RPC could not list every access key of ${accountId}`);
+};
+
+/** My NEAR Wallet's floor for an AddKey (0.002 NEAR): its storage deposit, with room for gas. */
+export const MIN_ADD_KEY_BALANCE_YOCTO = 2_000_000_000_000_000_000_000n;
+
+/**
+ * What the account can actually spend, as near-api-js `getAccountBalance().available` (which MNW
+ * checks) computes it: the total less whichever is larger of its stake and its storage. Not the
+ * plain `amount`, because locked and storage-bound NEAR cannot pay for the AddKey.
+ */
+const readAvailableBalance = async (
+  networkId: TNearNetworkId,
+  accountId: string,
+): Promise<bigint> => {
+  const [account, protocolConfig] = await Promise.all([
+    rpcCall(networkId, "query", {
+      request_type: "view_account",
+      account_id: accountId,
+      finality: "final",
+    }),
+    rpcCall(networkId, "EXPERIMENTAL_protocol_config", { finality: "final" }),
+  ]);
+  const runtimeConfig: unknown =
+    typeof protocolConfig === "object" && protocolConfig != null
+      ? Reflect.get(protocolConfig, "runtime_config")
+      : undefined;
+  const costPerByte = readBigIntField(
+    runtimeConfig,
+    "storage_amount_per_byte",
+    "EXPERIMENTAL_protocol_config",
+  );
+  const locked = readBigIntField(account, "locked", "view_account");
+  const storageStaked = readBigIntField(account, "storage_usage", "view_account") * costPerByte;
+  const total = readBigIntField(account, "amount", "view_account") + locked;
+  return total - (locked > storageStaked ? locked : storageStaked);
+};
+
+const normalizePublicKey = (publicKey: string): string | undefined => {
+  try {
+    return PublicKey.fromString(publicKey).toString();
+  } catch {
+    return undefined;
+  }
+};
+
+/** An access-key list entry's public key and whether it is full access, or nothing if malformed. */
+const readKeyEntry = (entry: unknown): { publicKey: string; fullAccess: boolean } | undefined => {
+  if (typeof entry !== "object" || entry == null) return undefined;
+  const publicKey: unknown = Reflect.get(entry, "public_key");
+  const accessKey: unknown = Reflect.get(entry, "access_key");
+  if (typeof publicKey !== "string" || typeof accessKey !== "object" || accessKey == null) {
+    return undefined;
+  }
+  const normalized = normalizePublicKey(publicKey);
+  if (normalized == null) return undefined;
+  return {
+    publicKey: normalized,
+    fullAccess: Reflect.get(accessKey, "permission") === "FullAccess",
+  };
+};
+
+export interface ISourceAccountCheck {
+  accountId: string;
+  networkId: TNearNetworkId;
+  /** Every key on the account at final finality, and how many pages reading them took. */
+  keyCount: number;
+  pages: number;
+  sourceKey: "full_access" | "not_full_access" | "absent";
+  availableYocto: bigint;
+  /** My NEAR Wallet's eligibility, decided before start: the source key is on it with full access. */
+  eligible: boolean;
+  /** What it checks before the first AddKey is signed: the available balance covers one. */
+  canAffordAddKey: boolean;
+}
+
+/**
+ * The checks My NEAR Wallet makes on an account in a new-key transfer: eligibility before start
+ * (`accountExportAccounts`: the source key is on the account with full access, decided from the
+ * COMPLETE key list — the read that broke for accounts with more than 100 keys), and the balance
+ * before the AddKeys (`assertSelectionCanAffordAddKeys`).
+ */
+export const checkSourceAccount = async (account: {
+  networkId: string;
+  accountId: string;
+  sourcePublicKey: string;
+}): Promise<ISourceAccountCheck> => {
+  const networkId: TNearNetworkId = account.networkId === "mainnet" ? "mainnet" : "testnet";
+  const [{ keys, pages }, availableYocto] = await Promise.all([
+    readCompleteAccessKeyList(networkId, account.accountId),
+    readAvailableBalance(networkId, account.accountId),
+  ]);
+  const source = normalizePublicKey(account.sourcePublicKey);
+  const entry = keys.map(readKeyEntry).find((key) => key != null && key.publicKey === source);
+  const sourceKey = entry == null ? "absent" : entry.fullAccess ? "full_access" : "not_full_access";
+  return {
+    accountId: account.accountId,
+    networkId,
+    keyCount: keys.length,
+    pages,
+    sourceKey,
+    availableYocto,
+    eligible: sourceKey === "full_access",
+    canAffordAddKey: availableYocto >= MIN_ADD_KEY_BALANCE_YOCTO,
+  };
+};
+
+/**
+ * The accounts that provably cannot pay for their AddKey — MNW checks the whole selection before
+ * the first one is signed, so a transfer is never left half on-chain by an empty account. An
+ * unreadable balance is not provably short; the per-job check in the chain decides that one.
+ */
+export const findAccountsShortOfAddKeyBalance = async (
+  accounts: ReadonlyArray<{ networkId: string; accountId: string }>,
+): Promise<string[]> => {
+  const short: string[] = [];
+  for (const account of accounts) {
+    try {
+      const network: TNearNetworkId = account.networkId === "mainnet" ? "mainnet" : "testnet";
+      if ((await readAvailableBalance(network, account.accountId)) < MIN_ADD_KEY_BALANCE_YOCTO) {
+        short.push(account.accountId);
+      }
+    } catch {
+      // Unknown, not short.
+    }
+  }
+  return short;
 };
 
 /**
@@ -173,14 +310,30 @@ const signerFor = (
 const networkOf = (job: IAddKeyJournalJob): TNearNetworkId =>
   job.networkId === "mainnet" ? "mainnet" : "testnet";
 
+/**
+ * `checkBalanceBeforeSigning` is My NEAR Wallet's per-job check: it refuses to sign an AddKey the
+ * account cannot pay for. Off, the harness signs and broadcasts it anyway, so the journal meets
+ * the on-chain failure.
+ */
 export const createHarnessAddKeyChain = (
   getStaged: () => Promise<readonly TAccountTransferDataDecrypted[]>,
+  { checkBalanceBeforeSigning }: { checkBalanceBeforeSigning: boolean },
 ): IAddKeyJournalChain => ({
-  getAccessKeys: (job) => readCompleteAccessKeyList(networkOf(job), job.accountId),
+  getAccessKeys: async (job) => ({
+    keys: (await readCompleteAccessKeyList(networkOf(job), job.accountId)).keys,
+  }),
 
   signAddKeyTransaction: async (job): Promise<IAddKeySignedTransaction> => {
     const network = networkOf(job);
     const signer = signerFor(job, await getStaged());
+    // Before signing, not after: signed bytes are journaled as replayable, and there is no reason
+    // to create ones that can only ever fail on-chain.
+    if (
+      checkBalanceBeforeSigning &&
+      (await readAvailableBalance(network, job.accountId)) < MIN_ADD_KEY_BALANCE_YOCTO
+    ) {
+      throw new Error(`${job.accountId} does not have enough available NEAR to add Meteor's key`);
+    }
     const [accessKey, block] = await Promise.all([
       rpcCall(network, "query", {
         request_type: "view_access_key",

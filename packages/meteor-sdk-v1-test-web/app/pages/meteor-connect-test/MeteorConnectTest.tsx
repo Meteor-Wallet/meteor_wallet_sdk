@@ -27,6 +27,7 @@ import {
   summarizeSignOut,
 } from "./results/summaries";
 import { StagedAccountsPanel } from "./StagedAccountsPanel";
+import { STAGED_SECRETS_IN_MEMORY } from "./stagedSecretsMode";
 import { SwapSafetyTest } from "./SwapSafetyTest";
 import {
   ActionButton,
@@ -114,8 +115,9 @@ const initializedMeteorConnect = async (): Promise<MeteorConnect> => {
         // Dark by default in the SDK — the test harness opts in explicitly.
         enabled: true,
         // TEST HARNESS ONLY: persists staged secrets as plaintext in this origin's
-        // localStorage so test runs are repeatable. Never do this with mainnet key material.
-        persistStagedAccounts: true,
+        // localStorage so test runs are repeatable. `?stagedSecrets=memory` keeps them in this
+        // tab instead, and is the only mode that stages mainnet key material.
+        persistStagedAccounts: !STAGED_SECRETS_IN_MEMORY,
         // Default targets follow the mobile app id (mobile_dev → meteor_wallet_web_dev).
         // Uncomment to test against the local mc_backend demo wallet instead:
         // meteorAppIds: [EMeteorAppId.meteor_bridge_test_web],

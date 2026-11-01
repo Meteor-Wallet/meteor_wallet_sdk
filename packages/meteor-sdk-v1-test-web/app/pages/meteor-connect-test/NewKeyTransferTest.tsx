@@ -11,7 +11,13 @@ import type {
 import { deriveNearPublicKeyFromAccountSecret } from "@meteorwallet/sdk";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type ReactNode, useState } from "react";
-import { createHarnessAddKeyChain } from "./nearAddKeyChain";
+import {
+  checkSourceAccount,
+  createHarnessAddKeyChain,
+  findAccountsShortOfAddKeyBalance,
+  type ISourceAccountCheck,
+  MIN_ADD_KEY_BALANCE_YOCTO,
+} from "./nearAddKeyChain";
 import {
   explorerTxUrl,
   type IActionResultField,
@@ -19,7 +25,7 @@ import {
   type TNearNetwork,
 } from "./results/resultsModel";
 import { useActionResults } from "./results/ActionResultsUi";
-import { ActionButton, Chip, Notice, SubPanel } from "./ui";
+import { ActionButton, Chip, Notice, SubPanel, Toggle } from "./ui";
 
 /**
  * Test harness for the NEW-KEY transfer — the flow where secrets never move, and the only
@@ -88,6 +94,80 @@ const networkOf = (session: INewKeyTransferSdkSession, accountId: string): TNear
   "mainnet"
     ? "mainnet"
     : "testnet";
+
+//
+// My NEAR Wallet's pre-flight — the on-chain checks it makes before an account may be transferred.
+//
+
+/** One account's check, or why the chain could not answer it. */
+type TSourceAccountCheckRow =
+  | { kind: "read"; check: ISourceAccountCheck }
+  | { kind: "unreadable"; accountId: string; reason: string };
+
+const YOCTO_PER_NEAR = 10n ** 24n;
+
+const formatNear = (yocto: bigint): string => {
+  const magnitude = yocto < 0n ? -yocto : yocto;
+  const fraction = ((magnitude % YOCTO_PER_NEAR) / 10n ** 20n).toString().padStart(4, "0");
+  return `${yocto < 0n ? "-" : ""}${magnitude / YOCTO_PER_NEAR}.${fraction} NEAR`;
+};
+
+const SOURCE_KEY_LABELS: Record<ISourceAccountCheck["sourceKey"], string> = {
+  full_access: "source key has full access",
+  not_full_access: "source key is NOT full access",
+  absent: "source key is NOT on the account",
+};
+
+const checkAccountId = (row: TSourceAccountCheckRow): string =>
+  row.kind === "read" ? row.check.accountId : row.accountId;
+
+/**
+ * `refused` fails eligibility, which My NEAR Wallet decides before start (an unreadable account
+ * included, as its `verification_failed`). `low_balance` is eligible: the transfer starts, and
+ * AddKeys refuses it before anything is signed.
+ */
+type TCheckVerdict = "ready" | "low_balance" | "refused";
+
+const checkVerdict = (row: TSourceAccountCheckRow): TCheckVerdict => {
+  if (row.kind === "unreadable" || !row.check.eligible) return "refused";
+  return row.check.canAffordAddKey ? "ready" : "low_balance";
+};
+
+const VERDICTS: Record<
+  TCheckVerdict,
+  { label: string; mark: string; chip: "green" | "amber" | "red"; tone: "good" | "warn" | "bad" }
+> = {
+  ready: { label: "ready", mark: "✓", chip: "green", tone: "good" },
+  low_balance: { label: "low balance", mark: "!", chip: "amber", tone: "warn" },
+  refused: { label: "refused", mark: "✗", chip: "red", tone: "bad" },
+};
+
+const describeCheck = (row: TSourceAccountCheckRow): string => {
+  if (row.kind === "unreadable") return `could not be read (${row.reason})`;
+  const { check } = row;
+  const balance = check.canAffordAddKey
+    ? `${formatNear(check.availableYocto)} available`
+    : `${formatNear(check.availableYocto)} available, under the ${formatNear(MIN_ADD_KEY_BALANCE_YOCTO)} an AddKey needs`;
+  return `${check.keyCount} keys read in ${check.pages} page(s) · ${SOURCE_KEY_LABELS[check.sourceKey]} · ${balance}`;
+};
+
+const summarizeChecks = (rows: TSourceAccountCheckRow[]): IActionResultSummary => {
+  const verdicts = rows.map(checkVerdict);
+  return {
+    status: verdicts.includes("refused")
+      ? "failed"
+      : verdicts.includes("low_balance")
+        ? "warning"
+        : "success",
+    headline: `${verdicts.filter((verdict) => verdict === "ready").length} of ${rows.length} account(s) pass My NEAR Wallet's checks`,
+    fields: rows.map((row) => ({
+      label: checkAccountId(row),
+      value: describeCheck(row),
+      tone: VERDICTS[checkVerdict(row)].tone,
+      copyable: false,
+    })),
+  };
+};
 
 //
 // Step summaries for the shared Results log — what a phone tester needs to see per wallet turn.
@@ -178,6 +258,13 @@ export const NewKeyTransferTest = ({ meteorConnect }: { meteorConnect: MeteorCon
   const { run } = useActionResults();
   const [log, setLog] = useState<string[]>([]);
   const [flowError, setFlowError] = useState<string>();
+  /**
+   * On: the transfer runs My NEAR Wallet's checks — eligibility from the complete key list before
+   * start, balance before the AddKeys. Off: accounts reach the wallet and the chain unchecked, so
+   * their refusals and on-chain failures can be exercised (the fake batch needs this).
+   */
+  const [mnwChecks, setMnwChecks] = useState(true);
+  const [checks, setChecks] = useState<TSourceAccountCheckRow[]>([]);
 
   const append = (line: string) => setLog((lines) => [...lines, line]);
 
@@ -207,9 +294,31 @@ export const NewKeyTransferTest = ({ meteorConnect }: { meteorConnect: MeteorCon
 
   // Read the secrets fresh on every chain call rather than closing over a snapshot — the journal
   // may drive this seam long after the click that started it.
-  const chain = createHarnessAddKeyChain(() =>
-    meteorConnect.transferAccounts.getStagedWithSecrets(),
+  const chain = createHarnessAddKeyChain(
+    () => meteorConnect.transferAccounts.getStagedWithSecrets(),
+    { checkBalanceBeforeSigning: mnwChecks },
   );
+
+  /** Each account in turn rather than all at once: these are public RPCs, and lists can be long. */
+  const checkAccounts = async (
+    accounts: INewKeyTransferStartOptions["accounts"],
+  ): Promise<TSourceAccountCheckRow[]> => {
+    const rows: TSourceAccountCheckRow[] = [];
+    for (const account of accounts) {
+      try {
+        rows.push({ kind: "read", check: await checkSourceAccount(account) });
+      } catch (error) {
+        rows.push({ kind: "unreadable", accountId: account.accountId, reason: errorText(error) });
+      }
+    }
+    setChecks(rows);
+    for (const row of rows) {
+      append(
+        `    ${VERDICTS[checkVerdict(row)].mark} ${checkAccountId(row)}: ${describeCheck(row)}`,
+      );
+    }
+    return rows;
+  };
 
   /**
    * Every step ends by refreshing, and surfaces its own failure rather than throwing into the
@@ -248,6 +357,20 @@ export const NewKeyTransferTest = ({ meteorConnect }: { meteorConnect: MeteorCon
         const { accounts, skipped } = toStartAccounts(stagedWithSecrets);
         if (accounts.length === 0) throw new Error("No staged account yields a NEAR public key");
         for (const accountId of skipped) append(`… skipped ${accountId} (no derivable public key)`);
+
+        if (mnwChecks) {
+          // Before Meteor is asked anything, as My NEAR Wallet: an account it would refuse never
+          // gets destination keys minted for it.
+          append(`0/3 check → ${accounts.length} account(s) on chain, as My NEAR Wallet does`);
+          const refused = (await checkAccounts(accounts))
+            .filter((row) => checkVerdict(row) === "refused")
+            .map(checkAccountId);
+          if (refused.length > 0) {
+            throw new Error(
+              `My NEAR Wallet would not offer ${refused.join(", ")} for transfer (see the account checks). Turn its checks off to send them anyway.`,
+            );
+          }
+        }
 
         /*
          * The AddKey journal holds exactly ONE start result, and only `clear()` on that exact
@@ -326,6 +449,27 @@ export const NewKeyTransferTest = ({ meteorConnect }: { meteorConnect: MeteorCon
       label: "New-key transfer · 2. AddKeys",
       summarize: summarizeAddKeys,
       execute: async (transferSessionId: string) => {
+        const session = (await meteorConnect.newKeyTransfer.getSessions()).find(
+          (candidate) => candidate.startOutput?.transferSessionId === transferSessionId,
+        );
+        // Only before anything is journaled, as My NEAR Wallet: on a resume some AddKeys may
+        // already be live, and a balance dip must not block finishing them. The chain's per-job
+        // check still guards each signature.
+        if (mnwChecks && session != null && session.addKeyIntentAccounts.length === 0) {
+          const accepted = new Set(
+            (session.startOutput?.accounts ?? [])
+              .filter((account) => account.ok)
+              .map((account) => account.accountId),
+          );
+          const short = await findAccountsShortOfAddKeyBalance(
+            session.startRequest.accounts.filter((account) => accepted.has(account.accountId)),
+          );
+          if (short.length > 0) {
+            throw new Error(
+              `Not enough available NEAR for an AddKey on ${short.join(", ")}; nothing was signed`,
+            );
+          }
+        }
         append("2/3 runAddKeys → signing and broadcasting on-chain (no wallet involvement)");
         const result = await meteorConnect.newKeyTransfer.runAddKeys({
           transferSessionId,
@@ -376,6 +520,22 @@ export const NewKeyTransferTest = ({ meteorConnect }: { meteorConnect: MeteorCon
     }),
   });
 
+  const checkMutation = useMutation({
+    mutationFn: guarded<void, TSourceAccountCheckRow[]>({
+      key: "new_key_transfer:check",
+      label: "New-key transfer · Check accounts",
+      summarize: summarizeChecks,
+      execute: async () => {
+        const stagedWithSecrets = await meteorConnect.transferAccounts.getStagedWithSecrets();
+        const { accounts, skipped } = toStartAccounts(stagedWithSecrets);
+        if (accounts.length === 0) throw new Error("No staged account yields a NEAR public key");
+        for (const accountId of skipped) append(`… skipped ${accountId} (no derivable public key)`);
+        append(`check → ${accounts.length} account(s) on chain, as My NEAR Wallet does`);
+        return checkAccounts(accounts);
+      },
+    }),
+  });
+
   const clearMutation = useMutation({
     mutationFn: guarded({
       key: "new_key_transfer:clear",
@@ -390,6 +550,7 @@ export const NewKeyTransferTest = ({ meteorConnect }: { meteorConnect: MeteorCon
   });
 
   const busy =
+    checkMutation.isPending ||
     startMutation.isPending ||
     addKeysMutation.isPending ||
     verifyMutation.isPending ||
@@ -449,7 +610,9 @@ export const NewKeyTransferTest = ({ meteorConnect }: { meteorConnect: MeteorCon
           with each account&apos;s own full-access key, and the wallet verifies them live before
           importing. Uses the {staged.length} staged account(s) above — but sends only their{" "}
           <b>public</b> keys. The platform (Meteor Web / Mobile) is chosen in the popup on step 1;
-          step 3 reuses it.
+          step 3 reuses it. With My NEAR Wallet&apos;s checks on, each step first makes the on-chain
+          checks that wallet makes, so a real account is exercised the way its users transfer
+          theirs.
         </>
       }
     >
@@ -484,6 +647,59 @@ export const NewKeyTransferTest = ({ meteorConnect }: { meteorConnect: MeteorCon
           still land on-chain, so nothing new can start until it is reconciled.
         </Notice>
       )}
+
+      <div className={"flex flex-col gap-2"}>
+        <div className={"flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"}>
+          <Toggle
+            label={"Run My NEAR Wallet's checks"}
+            checked={mnwChecks}
+            onChange={setMnwChecks}
+          />
+          <ActionButton
+            size={"sm"}
+            variant={"secondary"}
+            pending={checkMutation.isPending}
+            pendingLabel={"Reading the chain…"}
+            disabled={busy || staged.length === 0}
+            onClick={() => checkMutation.mutate(undefined)}
+          >
+            Check accounts on chain
+          </ActionButton>
+        </div>
+        <p className={"text-xs text-slate-500 dark:text-slate-400"}>
+          {mnwChecks
+            ? "As My NEAR Wallet: Start first reads every key of each account (100 per page, at final) and refuses one whose source key is missing or not full access. AddKeys first checks every account can pay for its key, before anything is signed. The check button makes the same reads without starting anything."
+            : "Off: accounts go to the wallet and the chain unchecked, so the wallet's own refusals and on-chain failures can be exercised."}
+        </p>
+        {checks.length > 0 && (
+          <ul
+            className={
+              "divide-y divide-slate-200 rounded-xl border border-slate-200 dark:divide-slate-800 dark:border-slate-800"
+            }
+          >
+            {checks.map((row, index) => (
+              <li
+                key={`${index}:${checkAccountId(row)}`}
+                className={"flex flex-col gap-1 px-3 py-2"}
+              >
+                <div className={"flex flex-wrap items-center gap-2"}>
+                  <Chip tone={VERDICTS[checkVerdict(row)].chip}>
+                    {VERDICTS[checkVerdict(row)].label}
+                  </Chip>
+                  <span
+                    className={"font-mono text-xs break-all text-slate-700 dark:text-slate-300"}
+                  >
+                    {checkAccountId(row)}
+                  </span>
+                </div>
+                <span className={"text-xs text-slate-600 dark:text-slate-300"}>
+                  {describeCheck(row)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
 
       <ol className={"grid gap-2 sm:grid-cols-3"}>
         <TransferStep

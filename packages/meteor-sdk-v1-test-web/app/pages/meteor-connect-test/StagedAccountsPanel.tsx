@@ -3,6 +3,7 @@ import { parseTransferSecretInput } from "@meteorwallet/sdk";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { buildFakeTransferAccountBatch } from "./fakeTransferAccounts";
+import { STAGED_SECRETS_IN_MEMORY, switchStagedSecretsMode } from "./stagedSecretsMode";
 import { ActionButton, Notice, SubPanel, TextArea, TextField } from "./ui";
 
 /**
@@ -11,7 +12,9 @@ import { ActionButton, Notice, SubPanel, TextArea, TextField } from "./ui";
  * Staging is deliberately separate from the transfer itself: `NewKeyTransferTest` reads the same
  * staged set through `transferAccounts.getStagedWithSecrets()` and sends only the PUBLIC halves.
  * Staged secrets persist in plaintext localStorage (harness opt-in) so runs are repeatable —
- * testnet material only. (The bridge backend switcher lives in the connection card.)
+ * testnet material only. A real mainnet account is staged with `?stagedSecrets=memory`, which
+ * keeps its key in this tab and never writes it anywhere. (The bridge backend switcher lives in
+ * the connection card.)
  *
  * The old existing-secret flow (`transferAccounts.prompt()`) was removed from this harness: it is
  * not the method we ship, and no Meteor mobile wallet advertises `transfer_accounts_v1`, so its
@@ -39,6 +42,8 @@ export const StagedAccountsPanel = ({
     queryClient.invalidateQueries({ queryKey: ["transfer-accounts", "staged"] });
 
   const detected = secretInput.trim().length > 0 ? parseTransferSecretInput(secretInput) : null;
+  // A mainnet secret is a real account's key: never written to this origin's storage.
+  const mainnetNeedsMemory = network === "mainnet" && !STAGED_SECRETS_IN_MEMORY;
 
   const stageMutation = useMutation({
     mutationFn: async () => {
@@ -87,12 +92,48 @@ export const StagedAccountsPanel = ({
     <SubPanel
       title={`Staged source accounts (${staged.length})`}
       description={
-        <>
-          Testnet material only — staged secrets persist in plaintext localStorage for repeatable
-          runs. New stages go to <b>{network}</b>.
-        </>
+        STAGED_SECRETS_IN_MEMORY ? (
+          <>
+            Memory only — staged secrets live in this tab and a reload forgets them (stage the same
+            key again to carry on a transfer). New stages go to <b>{network}</b>.
+          </>
+        ) : (
+          <>
+            Testnet material only — staged secrets persist in plaintext localStorage for repeatable
+            runs. New stages go to <b>{network}</b>.
+          </>
+        )
       }
     >
+      {mainnetNeedsMemory && (
+        <Notice tone={"warn"}>
+          <span className={"flex flex-col gap-2"}>
+            <span>
+              A mainnet secret is a real account&apos;s key, so it is never saved to this
+              page&apos;s storage. Switch to memory-only staging to add one: the key stays in this
+              tab, and a reload forgets it.
+            </span>
+            <span>
+              <ActionButton size={"sm"} onClick={() => switchStagedSecretsMode(true)}>
+                Keep staged secrets in memory only
+              </ActionButton>
+            </span>
+          </span>
+        </Notice>
+      )}
+      {STAGED_SECRETS_IN_MEMORY && (
+        <p className={"text-xs text-slate-500 dark:text-slate-400"}>
+          Secrets staged before switching are still saved, and come back when you{" "}
+          <button
+            type={"button"}
+            className={"cursor-pointer font-medium underline"}
+            onClick={() => switchStagedSecretsMode(false)}
+          >
+            leave memory-only staging
+          </button>
+          .
+        </p>
+      )}
       <div className={"flex flex-col gap-3"}>
         <TextField
           label={"Account ID"}
@@ -129,7 +170,7 @@ export const StagedAccountsPanel = ({
         <div className={"flex flex-col gap-2 sm:flex-row sm:flex-wrap"}>
           <ActionButton
             pending={stageMutation.isPending}
-            disabled={accountId.trim() === "" || secretInput.trim() === ""}
+            disabled={accountId.trim() === "" || secretInput.trim() === "" || mainnetNeedsMemory}
             onClick={() => stageMutation.mutate()}
           >
             Stage account secret

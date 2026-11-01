@@ -69,6 +69,34 @@ So to try an executor change before releasing it: push it to `release/sdk-demo-a
 `release/sdk-demo-app`), open `/near-connect?executor=candidate`, and only then push
 `release/meteor-near-connect` to upload it to GCS.
 
+### Testing a real account's new-key transfer
+
+The **Account transfer (new-key)** panel transfers an account the way My NEAR Wallet does while
+**Run My NEAR Wallet's checks** is on (the default). Accounts with more than 100 keys are covered:
+every key list is read 100 keys per page.
+
+1. Choose the network in the connection card. For mainnet, open the page with
+   `?stagedSecrets=memory` (the staging panel offers the switch). A mainnet secret is a real
+   account's key, so it is only held in this tab's memory and never saved; a reload forgets it, and
+   staging the same key again carries on an unfinished transfer.
+2. Stage the account: its ID and its full-access private key (`ed25519:…`) or recovery phrase.
+3. **Check accounts on chain** only reads. For each account it reports how many keys it has and
+   over how many pages they were read, whether the source key is on the account with full access,
+   and the available balance (an AddKey needs at least 0.002 NEAR, My NEAR Wallet's floor).
+4. **Start**, **Run AddKeys**, **Verify active**. As in My NEAR Wallet, Start repeats the checks and
+   refuses an account whose source key is missing or lacks full access, before Meteor is asked
+   anything. AddKeys refuses before the first signature if any account can't pay for its AddKey, and
+   the chain checks each balance again before signing.
+
+The receiving wallet follows the deployment kind (table above): `bun run dev` and
+`sdk-demo-dev` send to the dev wallets, while `VITE_DEPLOYMENT_KIND=production bun run dev` and
+`sdk-demo` send to production Meteor.
+
+Turning the checks off sends accounts unchecked, so the wallet's own refusals and on-chain failures
+can be exercised; the fake batch needs this. There is no **Start over** here: a key added by a
+transfer that is then abandoned stays on the account until it is deleted with one of the account's
+full-access keys.
+
 # Welcome to React Router!
 
 A modern, production-ready template for building full-stack React applications using React Router.
