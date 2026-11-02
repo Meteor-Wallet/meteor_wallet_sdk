@@ -9,9 +9,11 @@ jobs:
   release-meteor-near-connect:
     name: Release Meteor Near Connect
     runs-on: ubuntu-latest
+    # Only release/meteor-near-connect may deploy to this environment, and a Release Team
+    # member approves each run. The Google service account trusts only this environment.
+    environment: near-connect-release
     permissions:
-      contents: write
-      deployments: write
+      contents: read
       id-token: write
     concurrency:
       group: ${{ github.workflow }}-${{ github.ref }}
@@ -50,7 +52,8 @@ jobs:
         uses: google-github-actions/auth@v2
         id: auth
         with:
-          credentials_json: '${{ secrets.GOOGLE_CREDENTIALS }}'
+          workload_identity_provider: projects/276870342533/locations/global/workloadIdentityPools/github/providers/meteor-v2-apps
+          service_account: near-connect-release@meteorwallet.iam.gserviceaccount.com
 
       - name: Upload NEAR Connect JS to Google Cloud Storage (Timestamped)
         uses: google-github-actions/upload-cloud-storage@v2
