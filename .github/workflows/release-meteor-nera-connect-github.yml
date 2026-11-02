@@ -6,12 +6,17 @@ on:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+    # Only release/meteor-near-connect may deploy to this environment, and a Release Team
+    # member approves each run. The deploy key that pushes data-storage is its secret.
+    environment: near-connect-release
     permissions:
-      contents: write # Crucial for pushing changes back to the repo
-    
+      contents: read # data-storage is pushed with the deploy key, not GITHUB_TOKEN
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Set up tools with proto
         uses: moonrepo/setup-toolchain@v0
@@ -41,12 +46,12 @@ jobs:
 
       - name: Commit and Push to Data Branch
         env:
-          SSH_DEPLOY_KEY: ${{ secrets.ACTIONS_WRITE_DEPLOY_KEY_PRIVATE_KEY }}
+          SSH_DEPLOY_KEY: ${{ secrets.DATA_STORAGE_DEPLOY_KEY }}
         run: |
           # Configure SSH to use the private key
           mkdir -p ~/.ssh
-          echo "$SSH_DEPLOY_KEY" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
+          echo "$SSH_DEPLOY_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan github.com >> ~/.ssh/known_hosts
           
           git config --global user.name "github-actions[bot]"
@@ -60,5 +65,7 @@ jobs:
           git add storage/meteor-near-connect-latest.js
           git commit -m "Automated update for Meteor NEAR Connect executor script"
 
-          # Force push to the dedicated data branch
+          # Force push to the dedicated data branch over SSH, so the deploy key (a bypass actor on
+          # the data-storage ruleset) does the push; checkout's https origin would not be allowed.
+          git remote set-url origin "git@github.com:${{ github.repository }}.git"
           git push origin data-storage --force
