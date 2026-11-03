@@ -43,7 +43,7 @@ import type {
   INewKeyTransferVerifyOptions,
   INewKeyTransferVerifyResult,
 } from "./new_key_transfer.types";
-import { NewKeyTransferError } from "./new_key_transfer_errors";
+import { isNewKeyTransferError, NewKeyTransferError } from "./new_key_transfer_errors";
 
 type TStartRequest = Extract<
   TMCActionRequestUnion<TMCActionRegistry>,
@@ -147,6 +147,22 @@ interface ICachedVerifyResult {
   request: TNewKeyTransferVerifyActiveInputV1;
   output: TNewKeyTransferVerifyActiveOutputV1;
 }
+
+/** The orchestration journal's own storage slots (the AddKey journal's live in connect-shared). */
+type TJournalStorageKey =
+  | "newKeyTransferSessions"
+  | "newKeyTransferVerifyResults"
+  | "newKeyTransferArchivedSessions";
+
+/**
+ * Whether a storage write failed because the host's storage is full. Decided by the error's type
+ * (`QuotaExceededError`, or `NS_ERROR_DOM_QUOTA_REACHED` from older Firefox), never its message.
+ */
+const isStorageQuotaError = (error: unknown): boolean =>
+  error != null &&
+  typeof error === "object" &&
+  "name" in error &&
+  (error.name === "QuotaExceededError" || error.name === "NS_ERROR_DOM_QUOTA_REACHED");
 
 const asRecord = (value: unknown): Record<string, unknown> | undefined =>
   value != null && typeof value === "object" && !Array.isArray(value)
@@ -518,11 +534,58 @@ export class MeteorConnectNewKeyTransfer {
     if (sessions.length > MAX_JOURNAL_SESSIONS) {
       throw new NewKeyTransferError("new_key_transfer_journal_retention_required");
     }
-    await this.meteorConnect.storage.setJson(
-      "newKeyTransferSessions",
-      validateStoredSessions(sessions),
-    );
+    await this.persistJson("newKeyTransferSessions", validateStoredSessions(sessions));
     this.notifySessionsChanged();
+  }
+
+  /**
+   * Every orchestration-journal write goes through here. Storage that is full surfaces as the
+   * typed `new_key_transfer_storage_full`, never a raw `QuotaExceededError`, after ONE retry that
+   * first frees what this SDK can drop without losing anything a transfer needs. The storage is
+   * the host's whole origin, so the space is usually held by something else: the typed code is
+   * how the host knows to say so instead of showing the browser's own sentence.
+   */
+  private async persistJson(key: TJournalStorageKey, value: unknown): Promise<void> {
+    try {
+      await this.meteorConnect.storage.setJson(key, value);
+      return;
+    } catch (error) {
+      if (!isStorageQuotaError(error)) throw error;
+    }
+    await this.releaseDisposableStorage();
+    try {
+      await this.meteorConnect.storage.setJson(key, value);
+    } catch (error) {
+      if (!isStorageQuotaError(error)) throw error;
+      throw new NewKeyTransferError("new_key_transfer_storage_full", { cause: error });
+    }
+  }
+
+  /**
+   * Free what this SDK stores that no transfer needs: the completed-session archive (history that
+   * nothing reads) and cached verify results whose transfer has no live session. The live session
+   * journal and the AddKey journal's slots are recovery state and are never touched. Best effort:
+   * a failure here is never the error a caller sees — the retried write's own outcome is.
+   */
+  private async releaseDisposableStorage(): Promise<void> {
+    try {
+      await this.meteorConnect.storage.removeItem("newKeyTransferArchivedSessions");
+      const cached = await this.readCachedVerifyResults();
+      const live = new Set(
+        (await this.readSessions()).map((session) => session.startOutput?.transferSessionId),
+      );
+      const retained = Object.entries(cached).filter(([transferSessionId]) =>
+        live.has(transferSessionId),
+      );
+      if (retained.length < Object.keys(cached).length) {
+        await this.meteorConnect.storage.setJson(
+          "newKeyTransferVerifyResults",
+          Object.fromEntries(retained),
+        );
+      }
+    } catch {
+      // Nothing more can be freed safely; the retry reports what the storage says.
+    }
   }
 
   private async replaceSession(session: INewKeyTransferSdkSession): Promise<void> {
@@ -600,7 +663,7 @@ export class MeteorConnectNewKeyTransfer {
     } else {
       cached[transferSessionId] = entry;
     }
-    await this.meteorConnect.storage.setJson("newKeyTransferVerifyResults", cached);
+    await this.persistJson("newKeyTransferVerifyResults", cached);
   }
 
   async getSessions(): Promise<INewKeyTransferSdkSession[]> {
@@ -1274,10 +1337,16 @@ export class MeteorConnectNewKeyTransfer {
       );
       const archive = Array.isArray(storedArchive) ? storedArchive : [];
       archive.push(session);
-      await this.meteorConnect.storage.setJson(
-        "newKeyTransferArchivedSessions",
-        archive.slice(-MAX_ARCHIVED_SESSIONS),
-      );
+      try {
+        await this.persistJson(
+          "newKeyTransferArchivedSessions",
+          archive.slice(-MAX_ARCHIVED_SESSIONS),
+        );
+      } catch (error) {
+        // Full storage has already dropped the archive (history only). Retiring the session
+        // still goes ahead: it is what shrinks the live journal, and the session is terminal.
+        if (!isNewKeyTransferError(error, "new_key_transfer_storage_full")) throw error;
+      }
       await this.writeSessions(
         sessions.filter((candidate) => candidate.clientTransferId !== clientTransferId),
       );

@@ -1,0 +1,20 @@
+/**
+ * The demo is an assets-only Worker deployed by Cloudflare Workers Builds (no GitHub Actions, no
+ * API token). One Worker per deployment kind, each connected to this repo with its own release
+ * branch — settings in README.md "Deployment":
+ *   meteorwallet-sdk-demo      ← release/sdk-demo-app      → `bun run deploy:production`
+ *   meteorwallet-sdk-demo-dev  ← release/sdk-demo-app-dev  → `bun run deploy:dev` (env "dev")
+ */
+{
+	"$schema": "../../node_modules/wrangler/config-schema.json",
+	"name": "meteorwallet-sdk-demo",
+	"compatibility_date": "2026-10-30",
+	"assets": {
+		"directory": "./build/client",
+		// The React Router SPA build (ssr: false): unknown paths get index.html, as on Pages.
+		"not_found_handling": "single-page-application"
+	},
+	"env": {
+		"dev": {}
+	}
+}

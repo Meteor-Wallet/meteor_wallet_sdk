@@ -6,6 +6,8 @@
     "build:dev": "VITE_DEPLOYMENT_KIND=dev react-router build && bun run build:executor-candidates",
     "build:production": "VITE_DEPLOYMENT_KIND=production react-router build && bun run build:executor-candidates",
     "build:executor-candidates": "NODE_ENV=production bun run --cwd ../meteor-near-connect build --outDir ../meteor-sdk-v1-test-web/build/client/executor/candidate && NODE_ENV=development bun run --cwd ../meteor-near-connect build --outDir ../meteor-sdk-v1-test-web/build/client/executor/candidate-dev",
+    "deploy:dev": "wrangler deploy --env dev",
+    "deploy:production": "wrangler deploy --env=''",
     "clear-vite-cache": "trash '**/.vite'",
     "clean-cache-files": "glcl -f glob-list-cache.clean",
     "dev": "bun run clean-cache-files && react-router dev --force",
@@ -59,6 +61,7 @@
     "vite-plugin-node-polyfills": "^0.24.0",
     "vite-plugin-watch-node-modules": "0.5.0",
     "vite-plugin-web-components-hmr": "0.1.3",
-    "vite-tsconfig-paths": "^5.1.4"
+    "vite-tsconfig-paths": "^5.1.4",
+    "wrangler": "4.70.0"
   }
 }

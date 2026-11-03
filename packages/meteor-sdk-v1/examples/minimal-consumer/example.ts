@@ -51,7 +51,9 @@ export async function initialize(): Promise<void> {
  * Each method has a guarantee the journal depends on:
  *
  * - `getAccessKeys` must read at FINAL finality. An optimistic read can report a key that is not
- *   there yet.
+ *   there yet. It must also return the account's COMPLETE list: nodes refuse an unpaginated
+ *   `view_access_key_list` for an account with more than 100 keys, so read it page by page
+ *   ({@link readCompleteAccessKeyList}).
  * - `signAddKeyTransaction` must NOT broadcast. The SDK records the exact signed bytes first; a
  *   method that broadcasts creates an effect the journal has not checkpointed.
  * - `broadcastSignedTransaction` must send those EXACT bytes and wait for FINAL. A throw is treated
@@ -62,12 +64,7 @@ export async function initialize(): Promise<void> {
  */
 function createChain(): IAddKeyJournalChain {
   return {
-    getAccessKeys: async (job: IAddKeyJournalJob) =>
-      await rpc("query", {
-        request_type: "view_access_key_list",
-        account_id: job.accountId,
-        finality: "final",
-      }),
+    getAccessKeys: async (job: IAddKeyJournalJob) => await readCompleteAccessKeyList(job.accountId),
 
     signAddKeyTransaction: async (job: IAddKeyJournalJob) => {
       // Resolve the signer for job.sourcePublicKey EXACTLY. Signing with any other key of the
@@ -219,6 +216,38 @@ export async function reconcile(operation: INewKeyTransferFencedOperation): Prom
     case "not_found":
       return;
   }
+}
+
+/**
+ * Every key of the account at FINAL finality, read 100 at a time and pinned to the first page's
+ * block, in the shape of one unpaginated answer. Each page after the first continues after the
+ * previous page's `last_key`; the last page has none. Nodes without pagination ignore `limit` and
+ * answer everything at once. Anything that cannot be read in full throws — the journal must never
+ * decide from part of the list.
+ */
+async function readCompleteAccessKeyList(accountId: string): Promise<{ keys: unknown[] }> {
+  const keys: unknown[] = [];
+  let blockHeight: unknown;
+  let afterKey: string | undefined;
+  for (let page = 0; page < 1_000; page++) {
+    const result = await rpc("query", {
+      request_type: "view_access_key_list",
+      account_id: accountId,
+      ...(blockHeight == null ? { finality: "final" } : { block_id: blockHeight }),
+      limit: 100,
+      ...(afterKey != null ? { after_key: afterKey } : {}),
+    });
+    if (typeof result !== "object" || result == null || !("keys" in result)) break;
+    if (!Array.isArray(result.keys)) break;
+    blockHeight ??= "block_height" in result ? result.block_height : undefined;
+    keys.push(...result.keys);
+    const lastKey =
+      "last_key" in result && typeof result.last_key === "string" ? result.last_key : undefined;
+    if (lastKey == null) return { keys };
+    if (result.keys.length === 0 || lastKey === afterKey || blockHeight == null) break;
+    afterKey = lastKey;
+  }
+  throw new Error(`${accountId}'s access keys could not be read in full.`);
 }
 
 /* ── Host-supplied pieces, stubbed here ───────────────────────────────────────────────────── */

@@ -22,13 +22,35 @@ Each build targets one Meteor stack, chosen by `VITE_DEPLOYMENT_KIND` (config in
 | Mobile wallet | `meteor_wallet_mobile_dev` (`meteorwalletdev://`) | `meteor_wallet_mobile` (`meteorwallet://`) |
 | Build | `bun run build:dev` | `bun run build:production` |
 | Deploy branch | `release/sdk-demo-app-dev` | `release/sdk-demo-app` |
-| Cloudflare Pages project | `meteorwallet-sdk-demo-dev` | `meteorwallet-sdk-demo` |
+| Cloudflare Worker | `meteorwallet-sdk-demo-dev` | `meteorwallet-sdk-demo` |
 | URL | <https://sdk-demo-dev.meteorwallet.app> | <https://sdk-demo.meteorwallet.app> |
 
 `bun run dev` is the `dev` kind; run `VITE_DEPLOYMENT_KIND=production bun run dev` to try production
 locally. `?backend=local|development|production|<url>` still overrides the bridge backend per page
 load, and nothing else. The V1 extension is whichever one is installed in the browser, and the SDK
 always sends new-key transfers to the extension under the production web wallet identity.
+
+### Deployment
+
+Cloudflare Workers Builds deploys the demo itself: each kind is an assets-only Worker
+([`wrangler.jsonc`](wrangler.jsonc)) connected to this repo through the Cloudflare GitHub app, so a
+push to its deploy branch is a production deployment. There is no GitHub Actions workflow and no
+Cloudflare token in GitHub. The settings live in the dashboard (**Worker → Settings → Build**), so
+they are recorded here:
+
+| Setting | `dev` | `production` |
+| --- | --- | --- |
+| Branch control | `release/sdk-demo-app-dev`, **Enable Preview Builds** off | `release/sdk-demo-app`, **Enable Preview Builds** off |
+| Root directory | `packages/meteor-sdk-v1-test-web` | `packages/meteor-sdk-v1-test-web` |
+| Build command | `bun install --cwd ../.. --frozen-lockfile && bun run build:dev` | `bun install --cwd ../.. --frozen-lockfile && bun run build:production` |
+| Deploy command | `bun run deploy:dev` | `bun run deploy:production` |
+| Preview command (required by the form; never runs with previews off) | `echo "Preview builds are off for this Worker" && exit 1` | same |
+| Build variables | `BUN_VERSION=1.3.14`, `NODE_VERSION=22.22.0`, `SKIP_DEPENDENCY_INSTALL=1` | same |
+
+The install runs from the repo root so it reads `bunfig.toml` (`linker = "hoisted"`, which this build
+needs) and `patches/`; keep `BUN_VERSION` and `NODE_VERSION` in step with `.prototools`. The `dev`
+Worker deploys `wrangler.jsonc`'s `env.dev`, which Workers Builds accepts for the `-dev` name. The
+custom domains are attached to each Worker in the dashboard (**Settings → Domains & Routes**).
 
 ### Testing a NEAR Connect executor before releasing it
 
@@ -46,6 +68,34 @@ Both deploy builds also build the `meteor-near-connect` executor from the same c
 So to try an executor change before releasing it: push it to `release/sdk-demo-app-dev` (or
 `release/sdk-demo-app`), open `/near-connect?executor=candidate`, and only then push
 `release/meteor-near-connect` to upload it to GCS.
+
+### Testing a real account's new-key transfer
+
+The **Account transfer (new-key)** panel transfers an account the way My NEAR Wallet does while
+**Run My NEAR Wallet's checks** is on (the default). Accounts with more than 100 keys are covered:
+every key list is read 100 keys per page.
+
+1. Choose the network in the connection card. For mainnet, open the page with
+   `?stagedSecrets=memory` (the staging panel offers the switch). A mainnet secret is a real
+   account's key, so it is only held in this tab's memory and never saved; a reload forgets it, and
+   staging the same key again carries on an unfinished transfer.
+2. Stage the account: its ID and its full-access private key (`ed25519:…`) or recovery phrase.
+3. **Check accounts on chain** only reads. For each account it reports how many keys it has and
+   over how many pages they were read, whether the source key is on the account with full access,
+   and the available balance (an AddKey needs at least 0.002 NEAR, My NEAR Wallet's floor).
+4. **Start**, **Run AddKeys**, **Verify active**. As in My NEAR Wallet, Start repeats the checks and
+   refuses an account whose source key is missing or lacks full access, before Meteor is asked
+   anything. AddKeys refuses before the first signature if any account can't pay for its AddKey, and
+   the chain checks each balance again before signing.
+
+The receiving wallet follows the deployment kind (table above): `bun run dev` and
+`sdk-demo-dev` send to the dev wallets, while `VITE_DEPLOYMENT_KIND=production bun run dev` and
+`sdk-demo` send to production Meteor.
+
+Turning the checks off sends accounts unchecked, so the wallet's own refusals and on-chain failures
+can be exercised; the fake batch needs this. There is no **Start over** here: a key added by a
+transfer that is then abandoned stays on the account until it is deleted with one of the account's
+full-access keys.
 
 # Welcome to React Router!
 

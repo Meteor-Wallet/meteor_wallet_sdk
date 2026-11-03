@@ -78,3 +78,5 @@ Run `bun dev` in the `/packages/meteor-sdk-v1-test-web` folder. This will start 
 The demo manifest (`manifest.json`) for NEAR Connect is here: `packages\meteor-sdk-v1-test-web\app\pages\near-connect\dev-manifest.ts` - you can make changes here to see how our SDK will work with NEAR Connect.
 
 Sometimes a full stop of Vite and restart using `bun dev` is required to see changes.
+
+.

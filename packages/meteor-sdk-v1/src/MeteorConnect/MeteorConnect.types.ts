@@ -148,7 +148,9 @@ export interface IMeteorConnectTypedStorage {
   newKeyTransferVerifyResults: unknown;
   /**
    * Bounded archive of fully completed transfer sessions (stabilization SD10): retention that
-   * keeps the active journal under its capacity without deleting completion records.
+   * keeps the active journal under its capacity without deleting completion records. History
+   * only — nothing reads it back — so it is the first thing dropped when the host's storage is
+   * full and a journal write needs the room.
    */
   newKeyTransferArchivedSessions: unknown;
 }
