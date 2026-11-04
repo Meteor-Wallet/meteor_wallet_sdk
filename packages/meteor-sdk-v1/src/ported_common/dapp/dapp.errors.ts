@@ -7,7 +7,12 @@ export enum EDappActionErrorTag {
   POPUP_WINDOW_REFUSED = "POPUP_WINDOW_REFUSED",
   POPUP_WINDOW_OPEN_FAILED = "POPUP_WINDOW_OPEN_FAILED",
   EXT_DIRECT_RESPONSE_FAILED = "EXT_DIRECT_RESPONSE_FAILED",
+  EXTENSION_RELOADED = "EXTENSION_RELOADED",
+  EXTENSION_NO_RESPONSE = "EXTENSION_NO_RESPONSE",
 }
+
+const EXTENSION_REFRESH_MESSAGE =
+  "Meteor extension didn't respond. If you just updated it, refresh this page.";
 
 const en: { [key in EDappActionErrorTag]: string } = {
   [EDappActionErrorTag.WINDOW_CLOSED]: "User closed the window",
@@ -20,6 +25,8 @@ const en: { [key in EDappActionErrorTag]: string } = {
   [EDappActionErrorTag.NO_ACCOUNTS]: "No Meteor account found- try again after creating one",
   [EDappActionErrorTag.EXT_DIRECT_RESPONSE_FAILED]:
     "Couldn't send and get a direct response from Meteor V1 Extension",
+  [EDappActionErrorTag.EXTENSION_RELOADED]: EXTENSION_REFRESH_MESSAGE,
+  [EDappActionErrorTag.EXTENSION_NO_RESPONSE]: EXTENSION_REFRESH_MESSAGE,
 };
 
 export function getExternalActionErrorMessageForEndTag(tag: string | EDappActionErrorTag): string {
