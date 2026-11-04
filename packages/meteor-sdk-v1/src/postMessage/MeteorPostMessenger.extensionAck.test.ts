@@ -3,7 +3,11 @@ import { EDappActionErrorTag } from "../ported_common/dapp/dapp.errors";
 import { EDappActionConnectionStatus, EExternalActionType } from "../ported_common/dapp/dapp.enums";
 import { MeteorActionError } from "../ported_common/dapp/dapp.types";
 import { ENearNetwork } from "../ported_common/near/near_basic_types";
-import { EXTENSION_ACK_TIMEOUT_MS, MeteorPostMessenger } from "./MeteorPostMessenger";
+import {
+  EXTENSION_ACK_TIMEOUT_MS,
+  EXTENSION_LEGACY_ACK_TIMEOUT_MS,
+  MeteorPostMessenger,
+} from "./MeteorPostMessenger";
 
 const REFRESH_MESSAGE = "Meteor extension didn't respond. If you just updated it, refresh this page.";
 
@@ -13,11 +17,12 @@ const advance = (ms: number) =>
 
 type Listener = (data?: any) => void;
 
-function installFakeExtension(opts: { sendThrows?: Error } = {}) {
+function installFakeExtension(opts: { sendThrows?: Error; ack?: boolean } = {}) {
   const state: { listener?: Listener; sent: any[] } = { sent: [] };
   (globalThis as any).window = {
     location: { href: "https://dapp.example/" },
     meteorCom: {
+      ...(opts.ack ? { capabilities: { ack: true } } : {}),
       addMessageDataListener: (l: Listener) => {
         state.listener = l;
       },
@@ -30,12 +35,12 @@ function installFakeExtension(opts: { sendThrows?: Error } = {}) {
   return state;
 }
 
-function start(messenger: MeteorPostMessenger) {
+function start(messenger: MeteorPostMessenger, forceExecutionTargetConfig?: any) {
   return messenger.connectAndWaitForResponse({
     actionType: EExternalActionType.login,
     network: ENearNetwork.mainnet,
     inputs: {},
-    forceExecutionTargetConfig: undefined,
+    forceExecutionTargetConfig,
   });
 }
 
@@ -53,8 +58,8 @@ describe("MeteorPostMessenger extension acknowledgement", () => {
     else delete (globalThis as any).window;
   });
 
-  it("rejects with a refresh-the-page error when the extension never acknowledges", async () => {
-    installFakeExtension();
+  it("rejects with a refresh-the-page error when an ack-capable extension never acknowledges", async () => {
+    installFakeExtension({ ack: true });
     const messenger = new MeteorPostMessenger();
     const promise = start(messenger);
     let settled: unknown;
@@ -124,5 +129,93 @@ describe("MeteorPostMessenger extension acknowledgement", () => {
     const err = await start(messenger).catch((e) => e);
     expect(err.message).toBe(REFRESH_MESSAGE);
     expect(err._reason.endTags).toEqual([EDappActionErrorTag.EXTENSION_RELOADED]);
+  });
+  async function settleAfter(promise: Promise<unknown>, ms: number) {
+    let settled: unknown = "pending";
+    promise.then(
+      (v) => (settled = v),
+      (e) => (settled = e),
+    );
+    advance(ms);
+    await Promise.resolve();
+    await Promise.resolve();
+    return settled;
+  }
+
+  it("accepts a late ack at 2.5s when the extension advertises the ack capability", async () => {
+    const ext = installFakeExtension({ ack: true });
+    const messenger = new MeteorPostMessenger();
+    const promise = start(messenger);
+    advance(2500);
+    ext.listener!({ uid: ext.sent[0].uid, status: EDappActionConnectionStatus.connected, endTags: [] });
+    expect(await settleAfter(promise, 60_000)).toBe("pending");
+    expect(messenger.connections).toHaveLength(1);
+  });
+
+  it("uses the 20s legacy timeout for extensions without the ack capability (ack at 4s passes)", async () => {
+    const ext = installFakeExtension();
+    const messenger = new MeteorPostMessenger();
+    const promise = start(messenger);
+    advance(4000);
+    ext.listener!({ uid: ext.sent[0].uid, status: EDappActionConnectionStatus.connected, endTags: [] });
+    expect(await settleAfter(promise, 60_000)).toBe("pending");
+  });
+
+  it("legacy extension with no message at all fails at 20s, not 3s", async () => {
+    installFakeExtension();
+    const messenger = new MeteorPostMessenger();
+    const promise = start(messenger);
+    expect(await settleAfter(promise, EXTENSION_ACK_TIMEOUT_MS + 1000)).toBe("pending");
+    const err: any = await settleAfter(promise, EXTENSION_LEGACY_ACK_TIMEOUT_MS);
+    expect(err).toBeInstanceOf(MeteorActionError);
+    expect(err._reason.endTags).toContain(EDappActionErrorTag.EXTENSION_NO_RESPONSE);
+  });
+
+  it("handles the exact extension reloaded payload and uses its message", async () => {
+    const ext = installFakeExtension({ ack: true });
+    const messenger = new MeteorPostMessenger();
+    const promise = start(messenger);
+    ext.listener!({
+      uid: ext.sent[0].uid,
+      status: "closed_fail",
+      endTags: ["EXTENSION_RELOADED"],
+      message: "Meteor was updated. Refresh this page to continue.",
+    });
+    const err = await promise.catch((e) => e);
+    expect(err.message).toBe("Meteor was updated. Refresh this page to continue.");
+    expect(err._reason.endTags).toEqual([EDappActionErrorTag.EXTENSION_RELOADED]);
+  });
+
+  it("treats an empty-string uid on a reloaded reply as absent", async () => {
+    const ext = installFakeExtension({ ack: true });
+    const messenger = new MeteorPostMessenger();
+    const promise = start(messenger);
+    ext.listener!({ uid: "", status: "closed_fail", endTags: ["EXTENSION_RELOADED"] });
+    const err = await promise.catch((e) => e);
+    expect(err.message).toBe(REFRESH_MESSAGE);
+    expect(messenger.connections).toHaveLength(0);
+  });
+
+  it("rejects on any sendMessageData error, not only invalidation", async () => {
+    installFakeExtension({ sendThrows: new Error("Could not establish connection. Receiving end does not exist.") });
+    const messenger = new MeteorPostMessenger();
+    const err = await start(messenger).catch((e) => e);
+    expect(err).toBeInstanceOf(MeteorActionError);
+    expect(err._reason.endTags).toEqual([EDappActionErrorTag.EXTENSION_NO_RESPONSE]);
+  });
+
+  it("rejects the direct (meteorComV2) path when the call throws", async () => {
+    installFakeExtension({ ack: true });
+    (globalThis as any).window.meteorComV2 = {
+      version: "v2",
+      featureFlags: [],
+      sendMessageDataAndRespond: async () => {
+        throw new Error("Receiving end does not exist.");
+      },
+    };
+    const messenger = new MeteorPostMessenger();
+    const err = await start(messenger, { executionTarget: "v1_ext" }).catch((e) => e);
+    expect(err).toBeInstanceOf(MeteorActionError);
+    expect(err._reason.endTags).toEqual([EDappActionErrorTag.EXTENSION_NO_RESPONSE]);
   });
 });
