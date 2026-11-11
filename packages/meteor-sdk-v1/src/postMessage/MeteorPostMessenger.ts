@@ -46,6 +46,7 @@ class ComWindow {
   directExtensionState?: {
     listener: TMeteorComListener<TClientPostMessageResponse>;
   };
+  private extensionListener?: TMeteorComListener<TClientPostMessageResponse>;
   private lastResponseStatus: EDappActionConnectionStatus | null = null;
   private lastSendStatus: EDappActionConnectionStatus | null = null;
 
@@ -123,6 +124,7 @@ class ComWindow {
       } else {
         // console.log("Need to communicate with the extension!");
         window.meteorCom.addMessageDataListener(listener);
+        this.extensionListener = listener;
       }
 
       this.wasOpened = true;
@@ -169,9 +171,19 @@ class ComWindow {
           this.directExtensionState!.listener(response);
         };
 
-        callDirect(data);
+        callDirect(data).catch((e) => {
+          // A stale content script (extension updated/reloaded) throws
+          // "Extension context invalidated". Surface it as a failure instead of hanging.
+          this.logger.log("[sendMessageDataAndRespond()]: direct call failed", e);
+          this.directExtensionState?.listener(sendFailureReply(data.uid, e));
+        });
       } else {
-        window.meteorCom?.sendMessageData(data);
+        try {
+          window.meteorCom?.sendMessageData(data);
+        } catch (e) {
+          this.logger.log("[sendMessageData()]: failed", e);
+          this.extensionListener?.(sendFailureReply(data.uid, e));
+        }
       }
     }
   }
@@ -202,7 +214,69 @@ class ComWindow {
 
 const pingInterval = 500;
 
-class MeteorPostMessenger {
+/**
+ * How long we wait for the extension to send ANY message for a request before
+ * assuming it is unreachable (e.g. stale content script after an extension update).
+ * This is only an acknowledgement timeout: once the extension has responded once,
+ * the request may wait indefinitely for user approval.
+ */
+export const EXTENSION_ACK_TIMEOUT_MS = 3000;
+
+/**
+ * Older extensions don't ACK from the content script; the first message they send is the
+ * popup's "connected", which can take several seconds (popup open + wallet unlock load).
+ */
+export const EXTENSION_LEGACY_ACK_TIMEOUT_MS = 20000;
+
+/**
+ * Extensions that ACK every request from the content script advertise it via
+ * `window.meteorCom.capabilities.ack === true` (set by meteor_inpage).
+ */
+export function extensionSupportsAck(): boolean {
+  return (window.meteorCom as any)?.capabilities?.ack === true;
+}
+
+export function getExtensionAckTimeoutMs(): number {
+  return extensionSupportsAck() ? EXTENSION_ACK_TIMEOUT_MS : EXTENSION_LEGACY_ACK_TIMEOUT_MS;
+}
+
+/** Any failure to hand a request to the extension terminates that request. */
+function sendFailureReply(uid: string | undefined, e: unknown): TClientPostMessageResponse {
+  return {
+    uid,
+    status: EDappActionConnectionStatus.closed_fail,
+    endTags: [
+      isExtensionContextInvalidatedError(e)
+        ? EDappActionErrorTag.EXTENSION_RELOADED
+        : EDappActionErrorTag.EXTENSION_NO_RESPONSE,
+    ],
+  } as TClientPostMessageResponse;
+}
+
+function normalizeUid(uid: unknown): string | undefined {
+  return typeof uid === "string" && uid !== "" ? uid : undefined;
+}
+
+function extensionMessage(data: any): string | undefined {
+  return typeof data?.message === "string" && data.message !== "" ? data.message : undefined;
+}
+
+export function isExtensionContextInvalidatedError(e: unknown): boolean {
+  const message = e instanceof Error ? e.message : typeof e === "string" ? e : "";
+  return /extension context invalidated/i.test(message);
+}
+
+function isExtensionUnreachableReply(data: any): boolean {
+  return (
+    data?.code === EDappActionErrorTag.EXTENSION_RELOADED ||
+    data?.error === EDappActionErrorTag.EXTENSION_RELOADED ||
+    (Array.isArray(data?.endTags) &&
+      (data.endTags.includes(EDappActionErrorTag.EXTENSION_RELOADED) ||
+        data.endTags.includes(EDappActionErrorTag.EXTENSION_NO_RESPONSE)))
+  );
+}
+
+export class MeteorPostMessenger {
   baseWalletUrl: string;
   walletOrigin: string;
   // listener: (event: MessageEvent) => void;
@@ -222,6 +296,31 @@ class MeteorPostMessenger {
 
     this.listener = (data) => {
       // console.log("[ METEOR POST MESSENGER !!! MESSAGE ] Received data", data);
+
+      if (data != null && isExtensionUnreachableReply(data)) {
+        // Explicit unreachable reply from the (stale) content script or a failed send.
+        // Handled without sendComs() so a throwing transport can't recurse. It may not carry a uid,
+        // in which case it applies to every pending extension request.
+        const replyUid = normalizeUid(data.uid);
+        const targets =
+          replyUid != null
+            ? this.connections.filter((con) => con.uid === replyUid)
+            : this.comWindow?.comType === EDappActionSource.extension_injected
+              ? [...this.connections]
+              : [];
+        for (const con of targets) {
+          this.removeConnection(con.uid);
+          con.reject(
+            new MeteorActionError({
+              endTags: data.endTags?.includes?.(EDappActionErrorTag.EXTENSION_NO_RESPONSE)
+                ? [EDappActionErrorTag.EXTENSION_NO_RESPONSE]
+                : [EDappActionErrorTag.EXTENSION_RELOADED],
+              message: extensionMessage(data),
+            }),
+          );
+        }
+        return;
+      }
 
       if (data != null) {
         // const data: TClientPostMessageResponse = event.data;
@@ -275,7 +374,9 @@ class MeteorPostMessenger {
             this.sendComs();
             // const error = new MeteorActionError({ endTags: data.endTags });
             // console.log("Ending failure with error", { ...error });
-            currentConnection.reject(new MeteorActionError({ endTags: data.endTags }));
+            currentConnection.reject(
+              new MeteorActionError({ endTags: data.endTags, message: extensionMessage(data) }),
+            );
           }
 
           if (data.status === EDappActionConnectionStatus.closed_window) {
@@ -396,6 +497,26 @@ class MeteorPostMessenger {
     }
 
     this.sendComs();
+
+    if (this.comWindow?.comType === EDappActionSource.extension_injected) {
+      this.startExtensionAckTimeout(connection.uid);
+    }
+  }
+
+  private startExtensionAckTimeout(uid: string) {
+    setTimeout(() => {
+      const con = this.connections.find((c) => c.uid === uid);
+      // Any message from the extension for this uid sets lastConnection (the "ack").
+      if (con == null || con.lastConnection !== 0) return;
+
+      console.warn(`[MeteorPostMessenger] Extension did not acknowledge request ${uid}`);
+      this.removeConnection(uid);
+      con.reject(
+        new MeteorActionError({
+          endTags: [EDappActionErrorTag.INCOMPLETE_ACTION, EDappActionErrorTag.EXTENSION_NO_RESPONSE],
+        }),
+      );
+    }, getExtensionAckTimeoutMs());
   }
 
   async connectAndWaitForResponse<T>({
