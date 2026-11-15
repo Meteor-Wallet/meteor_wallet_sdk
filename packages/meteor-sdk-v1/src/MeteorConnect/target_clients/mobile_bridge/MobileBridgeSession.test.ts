@@ -23,7 +23,6 @@ import {
   merr_bridge_session,
   type TSessionFacts,
 } from "@meteorwallet/connect-shared";
-import { err_nice_transport } from "@nice-code/action";
 import {
   createSessionClientDoubleBase,
   sessionFactsFor,
@@ -965,13 +964,17 @@ describe("MobileBridgeSession closing verb across a transport loss", () => {
     resultHash: "result-hash",
   };
   const FAST_RETRY = { maxRetries: 2, budgetMs: 2_000, initialBackoffMs: 1 };
-  /** Exactly what `abortInFlight` raises for a request the detaching link was still carrying. */
+  /**
+   * The message `abortInFlight` raises for a request the detaching link was still carrying. Built
+   * as a plain `Error` (the typed transport error class is not part of `@meteorwallet/connect`'s
+   * public API), so `describeSessionError` classifies it `unknown` rather than
+   * `connection_interrupted` — both are a transport loss to `isTransportLoss`, so the resend path
+   * under test is the same.
+   */
   const linkDropped = () =>
-    err_nice_transport.fromId("send_failed", {
-      actionId: "—",
-      actionState: "request",
-      message: "link channel disconnected",
-    });
+    new Error(
+      '[err_nice_transport](send_failed) Failed to send action "—" [Unknown status]: link channel disconnected.',
+    );
 
   const runWith = async (input: {
     outcome?: TValidatedSessionResult<unknown>;

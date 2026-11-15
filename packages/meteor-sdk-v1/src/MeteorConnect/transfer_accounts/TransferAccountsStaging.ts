@@ -8,9 +8,9 @@ import {
   vAccountBasicData,
   vAccountTransferDataDecrypted,
 } from "@meteorwallet/connect-shared";
-import { stringifyCanonicalJson } from "@nice-code/util";
 import * as v from "valibot";
 import type { ITypedStorageHelper } from "../../ported_common/utils/storage/TypedStorageHelper";
+import { stringifyCanonicalJson } from "../../utils/stringifyCanonicalJson";
 import type { IMeteorConnectTypedStorage } from "../MeteorConnect.types";
 import { TRANSFER_ACCOUNTS_MAX_ACCOUNTS } from "./transfer_accounts.limits";
 import type {

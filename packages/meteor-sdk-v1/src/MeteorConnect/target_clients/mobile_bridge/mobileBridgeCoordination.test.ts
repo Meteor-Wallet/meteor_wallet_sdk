@@ -84,7 +84,7 @@ describe("Meteor mobile bridge coordination", () => {
 
   it("hands PartnerSessionClient the adapter class that client library itself exports", () => {
     // `StorageAdapter` reaches this SDK through `@meteorwallet/connect`, which re-exports the one
-    // `@nice-code/util` copy the client was compiled against. A second hoisted copy would still
+    // nice-code `util` copy the client was compiled against. A second hoisted copy would still
     // type-check and would still LOOK like a StorageAdapter at runtime, while the client rejected
     // it — this is the drift tripwire for that.
     const context = createMobileBridgeStorage(memoryStorage(), "https://bridge.example");
