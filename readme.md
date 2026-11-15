@@ -20,6 +20,22 @@ bun i
 
 The `build` script inside `meteor-sdk-v1` will build out the SDK module.
 
+# Local dev environment
+
+Plain root scripts (each runs the package's own script; the combined ones use `bun run --parallel`):
+
+| Script | Runs |
+| --- | --- |
+| `bun run dev` / `dev:local` | demo (:5173), near-connect executor build watch, mc backend (:8787, sibling `../meteor-connect-bridge`), Meteor Web wallet (:3001, sibling `../meteor_wallet`) |
+| `bun run dev:full` | demo, near-connect build watch, `meteor-sdk-backend-test` (:8787), near-connect dev harness (:3001), popup preview (:8722), SDK build watch |
+| `bun run dev:transfer` | demo, near-connect build watch, mc backend |
+| `bun run dev:<name>` | one process: `demo`, `backend-test`, `near-connect`, `near-connect-build`, `sdk-preview`, `sdk-build-watch`, `mc-backend`, `web-wallet` |
+| `bun run checks` | SDK type-check, key-confinement check, SDK tests |
+
+Stop with Ctrl+C. To use a local `@hot-labs/near-connect` checkout in the demo:
+`NEAR_CONNECT_LOCAL_PATH=../near-connect bun run dev`. On a new machine, run `bun run dev:web-wallet`
+once on its own first so mkcert can ask for sudo.
+
 # Relevant packages and classes in repo
 
 ## Meteor Wallet / Meteor Connect SDK
