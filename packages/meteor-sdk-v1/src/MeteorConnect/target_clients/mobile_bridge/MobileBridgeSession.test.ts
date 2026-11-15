@@ -1033,6 +1033,22 @@ describe("MobileBridgeSession closing verb across a transport loss", () => {
     expect(run.warnings).toBe(1);
   });
 
+  it("re-sends a verb the backend classifies as an exact retry", async () => {
+    // The other arm of `isTransportLoss`: a typed error whose classification is `retry: "exact"`.
+    const exactRetry = () => merr_bridge_session.fromId(EErr_Bridge_Session.projection_repair_pending);
+    expect(describeSessionError(exactRetry()).retry).toBe("exact");
+    expect(describeSessionError(exactRetry()).kind).not.toBe("unknown");
+    const run = await runWith({
+      acknowledgeAndClose: async (attempt) => {
+        if (attempt === 1) throw exactRetry();
+        return sessionFactsFor(ESessionPhase.closed);
+      },
+    });
+    expect(run.attempts).toBe(2);
+    expect(run.settled).toEqual({ value: { success: true } });
+    expect(run.session.getSnapshot().phase).toBe("completed");
+  });
+
   it("does not re-send a typed refusal, and still delivers the answer", async () => {
     const run = await runWith({
       acknowledgeAndClose: async () => {
