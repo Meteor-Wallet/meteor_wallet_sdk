@@ -22,8 +22,8 @@ import {
   vNewKeyTransferStartOutputV1,
   vSerializedCryptoKeyDataEd25519_Raw,
 } from "@meteorwallet/connect-shared";
-import { stringifyCanonicalJson } from "@nice-code/util";
 import * as v from "valibot";
+import { stringifyCanonicalJson } from "../../utils/stringifyCanonicalJson";
 import type { TMCActionRegistry } from "../action/mc_action.combined";
 import type { TMCActionRequestUnion } from "../action/mc_action.types";
 import type { MeteorConnect } from "../MeteorConnect";

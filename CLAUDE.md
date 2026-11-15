@@ -80,15 +80,17 @@ will deploy or test, a review's findings built. A small edit in the middle of a 
   `meteor-sdk-v1-test-web` is the demo and engineering lab; `meteor-near-connect` builds the NEAR
   Connect executor into `near-connect/meteor-near-connect.js`; `meteor-sdk-backend-test` is the
   demo's test backend.
-- **Checks before handing back**: `bun run checks` (repo root) — types, transfer-key confinement and
-  the SDK tests, as one CI-style panel.
+- **Checks before handing back**: `bun run checks` (repo root) — SDK types, transfer-key confinement
+  and the SDK tests, run in sequence.
 - **Type-check all workspaces**: `bun run type-check-all` (repo root); a single workspace:
   `bun run type-check` (from its directory).
 - **SDK tests**: `bun run test` (from `packages/meteor-sdk-v1`) — the key-confinement and
   public-surface checks, then `bun test`.
 - **SDK build**: `bun run build` (from `packages/meteor-sdk-v1`) — fails when the published bundle is
   over its size budget.
-- **Dev environment**: `bun run dev` (nice-commander; `commander.config.ts` lists the selections).
+- **Dev environment**: `bun run dev` (repo root) = `dev:local`: demo :5173 + near-connect executor
+  build watch + sibling-repo mc backend :8787 + Meteor Web wallet :3001, in parallel. `dev:full`,
+  `dev:transfer` and the single-process `dev:*` scripts are in the root `package.json`.
 
 ## Tests
 

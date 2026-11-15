@@ -20,7 +20,7 @@ const localIp = Object.values(networkInterfaces)
 
 // Optional local @hot-labs/near-connect checkout (relative to the repo root, e.g. ../near-connect).
 // Its src/ is plain TS with type-only imports, so Vite serves it directly — edits hot-reload,
-// no build step. Unset = the npm package. Set via `nice-commander env sdk-test-web`.
+// no build step. Unset = the npm package. Set via `NEAR_CONNECT_LOCAL_PATH=../near-connect bun run dev`.
 const nearConnectLocalSrc = (() => {
   const configured = process.env.NEAR_CONNECT_LOCAL_PATH?.trim();
   if (!configured) return undefined;
@@ -37,7 +37,7 @@ const nearConnectLocalSrc = (() => {
 })();
 
 // The locally built meteor-near-connect executor (`build-dev-watch` in packages/meteor-near-connect,
-// commander's `near-connect-build`), served at /meteor-near-connect.js for the dev manifest straight
+// root `bun run dev:near-connect-build`), served at /meteor-near-connect.js for the dev manifest straight
 // from the build output — every rebuild is live on the next page load, with no copy into public/.
 const meteorNearConnectExecutor = path.resolve(
   __dirname,
@@ -78,7 +78,7 @@ export default defineConfig(({ isSsrBuild }) => ({
       configureServer(server) {
         if (!fs.existsSync(meteorNearConnectExecutor)) {
           server.config.logger.warn(
-            `meteor-near-connect executor not built yet (${meteorNearConnectExecutor}) — start it with \`bunx nice-commander up near-connect-build\``,
+            `meteor-near-connect executor not built yet (${meteorNearConnectExecutor}) — start it with \`bun run dev:near-connect-build\` (repo root)`,
           );
         }
 
@@ -91,7 +91,7 @@ export default defineConfig(({ isSsrBuild }) => ({
           if (!fs.existsSync(meteorNearConnectExecutor)) {
             res.statusCode = 404;
             res.end(
-              `// meteor-near-connect executor not built yet — start it with \`bunx nice-commander up near-connect-build\``,
+              `// meteor-near-connect executor not built yet — start it with \`bun run dev:near-connect-build\` (repo root)`,
             );
             return;
           }
