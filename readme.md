@@ -36,6 +36,10 @@ Stop with Ctrl+C. To use a local `@hot-labs/near-connect` checkout in the demo:
 `NEAR_CONNECT_LOCAL_PATH=../near-connect bun run dev`. On a new machine, run `bun run dev:web-wallet`
 once on its own first so mkcert can ask for sudo.
 
+If dev is stopped by signalling only the parent (IDE stop button, `kill <pid>`), child servers can keep
+ports 8787/5173/3001. Find them with `lsof -nP -iTCP:8787,5173,3001 -sTCP:LISTEN` and stop them with
+`kill $(lsof -tiTCP:8787,5173,3001 -sTCP:LISTEN)`.
+
 # Relevant packages and classes in repo
 
 ## Meteor Wallet / Meteor Connect SDK
