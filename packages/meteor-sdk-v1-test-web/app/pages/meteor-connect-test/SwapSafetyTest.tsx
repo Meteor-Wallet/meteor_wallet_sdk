@@ -111,15 +111,17 @@ const ScenarioRow = ({
         actionId: "near::sign_transactions",
         accountId,
         network,
-        execute: async () => {
-          const action = await meteorConnect.createAction({
-            id: "near::sign_transactions",
-            input: {
-              target: account.identifier,
-              transactions: scenario.transactions,
-              useFunctionCallKey: false,
-            },
-          });
+        execute: async (track) => {
+          const action = track(
+            await meteorConnect.createAction({
+              id: "near::sign_transactions",
+              input: {
+                target: account.identifier,
+                transactions: scenario.transactions,
+                useFunctionCallKey: false,
+              },
+            }),
+          );
           return action.promptForExecution();
         },
         summarize: (outcomes) => summarizeTransactions(outcomes, network),
@@ -132,11 +134,13 @@ const ScenarioRow = ({
       actionId: "near::sign_delegate_actions",
       accountId,
       network,
-      execute: async () => {
-        const action = await meteorConnect.createAction({
-          id: "near::sign_delegate_actions",
-          input: { target: account.identifier, delegateActions: scenario.transactions },
-        });
+      execute: async (track) => {
+        const action = track(
+          await meteorConnect.createAction({
+            id: "near::sign_delegate_actions",
+            input: { target: account.identifier, delegateActions: scenario.transactions },
+          }),
+        );
         return action.promptForExecution();
       },
       summarize: (output) => {

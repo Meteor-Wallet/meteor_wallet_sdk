@@ -65,4 +65,12 @@ backend's link path (`meteorwallet://b?…` today).
   mobile bindings cannot be used for push.
 
 Call `disposeMobileBridge()` only when there is no committed mobile request before reinitializing with
-a different mobile configuration.
+a different mobile configuration. While a request recovered after a reload is still being collected it
+throws `mobile_bridge_dispose_during_recovery`; `getRecoveredResults()` resolves once that request has
+settled.
+
+While the wallet has not answered a recovered request (the user may have closed Meteor Mobile),
+`getRecoveringRequest()` describes it: `openInWallet()` reopens the wallet on it through the same link
+and opener as the Connect popup's "Open Meteor Mobile" (call it from the tap), and `cancel()` closes it
+as closing the popup would and reports it as `"cancelled"`. A recovered sign-message result carries
+the NEP-413 `messageParams` it was made with, so the reloaded page can still verify the signature.

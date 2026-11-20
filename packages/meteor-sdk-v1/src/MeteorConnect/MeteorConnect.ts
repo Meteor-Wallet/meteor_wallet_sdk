@@ -20,9 +20,12 @@ import type {
   IMeteorConnectAccount,
   IMeteorConnectAccountIdentifier,
   IMeteorConnectNetworkTarget,
+  IMeteorConnectRecoveredActionResult,
+  IMeteorConnectRecoveringRequest,
   IMeteorConnectTypedStorage,
   TMCLoggingLevel,
   TMeteorConnectionExecutionTarget,
+  TMeteorConnectRecoveredActionResultListener,
 } from "./MeteorConnect.types.ts";
 import type { MeteorConnectClientBase } from "./target_clients/base/MeteorConnectClientBase";
 import { MeteorConnectMobileBridgeClient } from "./target_clients/mobile_bridge/MeteorConnectMobileBridgeClient";
@@ -123,6 +126,7 @@ export class MeteorConnect {
         leaseProvider: objectFingerprint(mobileBridge?.leaseProvider),
         nativeAppOpener: objectFingerprint(mobileBridge?.nativeAppOpener),
         autoOpenPairedWallet: mobileBridge?.autoOpenPairedWallet ?? true,
+        recoverAfterReload: mobileBridge?.recoverAfterReload ?? true,
         nearKeyStoreProvider: objectFingerprint(nearKeyStoreProvider),
         transferAccounts:
           mobileBridge?.transferAccounts == null
@@ -205,6 +209,38 @@ export class MeteorConnect {
     ).then((platforms) => platforms.flat());
 
     this.logger.log("Initialized with supported platforms:", this.supportedPlatforms);
+    // Collect a request this tab started before the page reloaded. Not awaited: it may wait on the
+    // wallet, and every new mobile-bridge request already waits for it on its own.
+    void this.clients.mobileBridge.recoverPendingRequest();
+  }
+
+  /**
+   * Hear, once each, about mobile-bridge requests recovered after a reload
+   * (`mobileBridge.recoverAfterReload`). Results recovered before anything subscribed go to the
+   * first listener; accounts are already updated when one arrives. Returns the unsubscribe.
+   */
+  onRecoveredActionResult(listener: TMeteorConnectRecoveredActionResultListener): () => void {
+    return this.clients.mobileBridge.onRecoveredActionResult(listener);
+  }
+
+  /**
+   * Every request recovered after a reload, once recovery has settled (`[]` if none). Resolves
+   * late while the wallet is still answering one, so a page can show "recovering" until then.
+   */
+  async getRecoveredResults(): Promise<IMeteorConnectRecoveredActionResult[]> {
+    await this.initializePromise?.catch(() => {});
+    return this.clients.mobileBridge.getRecoveredResults();
+  }
+
+  /**
+   * The request recovered after a reload that is still waiting on the wallet, or `undefined` when
+   * there is none (nothing to recover, or it already settled). Resolves once the recovered request
+   * has been re-entered, so a page can offer to reopen the wallet or cancel it — a wallet the user
+   * closed would otherwise leave it waiting until its deadline.
+   */
+  async getRecoveringRequest(): Promise<IMeteorConnectRecoveringRequest | undefined> {
+    await this.initializePromise?.catch(() => {});
+    return this.clients.mobileBridge.getRecoveringRequest();
   }
 
   get storage() {

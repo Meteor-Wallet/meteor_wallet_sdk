@@ -1,4 +1,4 @@
-import { MOBILE_BRIDGE_ENDING } from "@meteorwallet/sdk";
+import { type IMeteorConnectRecoveredActionResult, MOBILE_BRIDGE_ENDING } from "@meteorwallet/sdk";
 import { base64 } from "@scure/base";
 
 /**
@@ -19,6 +19,13 @@ export type TActionResultStatus =
   /** The user (or the wallet) declined or closed it — not a bug in itself. */
   | "cancelled"
   | "failed"
+  /** Nobody answered within the request's window — the wallet never replied, nothing broke. */
+  | "expired"
+  /**
+   * The page reloaded while the wallet held this request; the SDK is collecting its answer
+   * (`recoverAfterReload`). Becomes the answer, or `interrupted` when there is none to collect.
+   */
+  | "recovering"
   /** The page reloaded while this was still waiting, so its answer was never received. */
   | "interrupted";
 
@@ -47,6 +54,8 @@ export interface IActionResult {
   actionId?: string;
   accountId?: string;
   network?: TNearNetwork;
+  /** `ExecutableAction.requestId`, so an answer recovered after a reload finds this entry. */
+  requestId?: string;
   status: TActionResultStatus;
   startedAt: number;
   endedAt?: number;
@@ -75,7 +84,7 @@ const USER_ENDED_V1 =
 export const describeActionError = (
   error: unknown,
 ): {
-  status: "cancelled" | "failed";
+  status: "cancelled" | "failed" | "expired";
   headline: string;
   message: string;
   code?: string;
@@ -95,7 +104,7 @@ export const describeActionError = (
   }
   if (message.startsWith(MOBILE_BRIDGE_ENDING.expired)) {
     return {
-      status: "failed",
+      status: "expired",
       headline: "Expired without an answer from the wallet",
       message,
       code,
@@ -193,10 +202,16 @@ export const explorerAccountUrl = (network: TNearNetwork, accountId: string): st
 const STORAGE_KEY = "meteor_connect_test.action_results.v1";
 export const MAX_STORED_RESULTS = 50;
 
+const INTERRUPTED: Pick<IActionResult, "status" | "headline"> = {
+  status: "interrupted",
+  headline: "The page reloaded before the wallet answered",
+};
+
 /**
  * Mobile browsers freely discard a backgrounded tab — exactly what happens while the tester is
- * off approving in Meteor Mobile — so the log outlives a reload. Anything still pending when the
- * page died can never be answered now; it comes back as `interrupted`, not as a fake success.
+ * off approving in Meteor Mobile — so the log outlives a reload. A request still pending when the
+ * page died comes back as `recovering` when the SDK may still collect its answer (it knows the
+ * request's id), and as `interrupted` otherwise — never as a fake success.
  */
 export const loadStoredResults = (): IActionResult[] => {
   try {
@@ -204,19 +219,55 @@ export const loadStoredResults = (): IActionResult[] => {
     if (stored == null) return [];
     const parsed = JSON.parse(stored) as IActionResult[];
     if (!Array.isArray(parsed)) return [];
-    return parsed.map((result) =>
-      result.status === "pending"
-        ? {
-            ...result,
-            status: "interrupted",
-            headline: "The page reloaded before the wallet answered",
-          }
-        : result,
-    );
+    return parsed.map((result) => {
+      if (result.status !== "pending" && result.status !== "recovering") return result;
+      return result.requestId == null
+        ? { ...result, ...INTERRUPTED }
+        : { ...result, status: "recovering" };
+    });
   } catch {
     return [];
   }
 };
+
+/**
+ * The entry update for an answer the SDK recovered after the reload. A success is summarized by
+ * the caller (it knows the action); every other outcome is described here.
+ */
+export const recoveredResultUpdate = (
+  recovered: IMeteorConnectRecoveredActionResult,
+  summary: IActionResultSummary | undefined,
+): Partial<IActionResult> => {
+  const endedAt = Date.now();
+  if (recovered.outcome === "success") {
+    return {
+      status: summary?.status ?? "success",
+      endedAt,
+      headline: `${summary?.headline ?? "Completed"} (recovered after reload)`,
+      fields: summary?.fields ?? [],
+      raw: toDisplayJson(recovered.output),
+    };
+  }
+  const message = recovered.error?.message ?? recovered.outcome;
+  const described: Pick<IActionResult, "status" | "headline"> =
+    recovered.outcome === "declined"
+      ? { status: "cancelled", headline: "Declined by the wallet (recovered after reload)" }
+      : recovered.outcome === "cancelled"
+        ? { status: "cancelled", headline: "Cancelled before the wallet answered (after reload)" }
+        : recovered.outcome === "expired"
+          ? {
+              status: "expired",
+              headline: "The 5-minute window passed without an answer (after reload)",
+            }
+          : { status: "failed", headline: "Could not recover the answer after the reload" };
+  return { ...described, endedAt, errorMessage: message, raw: toDisplayJson(recovered.error) };
+};
+
+/** Recovery has settled: an entry still `recovering` has no answer to collect. */
+export const settleRecoveringResults = (results: readonly IActionResult[]): IActionResult[] =>
+  results.map((result) =>
+    result.status === "recovering" ? { ...result, ...INTERRUPTED } : result,
+  );
 
 export const storeResults = (results: readonly IActionResult[]): void => {
   try {

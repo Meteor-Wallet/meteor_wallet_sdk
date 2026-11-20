@@ -247,6 +247,17 @@ export interface IMeteorConnectMobileBridgeConfig {
    * notification and the Open button behave exactly as before, and both stay as fallbacks.
    */
   autoOpenPairedWallet?: boolean;
+  /**
+   * Collect a request's answer after the browser reloaded the page while the user was in Meteor
+   * Mobile (mobile Safari does this to background tabs). Default `true`; `false` turns it off and
+   * drops anything kept for it. Covers the NEAR actions answered within the request's 5-minute
+   * window; not account transfers, a closed tab, or lost `sessionStorage`.
+   *
+   * While a request is open, the tab's `sessionStorage` holds the session secret (and a sign-in's
+   * new function-call key) until it ends. Answers arrive through `onRecoveredActionResult` /
+   * `getRecoveredResults()`; a recovered sign-in or sign-out updates the stored accounts.
+   */
+  recoverAfterReload?: boolean;
   partnerMetadata?: {
     name?: string;
     description?: string;
@@ -261,3 +272,83 @@ export interface IMeteorConnectMobileBridgeConfig {
    */
   newKeyTransfer?: { enabled?: boolean };
 }
+
+/**
+ * How a request recovered after a reload ended. `"success"`: `output` is what the action's own
+ * `execute()` would have resolved with. `"declined"`: a signed decline. `"cancelled"`: closed
+ * before the wallet answered (or replaced by a new request first). `"expired"`: its window passed.
+ * `"failed"`: anything else.
+ */
+export type TMeteorConnectRecoveredOutcome =
+  | "success"
+  | "declined"
+  | "cancelled"
+  | "expired"
+  | "failed";
+
+/** One request a reloaded page collected (or could not). Reported exactly once. */
+export interface IMeteorConnectRecoveredActionResult {
+  /** `ExecutableAction.requestId` of the action that started it, before the reload. */
+  requestId: string;
+  /** e.g. `"near::sign_message"`. */
+  actionId: string;
+  outcome: TMeteorConnectRecoveredOutcome;
+  /** `"success"` only. */
+  output?: unknown;
+  /** Every outcome but `"success"`. */
+  error?: Error;
+  /**
+   * `near::sign_message` and `near::sign_in_and_sign_message` only: the NEP-413 params the request
+   * was made with, as the wallet was asked to sign them (no `callbackUrl` is sent over the mobile
+   * bridge). The page that made the request is gone, so this is what a reloaded page verifies the
+   * recovered signature against.
+   */
+  messageParams?: IMeteorConnectRecoveredMessageParams;
+}
+
+/** The NEP-413 params of a recovered sign-message request (see `IMeteorConnectRecoveredActionResult`). */
+export interface IMeteorConnectRecoveredMessageParams {
+  message: string;
+  recipient: string;
+  nonce: Uint8Array;
+}
+
+/**
+ * A request recovered after a reload that the wallet has not answered yet (`getRecoveringRequest`),
+ * with what a page needs to offer while it waits: reopen the wallet, or give up on it. Its answer,
+ * whatever it is, still arrives through `onRecoveredActionResult` / `getRecoveredResults()`.
+ */
+export interface IMeteorConnectRecoveringRequest {
+  /** `ExecutableAction.requestId` of the action that started it, before the reload. */
+  requestId: string;
+  /** e.g. `"near::sign_message"`. */
+  actionId: string;
+  /**
+   * When the request expires if the wallet never answers (epoch ms): the earlier of the session's
+   * idle deadline (5 minutes, pushed out by each step the wallet takes) and its absolute one. Read
+   * live, so it can move later while the request is open.
+   */
+  expiresAt: number;
+  /**
+   * Whether `openInWallet()` can reopen the wallet. `false` for a request kept by an SDK version
+   * that did not record the wallet link: it can still be collected or cancelled.
+   */
+  canOpenInWallet: boolean;
+  /**
+   * Reopen Meteor Mobile on this request — the same link and opener the Connect popup's "Open
+   * Meteor Mobile" button uses (`mobileBridge.nativeAppOpener` when one is configured). Call it
+   * straight from the user's tap: browsers only open an app from inside the gesture. Throws once
+   * the request has settled, or when `canOpenInWallet` is `false`.
+   */
+  openInWallet(): void | Promise<void>;
+  /**
+   * Give up on the request: close its session with the one close verb the session allows, as
+   * closing the Connect popup does, and report it as `"cancelled"`. Resolves once that result has
+   * been reported (immediately when the request already settled). Never rejects.
+   */
+  cancel(): Promise<void>;
+}
+
+export type TMeteorConnectRecoveredActionResultListener = (
+  result: IMeteorConnectRecoveredActionResult,
+) => void;

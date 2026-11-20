@@ -1,9 +1,24 @@
-import { EStorageAdapterType, StorageAdapter } from "@meteorwallet/connect";
-import { EPartnerOrigin, type TPartnerMetadata } from "@meteorwallet/connect-shared";
+import {
+  EStorageAdapterType,
+  type IActionPayload_Request_JsonObject,
+  type IPartnerResumeTokenV1,
+  StorageAdapter,
+  type TPartnerPairedWallet,
+} from "@meteorwallet/connect";
+import {
+  EBridgeLinkType,
+  EMeteorAppId,
+  EPartnerOrigin,
+  type TMeteorBridgeWalletLink,
+  type TPartnerMetadata,
+} from "@meteorwallet/connect-shared";
+import type { KeyPairString } from "@near-js/crypto";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { base64url } from "@scure/base";
+import * as v from "valibot";
 import type { ILocalStorageInterface } from "../../../ported_common/utils/storage/storage.types";
 import type { IMeteorConnectMobileBridgeConfig } from "../../MeteorConnect.types";
+import type { TMobileNearActionId } from "./MeteorConnectMobileBridgeClient.types";
 
 const BRIDGE_STORAGE_PREFIX = "met_bridge_partner::";
 
@@ -159,6 +174,249 @@ export function createMobileBridgeStorage(
       const keys = await readSameDeviceWallets();
       if (!keys.includes(walletVerifyPublicKey)) return;
       await writeSameDeviceWallets(keys.filter((key) => key !== walletVerifyPublicKey));
+    },
+  };
+}
+
+//
+// Reload recovery: the pending-request record
+//
+
+/** The SDK action ids whose mobile-bridge request a reloaded tab can collect (`single_turn_v1`). */
+export type TRecoverableSdkActionId =
+  | "near::sign_in"
+  | "near::sign_in_and_sign_message"
+  | "near::sign_out"
+  | "near::sign_message"
+  | "near::sign_transactions"
+  | "near::sign_delegate_actions"
+  | "near::verify_owner";
+
+/**
+ * The part of a NEAR request a reloaded tab needs to map the wallet's answer exactly as the
+ * original page would have: the staged input (to bind the result to the turn), and the few fields
+ * of the SDK request the result mapping reads (`target`, the function-call key definition and the
+ * targeted account's identifier). Never the whole SDK request: it holds bytes, keys and callbacks.
+ */
+export interface IMobileBridgePendingAction {
+  sdkActionId: TRecoverableSdkActionId;
+  sharedActionId: TMobileNearActionId;
+  /** The staged request, as the original page sent it. */
+  actionRequest: IActionPayload_Request_JsonObject;
+  actionInput: unknown;
+  retainedMessageState?: string;
+  expandedInput: Record<string, unknown>;
+}
+
+/**
+ * The wallet's verified answer to a recorded request, written into the record BEFORE the session is
+ * acknowledged. The acknowledgement closes the session, and a closed session no longer hands the
+ * answer out — so a page torn down after the backend applied it, but before the record was removed
+ * (iOS Safari reloading a tab it just woke, mid-verb), would otherwise leave the reloaded page a
+ * record whose session can only read back as a cancel. Only the wallet's raw output and the wallet
+ * that gave it are kept: the SDK-shaped result is mapped again from them, exactly as the first time.
+ */
+export type TMobileBridgeRecordedAnswer =
+  | {
+      status: "ok";
+      output: unknown;
+      wallet: Pick<TPartnerPairedWallet, "meteorAppId" | "walletVerifyPublicKey">;
+    }
+  | { status: "declined"; errorIds: string[]; errorMessage: string }
+  | { status: "mismatch" };
+
+/**
+ * One in-flight mobile-bridge request, kept per tab so a page the browser reloaded while the user
+ * was in the wallet can still collect the answer.
+ *
+ * It holds the session's resume token — partner secret and bridge lease included — and, for a
+ * sign-in that adds a function-call key, that key's private half. Both are accepted D15 exposures:
+ * the record lives only in this tab's `sessionStorage`, never in `localStorage`, and only until the
+ * session settles or its absolute deadline passes. Script running in the page can read it, but such
+ * script can already drive the live session. Without the key a recovered sign-in would leave a key
+ * on-chain that no device holds. Once the wallet has answered, the record also holds that verified
+ * answer for the short window until it is delivered — what the page is about to hand the DApp
+ * anyway, kept under the same rules.
+ */
+export interface IMobileBridgePendingRequestRecord {
+  v: 1;
+  /** `ExecutableAction.requestId` of the action that started the request. */
+  requestId: string;
+  createdAt: number;
+  /** The session's absolute deadline; a record past it can only be reported as expired. */
+  expiresAt: number;
+  /** The app ids the original session targeted, in preference order. */
+  meteorAppIds: EMeteorAppId[];
+  /**
+   * The verify key of the one wallet the original session accepted a claim from (an account
+   * action on a paired mobile account), so the recovered session refuses any other claimant too.
+   */
+  expectedWalletVerifyPublicKey?: string;
+  token: IPartnerResumeTokenV1;
+  /**
+   * The backend-issued wallet link the original session presented (without its fragment secret),
+   * so a reloaded page can reopen the wallet on the same request. Absent in a record written
+   * before it was kept; such a request can still be collected, only not reopened.
+   */
+  walletLink?: TMeteorBridgeWalletLink;
+  action: IMobileBridgePendingAction;
+  /** Sign-in with a new function-call key only: that key, as `KeyPair.toString()` writes it. */
+  functionCallKey?: KeyPairString;
+  /** Set once the wallet's answer is verified, before it is acknowledged (see the type). */
+  answer?: TMobileBridgeRecordedAnswer;
+}
+
+const isKeyPairString = (value: string): value is KeyPairString =>
+  value.startsWith("ed25519:") || value.startsWith("secp256k1:");
+
+const isPlainObject = (value: unknown): boolean =>
+  typeof value === "object" && value != null && !Array.isArray(value);
+
+/**
+ * The shape check on read. The token is only checked for being an object here: it is opaque to the
+ * SDK, and `PartnerSessionClient.resumeSession` validates it strictly before using any of it. The
+ * staged request is never sent again — a resumed session only collects the answer to it.
+ */
+const vPendingRequestRecord = v.object({
+  v: v.literal(1),
+  requestId: v.pipe(v.string(), v.minLength(1)),
+  createdAt: v.number(),
+  expiresAt: v.number(),
+  meteorAppIds: v.pipe(v.array(v.enum(EMeteorAppId)), v.minLength(1)),
+  expectedWalletVerifyPublicKey: v.optional(v.pipe(v.string(), v.minLength(1))),
+  token: v.custom<IPartnerResumeTokenV1>(isPlainObject),
+  walletLink: v.optional(
+    v.object({
+      linkString: v.pipe(v.string(), v.minLength(1)),
+      linkType: v.enum(EBridgeLinkType),
+    }),
+  ),
+  action: v.object({
+    sdkActionId: v.picklist([
+      "near::sign_in",
+      "near::sign_in_and_sign_message",
+      "near::sign_out",
+      "near::sign_message",
+      "near::sign_transactions",
+      "near::sign_delegate_actions",
+      "near::verify_owner",
+    ]),
+    sharedActionId: v.picklist([
+      "sign_in",
+      "sign_in_and_sign_message",
+      "sign_out",
+      "sign_message",
+      "sign_and_send_transaction",
+      "sign_and_send_transactions",
+      "sign_delegate_actions",
+      "verify_owner",
+    ]),
+    actionRequest: v.custom<IActionPayload_Request_JsonObject>(isPlainObject),
+    actionInput: v.unknown(),
+    retainedMessageState: v.optional(v.string()),
+    expandedInput: v.record(v.string(), v.unknown()),
+  }),
+  functionCallKey: v.optional(
+    v.custom<KeyPairString>((value) => typeof value === "string" && isKeyPairString(value)),
+  ),
+  answer: v.optional(
+    v.variant("status", [
+      v.object({
+        status: v.literal("ok"),
+        output: v.unknown(),
+        wallet: v.object({
+          meteorAppId: v.enum(EMeteorAppId),
+          walletVerifyPublicKey: v.custom<TPartnerPairedWallet["walletVerifyPublicKey"]>(
+            (value) => typeof value === "string" && value.startsWith("ed25519::raw_base64::"),
+          ),
+        }),
+      }),
+      v.object({
+        status: v.literal("declined"),
+        errorIds: v.array(v.string()),
+        errorMessage: v.string(),
+      }),
+      v.object({ status: v.literal("mismatch") }),
+    ]),
+  ),
+});
+
+/** Per-tab home of the {@link IMobileBridgePendingRequestRecord}; every method is best-effort. */
+export interface IMobileBridgePendingRequestStore {
+  /** The stored record, or `undefined` when there is none or it is unreadable (then removed). */
+  read(): IMobileBridgePendingRequestRecord | undefined;
+  /** Returns whether the record was stored. */
+  write(record: IMobileBridgePendingRequestRecord): boolean;
+  /** Remove the record — only if it is `requestId`'s, when one is given. */
+  clear(requestId?: string): void;
+}
+
+const PENDING_REQUEST_KEY_SUFFIX = "::pending_request";
+
+/** Where the record for one bridge environment lives, beside that environment's other records. */
+export function pendingRequestStorageKey(environmentId: string): string {
+  return `${BRIDGE_STORAGE_PREFIX}${environmentId}${PENDING_REQUEST_KEY_SUFFIX}`;
+}
+
+/**
+ * The store over this tab's `sessionStorage`. Every access is guarded: reading the property itself
+ * throws on an opaque origin or with site data blocked, and React Native has none at all. Without
+ * it the store holds nothing and recovery simply never happens.
+ */
+export function createPendingRequestStore(
+  environmentId: string,
+  getStorage: () => Storage | undefined = () => globalThis.sessionStorage,
+): IMobileBridgePendingRequestStore {
+  const key = pendingRequestStorageKey(environmentId);
+  const storage = (): Storage | undefined => {
+    try {
+      return getStorage() ?? undefined;
+    } catch {
+      return undefined;
+    }
+  };
+  const remove = () => {
+    try {
+      storage()?.removeItem(key);
+    } catch {
+      // Nothing more can be done; the record expires with its session.
+    }
+  };
+  const read = (): IMobileBridgePendingRequestRecord | undefined => {
+    let stored: string | null | undefined;
+    try {
+      stored = storage()?.getItem(key);
+    } catch {
+      return undefined;
+    }
+    if (stored == null) return undefined;
+    try {
+      const parsed = v.safeParse(vPendingRequestRecord, JSON.parse(stored));
+      if (parsed.success) return parsed.output;
+    } catch {
+      // Unparseable JSON falls through to removal.
+    }
+    remove();
+    return undefined;
+  };
+  return {
+    read,
+    write: (record) => {
+      try {
+        const target = storage();
+        if (target == null) return false;
+        target.setItem(key, JSON.stringify(record));
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    clear: (requestId) => {
+      if (requestId != null) {
+        const current = read();
+        if (current != null && current.requestId !== requestId) return;
+      }
+      remove();
     },
   };
 }

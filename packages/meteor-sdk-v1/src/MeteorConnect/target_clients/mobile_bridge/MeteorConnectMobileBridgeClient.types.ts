@@ -1,13 +1,18 @@
 import type {
   IActionPayload_Request_JsonObject,
+  IPartnerResumeTokenV1,
   ISessionResultReceipt,
 } from "@meteorwallet/connect";
-import type { TAllAccountsTransferDataEncrypted } from "@meteorwallet/connect-shared";
+import type {
+  TAllAccountsTransferDataEncrypted,
+  TMeteorBridgeWalletLink,
+} from "@meteorwallet/connect-shared";
 import type { KeyPair } from "@near-js/crypto";
 import type { TMCActionRegistry } from "../../action/mc_action.combined";
 import type { TMCActionRequestUnionExpandedInput } from "../../action/mc_action.types";
 import type { IMeteorConnection_V2_BridgeMobile } from "../../MeteorConnect.types";
 import type { MobileBridgeSession } from "./MobileBridgeSession";
+import type { TMobileBridgeRecordedAnswer } from "./mobileBridgeStorage";
 
 export type TMobileNearActionId =
   | "sign_in"
@@ -116,6 +121,24 @@ export interface IMobileBridgeRequestTarget {
    * a new session. Refused unless the retained session is still holding exactly that bridge.
    */
   continueExternalWorkHold?: IMobileBridgeExternalWorkHold;
+  /** The owning action's `requestId`, for reload recovery. */
+  requestId?: string;
+  /**
+   * Whether the owning action was cancelled meanwhile. Preparation can wait a long time for a
+   * request recovered after a reload; a request cancelled during that wait is never created, so
+   * no wallet is woken for it.
+   */
+  isCancelled?: () => boolean;
+}
+
+// One request's pending-request record (reload recovery), as its session sees it: written once its
+// session exists, given the wallet's verified answer before that answer is acknowledged, and
+// cleared on every ending before an answer is delivered (at most once).
+export interface IMobileBridgePendingRequestHandle {
+  /** `walletLink`: the link the session presents, so a reloaded page can reopen the wallet. */
+  write(token: IPartnerResumeTokenV1, walletLink?: TMeteorBridgeWalletLink): void;
+  recordAnswer(answer: TMobileBridgeRecordedAnswer): void;
+  clear(): void;
 }
 
 export interface IMobileBridgeResultContext {

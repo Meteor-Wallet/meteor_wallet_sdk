@@ -50,11 +50,13 @@ export const SignDelegateActionTest = ({
       actionId: "near::sign_delegate_actions",
       accountId,
       network,
-      execute: async () => {
-        const action = await meteorConnect.createAction({
-          id: "near::sign_delegate_actions",
-          input: { target: account.identifier, delegateActions },
-        });
+      execute: async (track) => {
+        const action = track(
+          await meteorConnect.createAction({
+            id: "near::sign_delegate_actions",
+            input: { target: account.identifier, delegateActions },
+          }),
+        );
         const output = await action.promptForExecution();
         setSignedDelegates(output.signedDelegatesWithHashes.map((d) => d.signedDelegate));
         return output;

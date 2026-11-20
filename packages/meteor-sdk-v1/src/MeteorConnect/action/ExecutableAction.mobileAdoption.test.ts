@@ -60,8 +60,14 @@ function createHarness(options: { staleTurn?: boolean } = {}) {
   let session!: ReturnType<typeof createSessionDouble>;
   let newRequestsPrepared = 0;
   const signedIn: unknown[] = [];
+  const preparedRequestIds: Array<string | undefined> = [];
   const mobileBridgeClient = {
-    prepareRequest: async (request: { id: string; expandedInput: unknown }) => {
+    prepareRequest: async (
+      request: { id: string; expandedInput: unknown },
+      _sensitive: unknown,
+      target: { requestId?: string },
+    ) => {
+      preparedRequestIds.push(target.requestId);
       session = createSessionDouble(
         options.staleTurn
           ? { id: "meteor_wallet_core::transfer_accounts", expandedInput: {} }
@@ -104,6 +110,7 @@ function createHarness(options: { staleTurn?: boolean } = {}) {
     action,
     outcome,
     signedIn,
+    preparedRequestIds,
     get session() {
       return session;
     },
@@ -114,6 +121,19 @@ function createHarness(options: { staleTurn?: boolean } = {}) {
 }
 
 const flush = () => new Promise((resolve) => setTimeout(resolve, 10));
+
+describe("ExecutableAction request id", () => {
+  it("hands its own requestId to the mobile bridge, so a reloaded page can match a recovered answer", async () => {
+    const first = createHarness();
+    const second = createHarness();
+    await first.action.prepareMobileBridge();
+    await second.action.prepareMobileBridge();
+
+    expect(first.preparedRequestIds).toEqual([first.action.requestId]);
+    expect(first.action.requestId).toMatch(/^[0-9a-f-]{36}$/);
+    expect(second.action.requestId).not.toBe(first.action.requestId);
+  });
+});
 
 describe("ExecutableAction adopting a wallet answer it never saw being made", () => {
   it("resolves when the tab reconnects straight into a completed turn", async () => {

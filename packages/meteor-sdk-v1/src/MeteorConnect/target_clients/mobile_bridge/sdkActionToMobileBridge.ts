@@ -5,17 +5,28 @@ import {
   type EWalletProtocolCapability,
   REQUIRED_METEOR_WALLET_CAPABILITIES,
 } from "@meteorwallet/connect-shared";
-import { getServerRequiredWalletCapabilities } from "@meteorwallet/connect-shared";
-import { KeyPair } from "@near-js/crypto";
+import {
+  type EMeteorAppId,
+  getServerRequiredWalletCapabilities,
+} from "@meteorwallet/connect-shared";
+import { KeyPair, type KeyPairString } from "@near-js/crypto";
 import { base64 } from "@scure/base";
 import { convertOldFunctionCallKeyDefToNew } from "../../../near_utils/convertOldFunctionCallKeyDefToNew";
 import type { TNearNativeAction } from "../../../near_utils/meteor_actions.types";
 import type { TMCActionRegistry } from "../../action/mc_action.combined";
 import type { TMCActionRequestUnionExpandedInput } from "../../action/mc_action.types";
+import type { IMeteorConnectRecoveredMessageParams } from "../../MeteorConnect.types";
 import type {
+  IMobileBridgePendingRequestHandle,
   IMobileBridgePreparedAction,
   IMobileBridgeSensitiveTransferSource,
 } from "./MeteorConnectMobileBridgeClient.types";
+import type {
+  IMobileBridgePendingAction,
+  IMobileBridgePendingRequestRecord,
+  IMobileBridgePendingRequestStore,
+  TRecoverableSdkActionId,
+} from "./mobileBridgeStorage";
 
 function decodeJsonOrBase64(bytes: Uint8Array): unknown {
   try {
@@ -316,5 +327,169 @@ async function nearActionToMobileBridge(
     }
     default:
       throw new Error("mobile_bridge_unsupported_sdk_action");
+  }
+}
+
+//
+// Reload recovery
+//
+
+const RECOVERABLE_SDK_ACTION_IDS: ReadonlySet<string> = new Set<TRecoverableSdkActionId>([
+  "near::sign_in",
+  "near::sign_in_and_sign_message",
+  "near::sign_out",
+  "near::sign_message",
+  "near::sign_transactions",
+  "near::sign_delegate_actions",
+  "near::verify_owner",
+]);
+
+const isRecoverableSdkActionId = (id: string): id is TRecoverableSdkActionId =>
+  RECOVERABLE_SDK_ACTION_IDS.has(id);
+
+/** The expanded-input fields `nearOutputToSdk` reads besides the targeted account's identifier. */
+const RECOVERED_EXPANDED_INPUT_KEYS = ["target", "addFunctionCallKey", "contract"] as const;
+
+/**
+ * What a reloaded tab needs to collect this request's answer, or `undefined` for a request it
+ * cannot collect. Only the NEAR actions qualify: the transfer families carry key handles and
+ * external-work state that a page never writes down.
+ */
+export function preparedActionToPendingAction(
+  prepared: IMobileBridgePreparedAction,
+): { action: IMobileBridgePendingAction; functionCallKey?: KeyPairString } | undefined {
+  const kind = prepared.kind;
+  const sdkActionId = prepared.sdkRequest.id;
+  if (kind.domain !== "near" || !isRecoverableSdkActionId(sdkActionId)) return undefined;
+  const input: any = prepared.sdkRequest.expandedInput;
+  const expandedInput: Record<string, unknown> = {};
+  for (const key of RECOVERED_EXPANDED_INPUT_KEYS) {
+    if (input?.[key] != null) expandedInput[key] = input[key];
+  }
+  const identifier = input?.account?.identifier;
+  if (identifier != null) expandedInput.account = { identifier };
+  return {
+    action: {
+      sdkActionId,
+      sharedActionId: kind.sharedActionId,
+      actionRequest: prepared.actionRequest,
+      actionInput: prepared.actionInput,
+      ...(kind.retainedMessageState == null
+        ? {}
+        : { retainedMessageState: kind.retainedMessageState }),
+      expandedInput,
+    },
+    ...(kind.pendingFunctionCallKey == null
+      ? {}
+      : { functionCallKey: kind.pendingFunctionCallKey.toString() }),
+  };
+}
+
+/**
+ * The pending-request handle a session writes and clears its record through, or `undefined` for a
+ * request a reloaded tab could not collect (see {@link preparedActionToPendingAction}).
+ */
+export function createPendingRequestHandle(input: {
+  store: IMobileBridgePendingRequestStore;
+  requestId: string;
+  prepared: IMobileBridgePreparedAction;
+  meteorAppIds: readonly EMeteorAppId[];
+  expectedWalletVerifyPublicKey?: string;
+}): IMobileBridgePendingRequestHandle | undefined {
+  const recoverable = preparedActionToPendingAction(input.prepared);
+  if (recoverable == null) return undefined;
+  return {
+    write: (token, walletLink) => {
+      input.store.write({
+        v: 1,
+        requestId: input.requestId,
+        createdAt: Date.now(),
+        expiresAt: token.facts.absoluteExpiresAt,
+        meteorAppIds: [...input.meteorAppIds],
+        ...(input.expectedWalletVerifyPublicKey == null
+          ? {}
+          : { expectedWalletVerifyPublicKey: input.expectedWalletVerifyPublicKey }),
+        token,
+        // Only the link itself: its fragment secret is the token's own `partnerSecret`.
+        ...(walletLink == null
+          ? {}
+          : { walletLink: { linkString: walletLink.linkString, linkType: walletLink.linkType } }),
+        ...recoverable,
+      });
+    },
+    // Added to this request's own record only: a record that is gone (or now another request's)
+    // has nothing left to recover.
+    recordAnswer: (answer) => {
+      const current = input.store.read();
+      if (current == null || current.requestId !== input.requestId) return;
+      input.store.write({ ...current, answer });
+    },
+    // Another request's record is never touched.
+    clear: () => input.store.clear(input.requestId),
+  };
+}
+
+/**
+ * The prepared action a recovered session carries. Its SDK request holds only the fields the
+ * result mapping reads (see {@link IMobileBridgePendingAction}); that narrowing is the one cast
+ * here, and nothing on the recovered path reads any other member of the expanded input.
+ */
+export function pendingRequestToPreparedAction(
+  record: IMobileBridgePendingRequestRecord,
+): IMobileBridgePreparedAction {
+  const { action } = record;
+  const sdkRequest = {
+    id: action.sdkActionId,
+    expandedInput: action.expandedInput,
+  } as unknown as TMCActionRequestUnionExpandedInput<TMCActionRegistry>;
+  return {
+    sdkRequest,
+    actionRequest: action.actionRequest,
+    actionInput: action.actionInput,
+    kind: {
+      domain: "near",
+      sharedActionId: action.sharedActionId,
+      ...(record.functionCallKey == null
+        ? {}
+        : { pendingFunctionCallKey: KeyPair.fromString(record.functionCallKey) }),
+      ...(action.retainedMessageState == null
+        ? {}
+        : { retainedMessageState: action.retainedMessageState }),
+    },
+  };
+}
+
+/**
+ * The NEP-413 params a recorded sign-message request staged — what a reloaded page needs to verify
+ * the recovered signature, which its own memory no longer holds. Read back from the staged wire
+ * input without trusting its shape; `undefined` for any other action or anything unreadable.
+ */
+export function pendingActionMessageParams(
+  action: IMobileBridgePendingAction,
+): IMeteorConnectRecoveredMessageParams | undefined {
+  const input = action.actionInput;
+  if (typeof input !== "object" || input == null) return undefined;
+  const staged =
+    action.sharedActionId === "sign_message"
+      ? input
+      : action.sharedActionId === "sign_in_and_sign_message" && "messageParams" in input
+        ? input.messageParams
+        : undefined;
+  if (typeof staged !== "object" || staged == null) return undefined;
+  if (!("message" in staged) || !("recipient" in staged) || !("nonceBase64" in staged)) {
+    return undefined;
+  }
+  const { message, recipient, nonceBase64 } = staged;
+  if (
+    typeof message !== "string" ||
+    typeof recipient !== "string" ||
+    typeof nonceBase64 !== "string"
+  ) {
+    return undefined;
+  }
+  try {
+    return { message, recipient, nonce: base64.decode(nonceBase64) };
+  } catch {
+    return undefined;
   }
 }

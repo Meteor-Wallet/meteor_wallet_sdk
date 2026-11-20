@@ -1,13 +1,21 @@
+import type {
+  IMeteorConnectRecoveredActionResult,
+  IMeteorConnectRecoveringRequest,
+} from "@meteorwallet/sdk";
 import {
   createContext,
+  type Dispatch,
   type ReactNode,
+  type SetStateAction,
   useCallback,
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import {
+  ActionButton,
   AlertIcon,
   BanIcon,
   CheckIcon,
@@ -20,6 +28,7 @@ import {
 } from "../ui";
 import {
   describeActionError,
+  errorMessageOf,
   formatClock,
   formatDuration,
   type IActionResult,
@@ -27,6 +36,8 @@ import {
   type IActionResultSummary,
   loadStoredResults,
   MAX_STORED_RESULTS,
+  recoveredResultUpdate,
+  settleRecoveringResults,
   storeResults,
   type TActionResultStatus,
   type TNearNetwork,
@@ -45,7 +56,13 @@ export interface IRunActionRequest<T> {
   actionId?: string;
   accountId?: string;
   network?: TNearNetwork;
-  execute: () => Promise<T>;
+  /**
+   * Runs the request. Pass the created action through `track` so its `requestId` is kept with the
+   * entry: an answer the SDK recovers after a page reload is matched back to it by that id.
+   */
+  execute: (
+    track: <TAction extends { requestId: string }>(action: TAction) => TAction,
+  ) => Promise<T>;
   summarize?: (output: T) => IActionResultSummary | Promise<IActionResultSummary>;
 }
 
@@ -57,6 +74,19 @@ interface IActionResultsContext {
   run: <T>(request: IRunActionRequest<T>) => Promise<TRunOutcome<T>>;
   remove: (id: string) => void;
   clear: () => void;
+  /** Settle the entry an answer recovered after a reload belongs to (matched by `requestId`). */
+  resolveRecovered: (
+    recovered: IMeteorConnectRecoveredActionResult,
+    summarize?: (entry: IActionResult) => IActionResultSummary | undefined,
+  ) => void;
+  /** Recovery has settled: entries still `recovering` become `interrupted`. */
+  settleRecovering: () => void;
+  /**
+   * The recovered request still waiting on the wallet (`MeteorConnect.getRecoveringRequest`), so
+   * its entry can offer to reopen the wallet or cancel it.
+   */
+  recoveringRequest?: IMeteorConnectRecoveringRequest;
+  setRecoveringRequest: Dispatch<SetStateAction<IMeteorConnectRecoveringRequest | undefined>>;
   toastId?: string;
   dismissToast: () => void;
 }
@@ -70,6 +100,10 @@ export const ActionResultsProvider = ({ children }: { children: ReactNode }) => 
   const [results, setResults] = useState<IActionResult[]>([]);
   const [toastId, setToastId] = useState<string>();
   const [loaded, setLoaded] = useState(false);
+  const [recoveringRequest, setRecoveringRequest] = useState<IMeteorConnectRecoveringRequest>();
+  // The latest log, for handlers that must find an entry before deciding what to update.
+  const resultsRef = useRef(results);
+  resultsRef.current = results;
 
   // Loaded after mount, not in the initializer — the SPA shell is prerendered without storage.
   // Merged by id, because StrictMode runs this twice in development.
@@ -117,9 +151,13 @@ export const ActionResultsProvider = ({ children }: { children: ReactNode }) => 
       );
       console.log(`[${request.label}] requested`, request.actionId ?? "");
 
+      const track = <TAction extends { requestId: string }>(action: TAction): TAction => {
+        patch(id, { requestId: action.requestId });
+        return action;
+      };
       let output: T;
       try {
-        output = await request.execute();
+        output = await request.execute(track);
       } catch (error) {
         const described = describeActionError(error);
         console.error(`[${request.label}] ${described.status}:`, error);
@@ -160,6 +198,34 @@ export const ActionResultsProvider = ({ children }: { children: ReactNode }) => 
     [patch],
   );
 
+  const resolveRecovered = useCallback<IActionResultsContext["resolveRecovered"]>(
+    (recovered, summarize) => {
+      console.log("[recovered after reload]", recovered.actionId, recovered.outcome, recovered);
+      const entry = resultsRef.current.find(
+        (result) => result.requestId === recovered.requestId && result.status === "recovering",
+      );
+      if (entry == null) return;
+      let summary: IActionResultSummary | undefined;
+      try {
+        summary = recovered.outcome === "success" ? summarize?.(entry) : undefined;
+      } catch (summaryError) {
+        summary = {
+          status: "warning",
+          headline: "Completed, but the output could not be summarized",
+          fields: [{ label: "Summary error", value: String(summaryError) }],
+        };
+      }
+      patch(entry.id, recoveredResultUpdate(recovered, summary));
+      setToastId(entry.id);
+    },
+    [patch],
+  );
+
+  const settleRecovering = useCallback(
+    () => setResults((current) => settleRecoveringResults(current)),
+    [],
+  );
+
   // Stable, so the toast's auto-dismiss timer isn't restarted by every unrelated log update.
   const dismissToast = useCallback(() => setToastId(undefined), []);
 
@@ -168,12 +234,19 @@ export const ActionResultsProvider = ({ children }: { children: ReactNode }) => 
       results,
       run,
       remove: (id) => setResults((current) => current.filter((result) => result.id !== id)),
-      // Pending requests stay: their promise is still out and will land back here.
-      clear: () => setResults((current) => current.filter((result) => result.status === "pending")),
+      // Pending and recovering requests stay: their answer is still out and will land back here.
+      clear: () =>
+        setResults((current) =>
+          current.filter((result) => result.status === "pending" || result.status === "recovering"),
+        ),
+      resolveRecovered,
+      settleRecovering,
+      recoveringRequest,
+      setRecoveringRequest,
       toastId,
       dismissToast,
     }),
-    [results, run, toastId, dismissToast],
+    [results, run, resolveRecovered, settleRecovering, recoveringRequest, toastId, dismissToast],
   );
 
   return <ActionResultsContext.Provider value={value}>{children}</ActionResultsContext.Provider>;
@@ -191,7 +264,7 @@ export const useLatestActionResult = (
 ): { latest?: IActionResult; pending: boolean } => {
   const { results } = useActionResults();
   const latest = results.find((result) => result.key === key);
-  return { latest, pending: latest?.status === "pending" };
+  return { latest, pending: isAwaitingAnswer(latest?.status) };
 };
 
 //
@@ -230,12 +303,26 @@ const STATUS_META: Record<
     accent: "border-l-slate-400",
     icon: (className) => <BanIcon className={className} />,
   },
+  expired: {
+    label: "Expired",
+    badge:
+      "bg-amber-50 text-amber-800 ring-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:ring-amber-900",
+    accent: "border-l-amber-400",
+    icon: (className) => <ClockIcon className={className} />,
+  },
   failed: {
     label: "Failed",
     badge:
       "bg-red-50 text-red-700 ring-red-200 dark:bg-red-950 dark:text-red-300 dark:ring-red-900",
     accent: "border-l-red-500",
     icon: (className) => <XIcon className={className} />,
+  },
+  recovering: {
+    label: "Recovering",
+    badge:
+      "bg-indigo-50 text-indigo-700 ring-indigo-200 dark:bg-indigo-950 dark:text-indigo-300 dark:ring-indigo-900",
+    accent: "border-l-indigo-500",
+    icon: (className) => <Spinner className={className} />,
   },
   interrupted: {
     label: "Interrupted",
@@ -273,9 +360,13 @@ const useNow = (active: boolean): number => {
   return now;
 };
 
+/** Still waiting on an answer: sent from this page, or being recovered after a reload. */
+const isAwaitingAnswer = (status: TActionResultStatus | undefined): boolean =>
+  status === "pending" || status === "recovering";
+
 const elapsedOf = (result: IActionResult, now: number): string | undefined => {
   if (result.endedAt != null) return formatDuration(result.endedAt - result.startedAt);
-  if (result.status === "pending") return formatDuration(now - result.startedAt);
+  if (isAwaitingAnswer(result.status)) return formatDuration(now - result.startedAt);
   return undefined;
 };
 
@@ -334,12 +425,84 @@ const ResultField = ({ field }: { field: IActionResultField }) => {
   );
 };
 
-const PendingHint = () => (
+const PendingHint = ({ recovering }: { recovering: boolean }) => (
   <p className={"text-sm text-slate-600 dark:text-slate-300"}>
-    Waiting for the wallet — approve or reject the request there. This updates on its own when the
-    answer arrives.
+    {recovering
+      ? "The page reloaded while the wallet held this request — collecting its answer. This updates on its own."
+      : "Waiting for the wallet — approve or reject the request there. This updates on its own when the answer arrives."}
   </p>
 );
+
+/**
+ * A recovered request the wallet has not answered: if Meteor Mobile was closed meanwhile, nothing
+ * would arrive until the 5-minute deadline, so the tester can reopen the wallet on it or give up.
+ */
+const RecoveringControls = ({
+  request,
+  now,
+}: {
+  request: IMeteorConnectRecoveringRequest;
+  now: number;
+}) => {
+  const [cancelling, setCancelling] = useState(false);
+  const [openError, setOpenError] = useState<string>();
+  const remaining = request.expiresAt - now;
+
+  // Opened straight from the tap, never after an await — browsers only open an app inside it.
+  const openWallet = () => {
+    setOpenError(undefined);
+    try {
+      void Promise.resolve(request.openInWallet()).catch((error: unknown) =>
+        setOpenError(errorMessageOf(error)),
+      );
+    } catch (error) {
+      setOpenError(errorMessageOf(error));
+    }
+  };
+
+  const cancel = async () => {
+    setCancelling(true);
+    // Never rejects; the entry settles to "Cancelled" through the recovered-result listener.
+    await request.cancel();
+    setCancelling(false);
+  };
+
+  return (
+    <div className={"flex flex-col gap-2"}>
+      {remaining > 0 && (
+        <p className={"text-xs text-slate-500 tabular-nums dark:text-slate-400"}>
+          Times out in {formatDuration(remaining)} if the wallet never answers.
+        </p>
+      )}
+      <div className={"flex flex-col gap-2 @sm:flex-row"}>
+        {request.canOpenInWallet && (
+          <ActionButton
+            size={"sm"}
+            variant={"secondary"}
+            onClick={openWallet}
+            disabled={cancelling}
+          >
+            Open Meteor Mobile
+          </ActionButton>
+        )}
+        <ActionButton
+          size={"sm"}
+          variant={"ghost"}
+          onClick={() => void cancel()}
+          pending={cancelling}
+          pendingLabel={"Cancelling…"}
+        >
+          Cancel request
+        </ActionButton>
+      </div>
+      {openError != null && (
+        <p className={"text-xs text-red-700 dark:text-red-400"}>
+          Could not open Meteor Mobile: {openError}
+        </p>
+      )}
+    </div>
+  );
+};
 
 export const ActionResultCard = ({
   result,
@@ -354,8 +517,15 @@ export const ActionResultCard = ({
   /** Collapsed cards keep the verdict and error visible and fold the fields away. */
   defaultExpanded?: boolean;
 }) => {
-  const now = useNow(result.status === "pending");
+  const now = useNow(isAwaitingAnswer(result.status));
   const elapsed = elapsedOf(result, now);
+  const { recoveringRequest } = useActionResults();
+  const recovering =
+    result.status === "recovering" &&
+    result.requestId != null &&
+    recoveringRequest?.requestId === result.requestId
+      ? recoveringRequest
+      : undefined;
   const meta = STATUS_META[result.status];
   const [expanded, setExpanded] = useState(defaultExpanded);
   const hasDetails = result.fields.length > 0 || result.raw != null;
@@ -391,7 +561,7 @@ export const ActionResultCard = ({
             </>
           )}
           <span>{formatClock(result.startedAt)}</span>
-          {onRemove != null && result.status !== "pending" && (
+          {onRemove != null && !isAwaitingAnswer(result.status) && (
             <button
               type={"button"}
               aria-label={"Remove result"}
@@ -407,8 +577,11 @@ export const ActionResultCard = ({
       </header>
 
       <div className={"mt-2 flex flex-col gap-2"}>
-        {result.status === "pending" ? (
-          <PendingHint />
+        {isAwaitingAnswer(result.status) ? (
+          <>
+            <PendingHint recovering={result.status === "recovering"} />
+            {recovering != null && <RecoveringControls request={recovering} now={now} />}
+          </>
         ) : (
           result.headline != null && (
             <p className={"text-sm font-medium text-slate-900 dark:text-slate-100"}>
@@ -498,9 +671,11 @@ type TFilter = "all" | "problems";
 
 const TALLY_ORDER: TActionResultStatus[] = [
   "pending",
+  "recovering",
   "success",
   "warning",
   "failed",
+  "expired",
   "cancelled",
   "interrupted",
 ];
@@ -519,7 +694,7 @@ export const ActionResultsPanel = ({ className }: { className?: string }) => {
 
   const visible =
     filter === "problems"
-      ? results.filter((result) => result.status !== "success" && result.status !== "pending")
+      ? results.filter((result) => result.status !== "success" && !isAwaitingAnswer(result.status))
       : results;
 
   return (
@@ -584,7 +759,7 @@ export const ActionResultsPanel = ({ className }: { className?: string }) => {
               key={result.id}
               result={result}
               onRemove={() => remove(result.id)}
-              defaultExpanded={index === 0 || result.status === "pending"}
+              defaultExpanded={index === 0 || isAwaitingAnswer(result.status)}
             />
           ))
         )}
@@ -613,7 +788,7 @@ export const ResultToast = () => {
     return () => window.clearTimeout(timer);
   }, [toastId, dismissToast]);
 
-  if (result == null || result.status === "pending") return null;
+  if (result == null || isAwaitingAnswer(result.status)) return null;
   const meta = STATUS_META[result.status];
 
   return (
