@@ -5,10 +5,12 @@ import {
   describeSessionError,
   type IBridgeSessionTerminalOutcome,
   type ICreatedPartnerSession,
+  type IPartnerResumeTokenV1,
   type IPushWakeOutcomeClassification,
   type ISessionResultReceipt,
   isTerminalPhase,
   type PartnerSessionClient,
+  PartnerSessionResumeError,
   type TPartnerPairedWallet,
   type TSessionErrorKind,
   type TSessionLinkPhase,
@@ -30,10 +32,12 @@ import type {
 } from "../../MeteorConnect.types";
 import type {
   IMobileBridgeExternalWorkHold,
+  IMobileBridgePendingRequestHandle,
   IMobileBridgePreparedAction,
   TMobileBridgeExternalWorkJournal,
 } from "./MeteorConnectMobileBridgeClient.types";
 import { meteorWalletCoreOutputToSdk, nearOutputToSdk } from "./mobileBridgeOutputToSdk";
+import type { TMobileBridgeRecordedAnswer } from "./mobileBridgeStorage";
 
 /**
  * Dev-only: rebase a backend-issued web wallet link onto a local dev origin, preserving the
@@ -211,7 +215,9 @@ interface IMobileBridgeSessionInput {
    * `acknowledgeAndBeginExternalWork`, leaving the session held open for the AddKey window.
    */
   journalBeforeExternalWorkHold?: TMobileBridgeExternalWorkJournal;
-  buildConnection(wallet: TPartnerPairedWallet): IMeteorConnection_V2_BridgeMobile;
+  buildConnection(
+    wallet: Pick<TPartnerPairedWallet, "meteorAppId" | "walletVerifyPublicKey">,
+  ): IMeteorConnection_V2_BridgeMobile;
   persistFunctionCallKey?: (network: string, accountId: string, keyPair: KeyPair) => Promise<void>;
   isCurrent(token: string): boolean;
   assertIdentityGeneration(): Promise<void>;
@@ -231,6 +237,8 @@ interface IMobileBridgeSessionInput {
   };
   /** Test seam: the re-send window for a lost closing verb. Defaults to {@link CLOSING_VERB_RETRY}. */
   closingVerbRetry?: IClosingVerbRetryPolicy;
+  /** Reload recovery; absent when it is off or the request is not recoverable. */
+  pendingRequest?: IMobileBridgePendingRequestHandle;
 }
 
 /** Authenticated phases that exist only once a wallet has claimed the bridge. */
@@ -323,6 +331,12 @@ export class MobileBridgeSession {
   private createdSession?: ICreatedPartnerSession;
   private selectedWalletLink?: TMeteorBridgeWalletLink;
   private resultSettled = false;
+  /**
+   * Set when a resume failed before anything was re-entered or refused (a local, possibly
+   * transient setup failure): the pending-request record then outlives this session, so a later
+   * load can still collect an answer the wallet may already hold. It expires on its own.
+   */
+  private keepPendingRequestRecord = false;
   private resultReceipt?: ISessionResultReceipt;
   /**
    * Set the moment this turn's result is validated — BEFORE the verb that ends the turn is sent.
@@ -448,8 +462,8 @@ export class MobileBridgeSession {
       const session = await this.input.client.createSession({
         initialActionRequest: this.prepared.actionRequest,
         meteorAppIds: [...this.input.targetMeteorAppIds],
-        // A reloaded tab's own context can never be re-entered (its partner secret was
-        // memory-only); a live sibling tab's context is always kept.
+        // A reloaded tab re-enters its own context only through its pending-request record
+        // (`startResume`), never through creation; a live sibling tab's context is always kept.
         onContextConflict: "discard-unbound",
         // A session pinned to one wallet says so in the creation binding too, so the backend
         // refuses any other claimant instead of relying on this SDK's local checks alone.
@@ -478,7 +492,11 @@ export class MobileBridgeSession {
       });
       this.createdSession = session;
       this.partnerRequestId = session.partnerRequestId;
-      this.publishWalletLink(session);
+      // Written before the link is published, so no wallet can answer a request this tab could
+      // not collect after a reload. It keeps the link too, so a reloaded page can reopen it.
+      const walletLink = this.selectWalletLink(session);
+      this.writePendingRequestRecord(walletLink);
+      this.publishWalletLink(session, walletLink);
       this.applySessionFacts(session.facts);
       this.collectionPromise ??= this.collectResult();
       const appOpened = (await this.input.autoOpen?.(this).catch(() => false)) === true;
@@ -490,6 +508,87 @@ export class MobileBridgeSession {
       this.fail(error);
       throw error;
     }
+  }
+
+  /**
+   * Re-enter the session a reloaded tab's pending-request record names and collect its answer as
+   * the original page would have. Nothing is created and no wallet is woken. `walletLink`, the
+   * link the original page presented, is published again once the session is re-entered, so the
+   * page can reopen the wallet on the same request (`openInApp`).
+   */
+  startResume(token: IPartnerResumeTokenV1, walletLink?: TMeteorBridgeWalletLink): Promise<void> {
+    this.preparationPromise ??= this.resume(token, walletLink);
+    return this.preparationPromise;
+  }
+
+  /**
+   * Deliver the answer a reloaded tab's pending-request record already holds (see
+   * `TMobileBridgeRecordedAnswer`). The page before the reload verified it and sent the verb that
+   * closed its session, so that session is not re-entered: resuming it could only read its
+   * `closed` phase back as a cancel. Nothing is sent and no wallet is woken.
+   */
+  startFromRecordedAnswer(answer: TMobileBridgeRecordedAnswer): Promise<void> {
+    this.preparationPromise ??= (async () => {
+      this.collectionPromise ??= this.collectResult(answer);
+      await this.collectionPromise;
+    })();
+    return this.preparationPromise;
+  }
+
+  private async resume(
+    token: IPartnerResumeTokenV1,
+    walletLink: TMeteorBridgeWalletLink | undefined,
+  ): Promise<void> {
+    let facts: TSessionFacts;
+    try {
+      await this.input.assertIdentityGeneration();
+      this.liveSession = await this.input.registerLiveSession();
+      facts = await this.input.client.resumeSession(token);
+    } catch (error) {
+      // Only a definitive refusal ends the record. Another live holder (`owned_elsewhere`) owns
+      // its delivery, and any other failure here was local: nothing was re-entered, so the record
+      // stays for a later load (it expires on its own).
+      this.keepPendingRequestRecord = !(
+        error instanceof PartnerSessionResumeError && error.reason !== "owned_elsewhere"
+      );
+      this.fail(error);
+      throw error;
+    }
+    try {
+      this.partnerRequestId = token.partnerRequestId;
+      if (walletLink != null) {
+        this.selectedWalletLink = walletLink;
+        // No `backendUrlHint`: only a "web_local_dev" transfer carries one, and transfers are
+        // never recorded for recovery (the record holds NEAR actions alone).
+        this.update({ deepLink: buildWalletLinkUrl(token, walletLink) });
+      }
+      this.applySessionFacts(facts);
+      this.collectionPromise ??= this.collectResult();
+    } catch (error) {
+      this.fail(error);
+      throw error;
+    }
+  }
+
+  // Keep this request's pending-request record. The client exports a resume token only for a
+  // `single_turn_v1` session, so no other profile is ever written down. Best-effort: reload
+  // recovery is optional and must never fail the request it would protect.
+  private writePendingRequestRecord(walletLink: TMeteorBridgeWalletLink): void {
+    const pending = this.input.pendingRequest;
+    if (pending == null) return;
+    try {
+      const client = this.input.client;
+      if (typeof client.exportResumeToken !== "function") return;
+      const token = client.exportResumeToken();
+      if (token != null) pending.write(token, walletLink);
+    } catch (error) {
+      console.warn("[MeteorConnect] Could not keep the request for recovery after a reload", error);
+    }
+  }
+
+  private clearPendingRequestRecord(): void {
+    if (this.keepPendingRequestRecord) return;
+    this.input.pendingRequest?.clear();
   }
 
   /**
@@ -681,7 +780,8 @@ export class MobileBridgeSession {
   // Wallet link + push
   // ---------------------------------------------------------------------------------------------
 
-  private publishWalletLink(session: ICreatedPartnerSession): void {
+  /** The wallet link this session presents, chosen once (and rebased for local dev). */
+  private selectWalletLink(session: ICreatedPartnerSession): TMeteorBridgeWalletLink {
     // Ordered preference: the first configured app id that has a backend-issued link wins.
     const backendLink = this.input.targetMeteorAppIds
       .map((appId) => session.walletLinks.find((candidate) => candidate.appId === appId))
@@ -700,6 +800,10 @@ export class MobileBridgeSession {
           }
         : backendLink;
     this.selectedWalletLink = link;
+    return link;
+  }
+
+  private publishWalletLink(session: ICreatedPartnerSession, link: TMeteorBridgeWalletLink): void {
     // The memory-only secret rides the URL fragment. `buildWalletLinkUrl` is the only supported
     // way to build it and `parseWalletLinkUrl` the only supported way to read it back — a
     // hand-concatenated link is the historical source of unclaimable bridges.
@@ -707,7 +811,11 @@ export class MobileBridgeSession {
     // different backends, so it is the only case that advertises one. Deployed links stay unset.
     const hint = this.input.localDevLinkRewrite?.mcBackendHintUrl;
     this.update({
-      deepLink: buildWalletLinkUrl(session, link, ...(hint == null ? [] : [{ backendUrlHint: hint }])),
+      deepLink: buildWalletLinkUrl(
+        session,
+        link,
+        ...(hint == null ? [] : [{ backendUrlHint: hint }]),
+      ),
     });
   }
 
@@ -758,13 +866,18 @@ export class MobileBridgeSession {
    * `waitForValidatedResult` never acknowledges anything itself, and a session parked in
    * `result_ready` blocks the wallet — so every arm below, the failures included, sends a verb.
    */
-  private async collectResult(): Promise<void> {
+  private async collectResult(recorded?: TMobileBridgeRecordedAnswer): Promise<void> {
     const kind = this.prepared.kind;
     try {
       const output =
-        kind.domain === "meteor_wallet_core"
-          ? await this.collectMeteorWalletCoreResult(kind.sharedActionId)
-          : await this.collectNearResult();
+        recorded != null
+          ? await this.collectRecordedAnswer(recorded)
+          : kind.domain === "meteor_wallet_core"
+            ? await this.collectMeteorWalletCoreResult(kind.sharedActionId)
+            : await this.collectNearResult();
+      // At most once: the record goes before the answer is delivered, so a reload from here on
+      // can never collect it a second time.
+      this.clearPendingRequestRecord();
       this.resultSettled = true;
       this.noteSameDeviceClaim();
       // A journal-backed external-work hold keeps the SESSION live even though this TURN is
@@ -865,25 +978,99 @@ export class MobileBridgeSession {
     this.resultReceipt = outcome.receipt;
     // Same rule as the meteor_wallet_core collector: raised before the first closing verb.
     this.closingAfterOwnResult = true;
+    // Every arm records the answer in the pending-request record BEFORE its closing verb: the verb
+    // closes the session, and a closed session no longer hands the answer out, so a page reloaded
+    // after the backend applied it — but before the record went — recovers it from the record.
     if (outcome.status === "mismatch") {
+      this.recordAnswer({ status: "mismatch" });
       await this.acknowledgeAndClose(outcome.receipt);
       throw new Error(MOBILE_BRIDGE_ENDING.resultMismatch);
     }
     if (outcome.status === "declined") {
+      this.recordAnswer({
+        status: "declined",
+        errorIds: [...outcome.errorIds],
+        errorMessage: outcome.errorMessage,
+      });
       await this.acknowledgeAndClose(outcome.receipt);
       throw new Error(
         `${MOBILE_BRIDGE_ENDING.walletDeclined}: ${outcome.errorIds.join(",")} — ${outcome.errorMessage}`,
       );
     }
+    // Resolved before the verb only to record it; a wallet that cannot be resolved still fails the
+    // turn exactly where it always did — after the verb, below.
+    let answeringWallet: TPartnerPairedWallet | undefined;
+    try {
+      answeringWallet = this.resolveClaimedWallet();
+    } catch {
+      answeringWallet = undefined;
+    }
+    if (answeringWallet != null) {
+      this.recordAnswer({
+        status: "ok",
+        output: outcome.output,
+        wallet: {
+          meteorAppId: answeringWallet.meteorAppId,
+          walletVerifyPublicKey: answeringWallet.walletVerifyPublicKey,
+        },
+      });
+    }
     // Same rule as above: acknowledge and close before the SDK-shaped hydration, which does local
     // key persistence and account-identity checks that must not be able to park the session.
     await this.acknowledgeAndClose(outcome.receipt);
-    const connection = this.input.buildConnection(this.resolveClaimedWallet());
+    return this.nearOutputFromWallet(
+      outcome.output,
+      answeringWallet ?? this.resolveClaimedWallet(),
+    );
+  }
+
+  /** The SDK-shaped result of a verified NEAR output, bound to the wallet that answered it. */
+  private nearOutputFromWallet(
+    output: unknown,
+    wallet: Pick<TPartnerPairedWallet, "meteorAppId" | "walletVerifyPublicKey">,
+  ): Promise<unknown> {
+    const connection = this.input.buildConnection(wallet);
     this.completedConnection = connection;
-    return nearOutputToSdk(this.prepared, outcome.output, {
+    return nearOutputToSdk(this.prepared, output, {
       getConnection: () => connection,
       persistFunctionCallKey: this.input.persistFunctionCallKey,
     });
+  }
+
+  /**
+   * The recovered half of {@link collectNearResult}: the answer a page before the reload already
+   * verified and recorded. It is acknowledged already (or its session expires on its own, like any
+   * closing verb that could not be delivered), so nothing is sent; the outcome is the one that page
+   * would have delivered.
+   */
+  private async collectRecordedAnswer(answer: TMobileBridgeRecordedAnswer): Promise<unknown> {
+    if (this.prepared.kind.domain !== "near") {
+      throw new Error("mobile_bridge_unsupported_action_result");
+    }
+    if (answer.status === "mismatch") throw new Error(MOBILE_BRIDGE_ENDING.resultMismatch);
+    if (answer.status === "declined") {
+      throw new Error(
+        `${MOBILE_BRIDGE_ENDING.walletDeclined}: ${answer.errorIds.join(",")} — ${answer.errorMessage}`,
+      );
+    }
+    const expectedVerifyKey = this.input.expectedWalletVerifyPublicKey;
+    if (
+      (expectedVerifyKey != null && answer.wallet.walletVerifyPublicKey !== expectedVerifyKey) ||
+      !this.input.targetMeteorAppIds.includes(answer.wallet.meteorAppId)
+    ) {
+      throw new Error("mobile_bridge_active_wallet_unavailable");
+    }
+    return this.nearOutputFromWallet(answer.output, answer.wallet);
+  }
+
+  // Best-effort, like the record itself: a record that cannot take the answer only means a reload
+  // inside the acknowledgement could not recover it.
+  private recordAnswer(answer: TMobileBridgeRecordedAnswer): void {
+    try {
+      this.input.pendingRequest?.recordAnswer(answer);
+    } catch (error) {
+      console.warn("[MeteorConnect] Could not keep the wallet's answer for recovery", error);
+    }
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -1096,6 +1283,7 @@ export class MobileBridgeSession {
       failedFromPhase: this.snapshot.phase,
     });
     if (!this.resultSettled) {
+      this.clearPendingRequestRecord();
       this.resultSettled = true;
       this.rejectResult(error);
     }
@@ -1106,6 +1294,7 @@ export class MobileBridgeSession {
     this.externalWorkHold = undefined;
     this.update({ phase: "cancelled" });
     if (!this.resultSettled) {
+      this.clearPendingRequestRecord();
       this.resultSettled = true;
       this.rejectResult(new Error(MOBILE_BRIDGE_ENDING.cancelled));
     }
@@ -1203,6 +1392,9 @@ export class MobileBridgeSession {
    */
   async abandon(): Promise<void> {
     if (SETTLED_PHASES.includes(this.snapshot.phase)) return;
+    // A turn already acknowledging the wallet's verified answer has its own closing verb in
+    // flight: a second one would race it, and the cancel would discard a delivered answer.
+    if (this.deliveringWalletAnswer) return;
     await this.preparationPromise?.catch(() => {});
     const facts = this.input.client.sessionFacts;
     if (facts == null || isTerminalPhase(facts)) {
@@ -1221,8 +1413,24 @@ export class MobileBridgeSession {
       return;
     }
     await this.input.assertIdentityGeneration();
-    await this.input.client.closePhaseSafe(this.resultReceipt);
+    // The answer may have arrived during the awaits above; it then wins over this close.
+    if (this.deliveringWalletAnswer) return;
+    try {
+      await this.input.client.closePhaseSafe(this.resultReceipt);
+    } catch (error) {
+      if (this.deliveringWalletAnswer) return;
+      throw error;
+    }
+    if (this.deliveringWalletAnswer) return;
     this.markCancelled();
+  }
+
+  /**
+   * Whether this turn holds the wallet's verified answer and is only acknowledging it: from then
+   * on it ends in that answer, so {@link abandon} leaves it be.
+   */
+  isDeliveringAnswer(): boolean {
+    return this.deliveringWalletAnswer;
   }
 
   async awaitResult(): Promise<any> {
@@ -1300,6 +1508,7 @@ export class MobileBridgeSession {
     if (this.expiryTimer != null) clearTimeout(this.expiryTimer);
     if (this.pairingRetryTimer != null) clearTimeout(this.pairingRetryTimer);
     if (!this.resultSettled) {
+      this.clearPendingRequestRecord();
       this.resultSettled = true;
       this.rejectResult(new Error(MOBILE_BRIDGE_ENDING.disposed));
     }

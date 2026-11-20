@@ -1,6 +1,7 @@
 import type {
   IMeteorConnectAccount,
   IMeteorConnectAccountIdentifier,
+  IMeteorConnectRecoveredActionResult,
   IODappAction_VerifyOwner_Output,
   IORequestSignDelegateActions_Output,
   TMeteorConnectionExecutionTarget,
@@ -414,4 +415,75 @@ export const summarizeSignedDelegates = (
     headline: `${plural(signed.length, "delegate action")} signed — ready to relay`,
     fields,
   };
+};
+
+//
+// RECOVERED AFTER A RELOAD
+//
+
+/**
+ * A recovered output that carries a NEP-413 signature. Recovered outputs come straight from the
+ * SDK in this page (never through storage), so the key and bytes keep their SDK shapes.
+ */
+const isSignedMessage = (value: unknown): value is SignedMessage =>
+  typeof value === "object" &&
+  value != null &&
+  "accountId" in value &&
+  typeof value.accountId === "string" &&
+  "publicKey" in value &&
+  value.publicKey != null &&
+  "signature" in value &&
+  value.signature != null;
+
+/**
+ * The summary of an answer the SDK recovered after a page reload (`recoverAfterReload`). The page
+ * that sent the request is gone, but the SDK hands back the NEP-413 params a signed message was
+ * made with (`messageParams`), so it is verified exactly as on the normal path; only an answer
+ * without them is shown unverified.
+ */
+export const summarizeRecoveredOutput = (
+  recovered: Pick<IMeteorConnectRecoveredActionResult, "actionId" | "output" | "messageParams">,
+  entry: { accountId?: string; network?: TNearNetwork },
+): IActionResultSummary => {
+  const { actionId, output, messageParams } = recovered;
+  const network = entry.network ?? "testnet";
+  switch (actionId) {
+    case "near::sign_in":
+      return summarizeSignIn(output as IMeteorConnectAccount);
+    case "near::sign_in_and_sign_message": {
+      const account = output as IMeteorConnectAccount & { signedMessage?: unknown };
+      if (messageParams != null && isSignedMessage(account.signedMessage)) {
+        return summarizeSignInAndSignMessage(
+          { ...account, signedMessage: account.signedMessage },
+          messageParams,
+        );
+      }
+      return {
+        ...summarizeSignIn(account),
+        headline: `Signed in as ${account.identifier.accountId} · message signed (not re-verified)`,
+      };
+    }
+    case "near::sign_out":
+      return summarizeSignOut(output as IMeteorConnectAccountIdentifier);
+    case "near::sign_transactions":
+      return summarizeTransactions(output as FinalExecutionOutcome[], network);
+    case "near::sign_delegate_actions": {
+      const delegates = output as IORequestSignDelegateActions_Output;
+      return summarizeSignedDelegates(delegates, delegates.signedDelegatesWithHashes?.length ?? 0);
+    }
+    case "near::verify_owner":
+      return summarizeVerifyOwner(output as IODappAction_VerifyOwner_Output, entry.accountId ?? "");
+    case "near::sign_message": {
+      if (messageParams != null && isSignedMessage(output)) {
+        return summarizeSignedMessage(output, messageParams, entry.accountId);
+      }
+      const signed = output as { accountId?: string };
+      return {
+        headline: `Message signed by ${signed.accountId ?? "unknown"} (not re-verified)`,
+        fields: [{ label: "Account", value: String(signed.accountId) }],
+      };
+    }
+    default:
+      return { headline: "The wallet answered" };
+  }
 };

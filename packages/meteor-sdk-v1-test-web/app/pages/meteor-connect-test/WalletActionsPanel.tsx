@@ -112,11 +112,13 @@ export const WalletActionsPanel = ({
                   actionId: "near::sign_message",
                   accountId,
                   network,
-                  execute: async () => {
-                    const action = await meteorConnect.createAction({
-                      id: "near::sign_message",
-                      input: { messageParams, target },
-                    });
+                  execute: async (track) => {
+                    const action = track(
+                      await meteorConnect.createAction({
+                        id: "near::sign_message",
+                        input: { messageParams, target },
+                      }),
+                    );
                     return action.promptForExecution();
                   },
                   summarize: (signed) => summarizeSignedMessage(signed, messageParams, accountId),
@@ -146,11 +148,13 @@ export const WalletActionsPanel = ({
                   actionId: "near::verify_owner",
                   accountId,
                   network,
-                  execute: async () => {
-                    const action = await meteorConnect.createAction({
-                      id: "near::verify_owner",
-                      input: { target, message: verifyOwnerText },
-                    });
+                  execute: async (track) => {
+                    const action = track(
+                      await meteorConnect.createAction({
+                        id: "near::verify_owner",
+                        input: { target, message: verifyOwnerText },
+                      }),
+                    );
                     return action.promptForExecution();
                   },
                   summarize: (output) => summarizeVerifyOwner(output, accountId),
@@ -222,11 +226,13 @@ export const WalletActionsPanel = ({
                   actionId: "near::sign_transactions",
                   accountId,
                   network,
-                  execute: async () => {
-                    const action = await meteorConnect.createAction({
-                      id: "near::sign_transactions",
-                      input: { target, transactions, useFunctionCallKey },
-                    });
+                  execute: async (track) => {
+                    const action = track(
+                      await meteorConnect.createAction({
+                        id: "near::sign_transactions",
+                        input: { target, transactions, useFunctionCallKey },
+                      }),
+                    );
                     const outcomes = await action.promptForExecution();
                     return { outcomes, signedWith: action.getExecutionMethod() };
                   },

@@ -34,6 +34,8 @@ import type {
 
 export class ExecutableAction<R extends TMCActionRequestUnion<TMCActionRegistry>> {
   readonly id: R["id"];
+  /** Unique per request; a reloaded page gets a recovered answer back under it. */
+  readonly requestId: string = crypto.randomUUID();
   readonly expandedInput: any;
   private readonly meta: IMCActionMeta;
 
@@ -150,6 +152,8 @@ export class ExecutableAction<R extends TMCActionRequestUnion<TMCActionRegistry>
       walletConnection: this.transferTargetWalletConnection,
       journalBeforeExternalWorkHold: this.externalWorkJournal,
       continueExternalWorkHold: this.continueExternalWorkHold,
+      requestId: this.requestId,
+      isCancelled: () => this.cancelled,
     };
   }
 

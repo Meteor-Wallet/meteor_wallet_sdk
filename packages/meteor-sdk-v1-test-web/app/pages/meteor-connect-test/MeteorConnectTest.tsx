@@ -1,7 +1,7 @@
 import type { IMeteorConnectAccount } from "@meteorwallet/sdk";
 import { METEOR_CONNECT_BACKENDS, MeteorConnect, webpage_local_storage } from "@meteorwallet/sdk";
 import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { DEPLOYMENT } from "~/core/deployment";
 import {
   createSimpleNonce,
@@ -21,6 +21,7 @@ import {
 } from "./results/ActionResultsUi";
 import {
   describeExecutionTarget,
+  summarizeRecoveredOutput,
   summarizeSignedMessage,
   summarizeSignIn,
   summarizeSignInAndSignMessage,
@@ -219,10 +220,73 @@ const NETWORK_OPTIONS = [
   { value: "mainnet", label: "Mainnet" },
 ] as const;
 
+const NETWORK_STORAGE_KEY = "meteor-connect-test:network";
+
+/** The Testnet/Mainnet tab the tester last picked, so a reload lands back on it. */
+const readStoredNetwork = (): TNearNetwork => {
+  try {
+    return window.localStorage.getItem(NETWORK_STORAGE_KEY) === "mainnet" ? "mainnet" : "testnet";
+  } catch {
+    // No window (prerender) or blocked storage: the default tab.
+    return "testnet";
+  }
+};
+
+const storeNetwork = (network: TNearNetwork): void => {
+  try {
+    window.localStorage.setItem(NETWORK_STORAGE_KEY, network);
+  } catch {
+    // Blocked storage: the choice simply lasts for this page load.
+  }
+};
+
+/**
+ * Answers the SDK recovered after the page reloaded while the wallet held a request
+ * (`recoverAfterReload`): each one settles its `recovering` log entry, matched by `requestId`.
+ * While the wallet has not answered, that entry offers to reopen the wallet or cancel the request
+ * (`getRecoveringRequest`). Once recovery has settled, an entry nothing answered becomes
+ * `interrupted`.
+ */
+const useRecoveredResults = (meteorConnect: MeteorConnect, onAccountChanged: () => unknown) => {
+  const { resolveRecovered, settleRecovering, setRecoveringRequest } = useActionResults();
+  // Always the latest callback, without re-subscribing on every render.
+  const onAccountChangedRef = useRef(onAccountChanged);
+  onAccountChangedRef.current = onAccountChanged;
+  useEffect(() => {
+    let active = true;
+    const unsubscribe = meteorConnect.onRecoveredActionResult((recovered) => {
+      setRecoveringRequest((current) =>
+        current?.requestId === recovered.requestId ? undefined : current,
+      );
+      resolveRecovered(recovered, (entry) => summarizeRecoveredOutput(recovered, entry));
+      // A recovered sign-in or sign-out has already changed the stored accounts.
+      if (recovered.outcome === "success" && /^near::sign_(in|out)/.test(recovered.actionId)) {
+        void onAccountChangedRef.current();
+      }
+    });
+    void meteorConnect.getRecoveringRequest().then((request) => {
+      if (active && request != null) setRecoveringRequest(request);
+    });
+    void meteorConnect.getRecoveredResults().then(() => {
+      if (!active) return;
+      setRecoveringRequest(undefined);
+      settleRecovering();
+    });
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [meteorConnect, resolveRecovered, settleRecovering, setRecoveringRequest]);
+};
+
 const MeteorConnectTestInitialized = ({ meteorConnect }: { meteorConnect: MeteorConnect }) => {
-  const [network, setNetwork] = useState<TNearNetwork>("testnet");
+  const [network, setNetwork] = useState<TNearNetwork>(readStoredNetwork);
   const { run } = useActionResults();
   const signOut = useLatestActionResult("near::sign_out");
+  const selectNetwork = (next: TNearNetwork) => {
+    setNetwork(next);
+    storeNetwork(next);
+  };
 
   const accountQuery = useQuery({
     queryKey: ["getAccount", network],
@@ -238,6 +302,7 @@ const MeteorConnectTestInitialized = ({ meteorConnect }: { meteorConnect: Meteor
 
   const account = accountQuery.data?.account;
   const refetchAccount = () => accountQuery.refetch({ cancelRefetch: true });
+  useRecoveredResults(meteorConnect, refetchAccount);
 
   return (
     <PageShell>
@@ -251,7 +316,7 @@ const MeteorConnectTestInitialized = ({ meteorConnect }: { meteorConnect: Meteor
           account={account}
           checking={accountQuery.isPending}
           network={network}
-          onSelectNetwork={setNetwork}
+          onSelectNetwork={selectNetwork}
           signOutPending={signOut.pending}
           onSignOut={async () => {
             if (account == null) return;
@@ -261,11 +326,13 @@ const MeteorConnectTestInitialized = ({ meteorConnect }: { meteorConnect: Meteor
               actionId: "near::sign_out",
               accountId: account.identifier.accountId,
               network,
-              execute: async () => {
-                const action = await meteorConnect.createAction({
-                  id: "near::sign_out",
-                  input: { target: account.identifier },
-                });
+              execute: async (track) => {
+                const action = track(
+                  await meteorConnect.createAction({
+                    id: "near::sign_out",
+                    input: { target: account.identifier },
+                  }),
+                );
                 return action.promptForExecution();
               },
               summarize: summarizeSignOut,
@@ -617,21 +684,23 @@ const SignInPanel = ({
       label,
       actionId: "near::sign_in",
       network,
-      execute: async () => {
-        const action = await meteorConnect.createAction({
-          id: "near::sign_in",
-          input: {
-            target: { blockchain: "near", network },
-            ...(withGuestbookKey
-              ? {
-                  addFunctionCallKey: {
-                    contractId: GUESTBOOK_CONTRACT_ID,
-                    allowMethods: { anyMethod: false, methodNames: GUESTBOOK_CONTRACT_METHODS },
-                  },
-                }
-              : {}),
-          },
-        });
+      execute: async (track) => {
+        const action = track(
+          await meteorConnect.createAction({
+            id: "near::sign_in",
+            input: {
+              target: { blockchain: "near", network },
+              ...(withGuestbookKey
+                ? {
+                    addFunctionCallKey: {
+                      contractId: GUESTBOOK_CONTRACT_ID,
+                      allowMethods: { anyMethod: false, methodNames: GUESTBOOK_CONTRACT_METHODS },
+                    },
+                  }
+                : {}),
+            },
+          }),
+        );
         return action.promptForExecution();
       },
       summarize: summarizeSignIn,
@@ -699,11 +768,13 @@ const SignInPanel = ({
                   label: "Sign in + sign message",
                   actionId: "near::sign_in_and_sign_message",
                   network,
-                  execute: async () => {
-                    const action = await meteorConnect.createAction({
-                      id: "near::sign_in_and_sign_message",
-                      input: { messageParams, target: { blockchain: "near", network } },
-                    });
+                  execute: async (track) => {
+                    const action = track(
+                      await meteorConnect.createAction({
+                        id: "near::sign_in_and_sign_message",
+                        input: { messageParams, target: { blockchain: "near", network } },
+                      }),
+                    );
                     return action.promptForExecution();
                   },
                   summarize: (output) => summarizeSignInAndSignMessage(output, messageParams),
@@ -747,11 +818,13 @@ const SignInPanel = ({
                   actionId: "near::sign_message",
                   accountId,
                   network,
-                  execute: async () => {
-                    const action = await meteorConnect.createAction({
-                      id: "near::sign_message",
-                      input: { messageParams, target: signedIn.output.identifier },
-                    });
+                  execute: async (track) => {
+                    const action = track(
+                      await meteorConnect.createAction({
+                        id: "near::sign_message",
+                        input: { messageParams, target: signedIn.output.identifier },
+                      }),
+                    );
                     return action.promptForExecution();
                   },
                   summarize: (signed) => summarizeSignedMessage(signed, messageParams, accountId),

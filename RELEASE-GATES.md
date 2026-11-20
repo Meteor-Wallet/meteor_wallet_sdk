@@ -43,6 +43,12 @@ both entry points threw `ERR_PACKAGE_PATH_NOT_EXPORTED`.
       `@noble/hashes` subpaths it rewrote are absent from the published build. (MNW still patches
       *nanoid's own* `sideEffects` field inside this package's tree — a third-party bundler
       workaround it already applies to its top-level copy, not a rewrite of anything we generate.)
+- [ ] **Reload recovery (MET-241) needs a new connect release first.** The SDK now calls
+      `exportResumeToken` / `resumeSession` and imports `PartnerSessionResumeError`, which the
+      published `@meteorwallet/connect` `0.27.0` does not have; local builds only see them through
+      the root `overrides` tarballs. Release `@meteorwallet/connect-shared` + `@meteorwallet/connect`
+      as a new minor (additive API), move both pins in `packages/meteor-sdk-v1/package.json` to it
+      exactly, remove the root `overrides`, then run `check-package-consumable` with no `--local`.
 - [ ] **Released-artifact end-to-end matrix.** `../meteor-connect-bridge/PLAN-new-key-transfer.md`
       §13 — real backend, real devices, every crash cut, recorded with browser/device/backend
       versions. Nothing in this repository can stand in for it, and informal interaction testing is

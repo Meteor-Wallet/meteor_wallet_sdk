@@ -71,15 +71,17 @@ export const FullAccessKeyRequestTest = ({
       actionId: "near::sign_transactions",
       accountId,
       network,
-      execute: async () => {
-        const action = await meteorConnect.createAction({
-          id: "near::sign_transactions",
-          input: {
-            target,
-            transactions: [{ receiverId: accountId, actions }],
-            useFunctionCallKey: false,
-          },
-        });
+      execute: async (track) => {
+        const action = track(
+          await meteorConnect.createAction({
+            id: "near::sign_transactions",
+            input: {
+              target,
+              transactions: [{ receiverId: accountId, actions }],
+              useFunctionCallKey: false,
+            },
+          }),
+        );
         const outcomes = await action.promptForExecution();
         onSuccess?.();
         return outcomes;

@@ -1,6 +1,7 @@
 import {
   METEOR_CONNECT_BACKENDS,
   PartnerSessionClient,
+  PartnerSessionResumeError,
   SessionLocalGuardError,
   type TMeteorConnectBackendEnvironment,
   type TPartnerPairedWallet,
@@ -15,14 +16,25 @@ import { SIGN_POPUP_HEIGHT, SIGN_POPUP_WIDTH } from "../../../ported_common/cons
 import type { ILocalStorageInterface } from "../../../ported_common/utils/storage/storage.types";
 import type { TMCActionOutput, TMCActionRegistry } from "../../action/mc_action.combined";
 import type { TMCActionRequestUnionExpandedInput } from "../../action/mc_action.types";
+import { isMobile } from "../../action_ui/utils/isMobile";
 import { MeteorLogger } from "../../logging/MeteorLogger";
 import type {
+  IMeteorConnectAccount,
+  IMeteorConnectAccountIdentifier_Near,
   IMeteorConnectBridgeLeaseProvider,
   IMeteorConnection_V2_BridgeMobile,
   IMeteorConnectMobileBridgeConfig,
+  IMeteorConnectRecoveredActionResult,
+  IMeteorConnectRecoveringRequest,
   TMeteorConnectionExecutionTarget,
+  TMeteorConnectRecoveredActionResultListener,
+  TMeteorConnectRecoveredOutcome,
   TMeteorExecutionTargetConfig,
 } from "../../MeteorConnect.types";
+import {
+  isExtensionNewKeyTransferAvailable,
+  openExtensionNewKeyTransfer,
+} from "../../utils/extensionNewKeyTransfer";
 import { MeteorConnectClientBase } from "../base/MeteorConnectClientBase";
 import type {
   IMobileBridgePreparedAction,
@@ -30,7 +42,7 @@ import type {
   IMobileBridgeSensitiveTransferSource,
   TTransferTargetPlatform,
 } from "./MeteorConnectMobileBridgeClient.types";
-import { MobileBridgeSession } from "./MobileBridgeSession";
+import { MOBILE_BRIDGE_ENDING, MobileBridgeSession } from "./MobileBridgeSession";
 import {
   AUTO_OPEN_CONFIRMATION_MS,
   canOpenAppWithoutNewTap,
@@ -43,21 +55,22 @@ import {
   WebLockBridgeLeaseProvider,
 } from "./mobileBridgeLease";
 import {
+  createBridgeEnvironmentId,
   createMobileBridgeStorage,
+  createPendingRequestStore,
+  type IMobileBridgePendingRequestRecord,
+  type IMobileBridgePendingRequestStore,
   type IMobileBridgeStorageContext,
   normalizeBridgeBackendUrl,
   normalizePartnerMetadata,
 } from "./mobileBridgeStorage";
 import {
+  createPendingRequestHandle,
   getActionRequiredWalletCapabilities,
+  pendingActionMessageParams,
+  pendingRequestToPreparedAction,
   sdkActionToMobileBridge,
 } from "./sdkActionToMobileBridge";
-
-import { isMobile } from "../../action_ui/utils/isMobile";
-import {
-  isExtensionNewKeyTransferAvailable,
-  openExtensionNewKeyTransfer,
-} from "../../utils/extensionNewKeyTransfer";
 
 const activeClientsByStorage = new WeakMap<object, Map<string, MeteorConnectMobileBridgeClient>>();
 
@@ -90,6 +103,78 @@ const DEV_SWITCH_MOBILE_APP_IDS = {
   production: EMeteorAppId.meteor_wallet_mobile,
   development: EMeteorAppId.meteor_wallet_mobile_dev,
 } as const satisfies Record<TMeteorConnectBackendEnvironment, EMeteorAppId>;
+
+/**
+ * How long a new request lets a request recovered after a reload keep its claim on the one session
+ * client before replacing it. Long enough for the reloaded page's bridge link to come up and show
+ * where the wallet is; a request the wallet already holds is always waited for, never replaced.
+ */
+export const RECOVERY_SUPERSEDE_GRACE_MS = 10_000;
+
+type TMobileBridgeSessionInput = ConstructorParameters<typeof MobileBridgeSession>[0];
+
+/** The parts of a session's input that differ per request; everything else is this client's. */
+type TRequestSessionInput = Pick<
+  TMobileBridgeSessionInput,
+  | "prepared"
+  | "targetMeteorAppIds"
+  | "localDevLinkRewrite"
+  | "pushWallet"
+  | "pinnedWallet"
+  | "expectedWalletVerifyPublicKey"
+  | "journalBeforeExternalWorkHold"
+  | "autoOpen"
+  | "pendingRequest"
+>;
+
+/** Resolve after `ms`, clearing the timer when `settled` wins first. */
+const settledWithin = async (settled: Promise<unknown>, ms: number): Promise<boolean> => {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      settled.then(() => true),
+      new Promise<boolean>((resolve) => {
+        timer = setTimeout(() => resolve(false), ms);
+      }),
+    ]);
+  } finally {
+    if (timer != null) clearTimeout(timer);
+  }
+};
+
+/**
+ * The outcome a recovered request ended in. The flow endings are the session's own shared
+ * constants (`MOBILE_BRIDGE_ENDING`) and a refused resume is typed, so nothing here reads prose.
+ */
+export function recoveredOutcomeOf(error: unknown): TMeteorConnectRecoveredOutcome {
+  if (error instanceof PartnerSessionResumeError) {
+    return error.reason === "expired" ? "expired" : "failed";
+  }
+  const message = error instanceof Error ? error.message : "";
+  if (message.startsWith(MOBILE_BRIDGE_ENDING.walletDeclined)) return "declined";
+  if (message === MOBILE_BRIDGE_ENDING.expired) return "expired";
+  if (message === MOBILE_BRIDGE_ENDING.cancelled || message === MOBILE_BRIDGE_ENDING.disposed) {
+    return "cancelled";
+  }
+  return "failed";
+}
+
+/** The targeted account a recorded account action names, read back without trusting its shape. */
+function recordedAccountIdentifier(
+  record: IMobileBridgePendingRequestRecord,
+): IMeteorConnectAccountIdentifier_Near | undefined {
+  const account = record.action.expandedInput.account;
+  if (typeof account !== "object" || account == null || !("identifier" in account))
+    return undefined;
+  const identifier = account.identifier;
+  if (typeof identifier !== "object" || identifier == null) return undefined;
+  if (!("accountId" in identifier) || !("network" in identifier)) return undefined;
+  const { accountId, network } = identifier;
+  if (typeof accountId !== "string" || (network !== "mainnet" && network !== "testnet")) {
+    return undefined;
+  }
+  return { blockchain: "near", network, accountId };
+}
 
 interface IMobileBridgeTarget {
   backendUrl: string;
@@ -145,6 +230,22 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
   private fencingGeneration?: number;
   private storageImplementation?: ILocalStorageInterface;
   private storageIdentity?: object;
+  // Reload recovery (`recoverPendingRequest`), which runs at most once per client; the session it
+  // is collecting from while it is; and the recovered results, with those no listener has seen
+  // yet (handed to the first one that subscribes).
+  private recoveryPromise?: Promise<void>;
+  private recoverySession?: MobileBridgeSession;
+  // What `getRecoveringRequest` describes while `recoverySession` is set, and the moment it can:
+  // once that session has been re-entered (its wallet link published), or recovery has ended.
+  private recoveringRequest?: { requestId: string; actionId: string; expiresAt: number };
+  private recoveryEntered?: Promise<void>;
+  private markRecoveryEntered?: () => void;
+  // The one cancel of the recovered request (`IMeteorConnectRecoveringRequest.cancel`).
+  private recoveryCancel?: Promise<void>;
+  private readonly recoveredResults: IMeteorConnectRecoveredActionResult[] = [];
+  private undeliveredRecoveredResults: IMeteorConnectRecoveredActionResult[] = [];
+  private readonly recoveredResultListeners =
+    new Set<TMeteorConnectRecoveredActionResultListener>();
 
   configure(
     config: IMeteorConnectMobileBridgeConfig | undefined,
@@ -284,7 +385,8 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
     if (this.config == null) return undefined;
     const configured = normalizeBridgeBackendUrl(this.config.backendUrl);
     return (Object.keys(METEOR_CONNECT_BACKENDS) as TMeteorConnectBackendEnvironment[]).find(
-      (environment) => normalizeBridgeBackendUrl(METEOR_CONNECT_BACKENDS[environment]) === configured,
+      (environment) =>
+        normalizeBridgeBackendUrl(METEOR_CONNECT_BACKENDS[environment]) === configured,
     );
   }
 
@@ -321,7 +423,9 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
    * session client, its storage scope and its coordinator slot all belong to one backend. The next
    * `prepareRequest` re-initializes against the chosen backend + mobile wallet pair.
    */
-  async setDevMobileWalletEnvironment(environment: TMeteorConnectBackendEnvironment): Promise<void> {
+  async setDevMobileWalletEnvironment(
+    environment: TMeteorConnectBackendEnvironment,
+  ): Promise<void> {
     if (!(await this.isDevMobileWalletSwitchAvailable())) {
       throw new Error("mobile_bridge_dev_switch_unavailable");
     }
@@ -516,6 +620,10 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
     await this.sessionDisposalPromise?.catch((error) => {
       this.logger.err("Previous mobile bridge session disposal failed", error);
     });
+    await this.settleRecoveryBeforeNewRequest();
+    // That wait can be long; a request cancelled during it must not create a session or wake the
+    // wallet only to be closed again.
+    if (target.isCancelled?.() === true) throw new Error("Action was cancelled");
     const continued = await this.continueExternalWorkHold(request, target);
     if (continued != null) return continued;
     if (this.currentSession != null) {
@@ -537,15 +645,15 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
     // and the wallet's own (partner, transferSessionId) binding stays the authoritative gate.
     const token = crypto.randomUUID();
     this.currentToken = token;
-    const session = new MobileBridgeSession({
-      token,
-      client: this.sessionClient!,
+    const pendingRequestStore = this.pendingRequestStore();
+    const targetMeteorAppIds = this.targetMeteorAppIdsFor(
       prepared,
-      targetMeteorAppIds: this.targetMeteorAppIdsFor(
-        prepared,
-        transferTargetPlatform,
-        targetWalletConnection,
-      ),
+      transferTargetPlatform,
+      targetWalletConnection,
+    );
+    const session = this.createMobileBridgeSession(token, {
+      prepared,
+      targetMeteorAppIds,
       localDevLinkRewrite:
         // Deliberately keyed on the persisted platform alone (stabilization SDK-14 review): a
         // wallet-pinned verify turn under `web_local_dev` targets the SAME localhost wallet that
@@ -564,6 +672,38 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
       pinnedWallet: targetWalletConnection == null ? undefined : pushWallet,
       expectedWalletVerifyPublicKey: targetWalletConnection?.walletVerifyPublicKey,
       journalBeforeExternalWorkHold: target.journalBeforeExternalWorkHold,
+      autoOpen,
+      pendingRequest:
+        pendingRequestStore == null
+          ? undefined
+          : createPendingRequestHandle({
+              store: pendingRequestStore,
+              requestId: target.requestId ?? crypto.randomUUID(),
+              prepared,
+              meteorAppIds: targetMeteorAppIds,
+              // The same claimant pin `MobileBridgeSession.resolveClaimedWallet` applies here.
+              expectedWalletVerifyPublicKey:
+                pushWallet?.walletVerifyPublicKey ?? targetWalletConnection?.walletVerifyPublicKey,
+            }),
+    });
+    // Bind the freshly minted transfer key handle to exactly this session before anything can
+    // observe it — a key generated for one bridge can never meet another bridge's wallet_action.
+    sensitiveTransferSource?.bindPendingHandleToSession(session);
+    this.currentSession = session;
+    this.currentTransferTargetPlatform = transferTargetPlatform;
+    void session.startPreparation().catch(() => {});
+    return session;
+  }
+
+  /** One session on this client's session client, wired to this client's own seams. */
+  private createMobileBridgeSession(
+    token: string,
+    request: TRequestSessionInput,
+  ): MobileBridgeSession {
+    return new MobileBridgeSession({
+      ...request,
+      token,
+      client: this.sessionClient!,
       isCurrent: (candidate) => candidate === this.currentToken,
       buildConnection: (wallet) => this.buildConnection(wallet),
       persistFunctionCallKey: async (network, accountId, keyPair) => {
@@ -572,7 +712,6 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
           .setKey(network, accountId, keyPair);
       },
       assertIdentityGeneration: () => this.assertCurrentGeneration(),
-      autoOpen,
       sameDevice: {
         remember: (walletVerifyPublicKey) => {
           void this.storage?.rememberSameDeviceWallet(walletVerifyPublicKey).catch((error) => {
@@ -603,13 +742,307 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
         }
       },
     });
-    // Bind the freshly minted transfer key handle to exactly this session before anything can
-    // observe it — a key generated for one bridge can never meet another bridge's wallet_action.
-    sensitiveTransferSource?.bindPendingHandleToSession(session);
-    this.currentSession = session;
-    this.currentTransferTargetPlatform = transferTargetPlatform;
-    void session.startPreparation().catch(() => {});
-    return session;
+  }
+
+  // This tab's pending-request store, unless reload recovery is switched off.
+  private pendingRequestStore(): IMobileBridgePendingRequestStore | undefined {
+    if (this.config?.recoverAfterReload === false || this.storage == null) return undefined;
+    return createPendingRequestStore(this.storage.environmentId);
+  }
+
+  //
+  // Reload recovery
+  //
+
+  // Collect the answer to a request this tab started before the page reloaded (see
+  // `IMeteorConnectMobileBridgeConfig.recoverAfterReload`). Runs at most once per client:
+  // `MeteorConnect.initialize` starts it, and every new request waits for it first, because the one
+  // session client carries one session at a time. Never rejects; its result is reported through
+  // `onRecoveredActionResult` and `getRecoveredResults`.
+  recoverPendingRequest(): Promise<void> {
+    if (this.recoveryPromise == null) {
+      this.recoveryEntered = new Promise<void>((resolve) => {
+        this.markRecoveryEntered = resolve;
+      });
+      this.recoveryPromise = this.runRecovery()
+        .catch((error) => {
+          this.logger.err("Recovering the request from before the reload failed", error);
+        })
+        .finally(() => this.markRecoveryEntered?.());
+    }
+    return this.recoveryPromise;
+  }
+
+  private async runRecovery(): Promise<void> {
+    const config = this.config;
+    if (config == null) return;
+    if (config.enabled !== true || config.recoverAfterReload === false) {
+      // Off, by the switch or with the bridge itself: withdraw what an earlier page kept for it
+      // (the session secret and maybe a function-call key), which nothing would read again.
+      const environmentIds = new Set([createBridgeEnvironmentId(config.backendUrl)]);
+      if (config.enabled === true) {
+        environmentIds.add(
+          createBridgeEnvironmentId((await this.resolveBridgeTarget()).backendUrl),
+        );
+      }
+      for (const environmentId of environmentIds) createPendingRequestStore(environmentId).clear();
+      return;
+    }
+    const target = await this.resolveBridgeTarget();
+    const store = createPendingRequestStore(createBridgeEnvironmentId(target.backendUrl));
+    const record = store.read();
+    if (record == null) return;
+    const messageParams = pendingActionMessageParams(record.action);
+    const base = {
+      requestId: record.requestId,
+      actionId: record.action.sdkActionId,
+      ...(messageParams == null ? {} : { messageParams }),
+    };
+    // An answer the page before the reload already verified is delivered whatever the deadline:
+    // the wallet gave it inside the session's lifetime.
+    if (record.answer == null && Date.now() >= record.expiresAt) {
+      store.clear(record.requestId);
+      this.publishRecoveredResult({
+        ...base,
+        outcome: "expired",
+        error: new Error(MOBILE_BRIDGE_ENDING.expired),
+      });
+      return;
+    }
+    let session: MobileBridgeSession;
+    try {
+      await this.initializeBridgeClient();
+      if (this.currentSession != null) {
+        // The one session client already carries a request (new requests wait for recovery, so
+        // this is only a guard). Its slot is never taken over, and the record is left to expire.
+        this.logger.log("A request is already running; the one from before the reload is left");
+        return;
+      }
+      const token = crypto.randomUUID();
+      const prepared = pendingRequestToPreparedAction(record);
+      session = this.createMobileBridgeSession(token, {
+        prepared,
+        targetMeteorAppIds: [...record.meteorAppIds],
+        expectedWalletVerifyPublicKey: record.expectedWalletVerifyPublicKey,
+        pendingRequest: createPendingRequestHandle({
+          store,
+          requestId: record.requestId,
+          prepared,
+          meteorAppIds: record.meteorAppIds,
+          expectedWalletVerifyPublicKey: record.expectedWalletVerifyPublicKey,
+        }),
+      });
+      this.currentToken = token;
+      this.currentSession = session;
+      this.recoverySession = session;
+      this.recoveringRequest = {
+        requestId: record.requestId,
+        actionId: record.action.sdkActionId,
+        expiresAt: record.expiresAt,
+      };
+    } catch (error) {
+      // A local setup failure: nothing was re-entered, so the record stays for a later load (it
+      // expires on its own) and an answer the wallet may already hold is not given up.
+      this.publishRecoveredResult(this.recoveredFailure(base, error));
+      return;
+    }
+    // A recorded answer means the page before the reload had already collected it and sent the
+    // acknowledgement that closes the session, so that session is never re-entered: it could
+    // only report its `closed` phase as a cancel, with the wallet's answer gone from it.
+    if (record.answer != null) {
+      void session.startFromRecordedAnswer(record.answer).catch(() => {});
+    } else {
+      void session
+        .startResume(record.token, record.walletLink)
+        .catch(() => {})
+        .finally(() => this.markRecoveryEntered?.());
+    }
+    let result: IMeteorConnectRecoveredActionResult;
+    let output: unknown;
+    let delivered = false;
+    try {
+      output = await session.awaitResult();
+      delivered = true;
+      result = { ...base, outcome: "success", output };
+    } catch (error) {
+      result = this.recoveredFailure(base, error);
+    } finally {
+      this.recoverySession = undefined;
+      this.recoveringRequest = undefined;
+    }
+    if (delivered) {
+      // The wallet's answer is already collected and acknowledged; a failure to update the stored
+      // accounts must never turn it into a failure the DApp would act on.
+      try {
+        await this.applyRecoveredAccountChange(record, session, output);
+      } catch (error) {
+        this.logger.err("Applying the recovered answer to the stored accounts failed", error);
+      }
+    }
+    // The session is over either way: release it (and its bridge) before anyone hears of it.
+    await this.releaseSession(session).catch((error) => {
+      this.logger.err("Releasing the recovered mobile bridge session failed", error);
+    });
+    if (
+      result.error instanceof PartnerSessionResumeError &&
+      result.error.reason === "owned_elsewhere"
+    ) {
+      // Another live tab (a duplicate) or instance holds this request and delivers its answer.
+      this.logger.log("The request from before the reload is held by another live page");
+      return;
+    }
+    this.publishRecoveredResult(result);
+  }
+
+  private recoveredFailure(
+    base: Pick<IMeteorConnectRecoveredActionResult, "requestId" | "actionId">,
+    error: unknown,
+  ): IMeteorConnectRecoveredActionResult {
+    return {
+      ...base,
+      outcome: recoveredOutcomeOf(error),
+      error: error instanceof Error ? error : new Error(String(error)),
+    };
+  }
+
+  // The stored-account effect the original page's `ExecutableAction` would have applied: a sign-in
+  // adds the account (its function-call key is already in the key store, written by the result
+  // mapping), a sign-out removes it, and any other account action refreshes the connection.
+  private async applyRecoveredAccountChange(
+    record: IMobileBridgePendingRequestRecord,
+    session: MobileBridgeSession,
+    output: any,
+  ): Promise<void> {
+    const actionId = record.action.sdkActionId;
+    if (actionId === "near::sign_in" || actionId === "near::sign_in_and_sign_message") {
+      const account: IMeteorConnectAccount = {
+        connection: output.connection,
+        identifier: output.identifier,
+        publicKeys: output.publicKeys,
+      };
+      // Replaced rather than appended: the account may already be stored from an earlier sign-in.
+      await this.meteorConnect.removeSignedInAccount(account.identifier);
+      await this.meteorConnect.addSignedInAccount(account);
+      return;
+    }
+    if (actionId === "near::sign_out") {
+      await this.meteorConnect.removeSignedInAccount(output);
+      return;
+    }
+    const connection = session.getCompletedConnection();
+    const identifier = recordedAccountIdentifier(record);
+    if (connection == null || identifier == null) return;
+    const account = await this.meteorConnect.getAccount(identifier);
+    if (account != null) {
+      await this.meteorConnect.updateSignedInAccountConnection({ ...account, connection });
+    }
+  }
+
+  // Let a request recovered after a reload finish before a new one takes the session client. A
+  // recovered request the wallet has not picked up within `RECOVERY_SUPERSEDE_GRACE_MS` is closed
+  // instead — the user has moved on to a new request — and reported as `"cancelled"`.
+  private async settleRecoveryBeforeNewRequest(): Promise<void> {
+    // Started here when `MeteorConnect.initialize` has not reached it yet (an unawaited
+    // initialize, or one that failed after configuring): recovery must always claim the one
+    // session client before a new request can.
+    const recovery = this.recoverPendingRequest();
+    if (await settledWithin(recovery, RECOVERY_SUPERSEDE_GRACE_MS)) return;
+    const session = this.recoverySession;
+    if (session != null && !session.isCommitted()) {
+      this.logger.log("A new request replaces the recovered one the wallet had not picked up");
+      await session.abandon().catch((error) => {
+        this.logger.err("Closing the recovered mobile bridge request failed", error);
+      });
+    }
+    await recovery;
+  }
+
+  /** See `MeteorConnect.getRecoveringRequest`. */
+  async getRecoveringRequest(): Promise<IMeteorConnectRecoveringRequest | undefined> {
+    if (this.recoveryPromise == null) return undefined;
+    await this.recoveryEntered;
+    const session = this.recoverySession;
+    const recovering = this.recoveringRequest;
+    if (session == null || recovering == null) return undefined;
+    const snapshot = session.getSnapshot();
+    if (["completed", "failed", "cancelled"].includes(snapshot.phase)) return undefined;
+    return {
+      requestId: recovering.requestId,
+      actionId: recovering.actionId,
+      // Read live: the idle deadline moves with every transition the session makes.
+      get expiresAt() {
+        const live = session.getSnapshot();
+        return Math.min(
+          live.idleExpiresAt ?? Number.POSITIVE_INFINITY,
+          live.absoluteExpiresAt ?? recovering.expiresAt,
+        );
+      },
+      canOpenInWallet: snapshot.deepLink != null,
+      openInWallet: () => {
+        if (this.recoverySession !== session || this.currentSession !== session) {
+          throw new Error("mobile_bridge_recovered_request_settled");
+        }
+        return this.openCurrentSessionInApp();
+      },
+      // Recovery runs once per client, so one memo covers every handle: a double tap sends one
+      // close verb.
+      cancel: () => (this.recoveryCancel ??= this.cancelRecoveringRequest(session)),
+    };
+  }
+
+  // The user gave up on a recovered request: close it as closing the Connect popup would
+  // (`abandon`), which reports it as `"cancelled"`. A close that cannot be sent still ends it
+  // locally — the session expires server-side on its own, like any undeliverable close verb. A
+  // request whose wallet answer is already being acknowledged is not cancelled: `abandon` leaves
+  // it be, and that answer is what gets reported.
+  private async cancelRecoveringRequest(session: MobileBridgeSession): Promise<void> {
+    if (this.recoverySession !== session) return;
+    try {
+      await session.abandon();
+    } catch (error) {
+      this.logger.err("Closing the recovered mobile bridge request failed", error);
+      if (!session.isDeliveringAnswer()) await session.dispose().catch(() => {});
+    }
+    await this.recoveryPromise;
+  }
+
+  /** See `MeteorConnect.onRecoveredActionResult`. */
+  onRecoveredActionResult(listener: TMeteorConnectRecoveredActionResultListener): () => void {
+    this.recoveredResultListeners.add(listener);
+    for (const result of this.undeliveredRecoveredResults.splice(0)) {
+      this.deliverRecoveredResult(listener, result);
+    }
+    return () => {
+      this.recoveredResultListeners.delete(listener);
+    };
+  }
+
+  /** See `MeteorConnect.getRecoveredResults`. */
+  async getRecoveredResults(): Promise<IMeteorConnectRecoveredActionResult[]> {
+    await this.recoveryPromise;
+    return [...this.recoveredResults];
+  }
+
+  private publishRecoveredResult(result: IMeteorConnectRecoveredActionResult): void {
+    this.recoveredResults.push(result);
+    if (this.recoveredResultListeners.size === 0) {
+      this.undeliveredRecoveredResults.push(result);
+      return;
+    }
+    for (const listener of [...this.recoveredResultListeners]) {
+      this.deliverRecoveredResult(listener, result);
+    }
+  }
+
+  private deliverRecoveredResult(
+    listener: TMeteorConnectRecoveredActionResultListener,
+    result: IMeteorConnectRecoveredActionResult,
+  ): void {
+    try {
+      listener(result);
+    } catch (error) {
+      this.logger.err("A recovered-result listener threw", error);
+    }
   }
 
   /** See `mobileAppAutoOpen.ts` for why each condition is required. */
@@ -844,7 +1277,10 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
         }
         if (this.currentTransferTargetPlatform === "extension") {
           pendingWindow?.close();
-          extensionOpen = openExtensionNewKeyTransfer(link, this.bridgeTarget?.backendUrl ?? this.config!.backendUrl);
+          extensionOpen = openExtensionNewKeyTransfer(
+            link,
+            this.bridgeTarget?.backendUrl ?? this.config!.backendUrl,
+          );
           return;
         }
         if (pendingWindow != null) {
@@ -918,6 +1354,10 @@ export class MeteorConnectMobileBridgeClient extends MeteorConnectClientBase {
 
   /** Drop the live bridge but keep `configure()`'s state, so the next request re-initializes. */
   private async teardownBridge(): Promise<void> {
+    // Tearing down would dispose a request recovered after a reload, deleting its record — and
+    // with a sign-in, the only copy of its new function-call key. `getRecoveredResults()` resolves
+    // once that request has settled; dispose after it.
+    if (this.recoverySession != null) throw new Error("mobile_bridge_dispose_during_recovery");
     this.currentToken = undefined;
     await this.currentSession?.dispose();
     await this.sessionDisposalPromise?.catch(() => {});
