@@ -1,5 +1,4 @@
 {
-  "workbench.editor.wrapTabs": true,
   "search.exclude": {
     "**/public": true,
     "**/dist": true,
